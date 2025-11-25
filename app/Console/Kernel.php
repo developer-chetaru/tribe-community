@@ -20,9 +20,12 @@ class Kernel extends ConsoleKernel
 
     protected function schedule(Schedule $schedule)
     {
+        // Run every 30 minutes to check if it's 4 PM (16:00) in any user's timezone
+        // This is necessary because users can be in different timezones (India, UK, US, etc.)
+        // We need to check frequently to catch 4 PM in each timezone
+        // Example: When it's 4 PM in UK, it's 9:30 PM in India - so we need to check multiple times
         $schedule->command('notification:send --only=notification')
-            ->dailyAt('16:30')
-            ->timezone('Asia/Kolkata');
+            ->everyThirtyMinutes();
 
         $schedule->command('notification:send --only=sentiment')
             ->dailyAt('18:00')

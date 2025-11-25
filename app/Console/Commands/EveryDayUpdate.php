@@ -9,6 +9,7 @@ use App\Http\Controllers\AdminReportController;
 use App\Services\OneSignalService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
 use OpenAI\Laravel\Facades\OpenAI;
 use App\Models\HappyIndex;
 use App\Models\WeeklySummary as WeeklySummaryModel;
@@ -96,12 +97,49 @@ class EveryDayUpdate extends Command
     }
 
 
+  /**
+   * Get timezone from user's IP address using ipapi.co
+   */
+  protected function getTimezoneFromIP($user)
+  {
+      // First, try to use stored timezone
+      if ($user->timezone && in_array($user->timezone, timezone_identifiers_list())) {
+          return $user->timezone;
+      }
+
+      // If no stored timezone, try to get from latest session IP
+      $latestSession = DB::table('sessions')
+          ->where('user_id', $user->id)
+          ->whereNotNull('ip_address')
+          ->where('ip_address', '!=', '127.0.0.1')
+          ->where('ip_address', '!=', '::1')
+          ->orderBy('last_activity', 'desc')
+          ->first();
+
+      if ($latestSession && $latestSession->ip_address) {
+          try {
+              $response = Http::timeout(3)->get("https://ipapi.co/{$latestSession->ip_address}/timezone/");
+              if ($response->successful()) {
+                  $timezone = trim($response->body());
+                  if ($timezone && in_array($timezone, timezone_identifiers_list())) {
+                      // Save timezone for future use
+                      $user->timezone = $timezone;
+                      $user->save();
+                      return $timezone;
+                  }
+              }
+          } catch (\Exception $e) {
+              Log::warning("Failed to get timezone from IP for user {$user->id}: " . $e->getMessage());
+          }
+      }
+
+      // Default fallback
+      return 'Asia/Kolkata';
+  }
+
   protected function sendNotification(OneSignalService $oneSignal)
   {
       $this->info("Fetching users...");
-
-      // Current India time
-      $now = now('Asia/Kolkata');
 
       // Get all users with a valid FCM token and load organisation
       $users = User::whereNotNull('fcmToken')
@@ -115,14 +153,27 @@ class EveryDayUpdate extends Command
           return;
       }
 
-      // Filter users based on organisation and working days
-      $usersToNotify = $users->filter(function ($user) use ($now) {
+      // Filter users based on:
+      // 1. It's 4 PM (16:00) in their timezone (based on IP location)
+      // 2. Organisation working days
+      $usersToNotify = $users->filter(function ($user) {
+          // Get user's timezone based on IP address
+          $userTimezone = $this->getTimezoneFromIP($user);
+          
+          // Get current time in user's timezone
+          $userNow = now($userTimezone);
+          
+          // Check if it's 4 PM (16:00) in user's timezone (allow 16:00-16:59 range)
+          $isFourPM = $userNow->format('H') === '16';
+          
+          if (!$isFourPM) {
+              return false;
+          }
 
-          $today = $now->format('D'); // e.g., Mon, Tue, Wed
+          $today = $userNow->format('D'); // e.g., Mon, Tue, Wed
 
           // Organisation users: notify only on working days
           if ($user->organisation) {
-
               // Decode working_days JSON or fallback to Mon–Fri
               $workingDays = $user->organisation->working_days;
               if (is_string($workingDays)) {
