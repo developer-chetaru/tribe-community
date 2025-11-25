@@ -85,7 +85,11 @@
                         setTimeout(() => {
                             initTelInput(
                                 $refs.phoneInput,
-                                @this
+                                @this,
+                                'state.phone',
+                                'state.country_code',
+                                @js($state['phone'] ?? ''),
+                                @js($state['country_code'] ?? '+91')
                             );
                         }, 100);
                     "
@@ -96,8 +100,6 @@
                         id="phone"
                         type="tel"
                         placeholder="Phone Number"
-                        value="{{ $state['phone'] ?? '' }}"
-                        data-country="{{ str_replace('+', '', $state['country_code'] ?? '91') }}"
                         class="border rounded-[8px] px-3 py-2.5 w-full focus:ring-red-500 focus:border-red-500 border border-[#80808080]"
                     >
                 </div>
@@ -181,43 +183,68 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.21/js/utils.js"></script>
 
 <script>
-function initTelInput(input, livewire) {
-    let initialCountry = "auto";
+function initTelInput(input, livewire, phoneField, countryField, initialPhone = '', initialCountryCode = null) {
+    const initialDialCode = (initialCountryCode || '+91').replace('+', '');
+    let initialIsoCode = 'in';
+    let useGeoIp = true;
 
-    // Use data attribute if available
-    if (input.dataset.country) {
-        const countryCode = input.dataset.country;
-        const countryDataList = window.intlTelInputGlobals.getCountryData();
-        const foundCountry = countryDataList.find(c => c.dialCode === countryCode);
-        if (foundCountry) {
-            initialCountry = foundCountry.iso2;
+    if (initialCountryCode) {
+        useGeoIp = false;
+        if (window.intlTelInputGlobals) {
+            try {
+                const countryDataList = window.intlTelInputGlobals.getCountryData();
+                const foundCountry = countryDataList.find(country => country.dialCode === initialDialCode);
+                if (foundCountry) {
+                    initialIsoCode = foundCountry.iso2;
+                }
+            } catch (e) {
+                console.error('Failed to resolve ISO code for stored dial code', e);
+            }
         }
     }
 
     let iti = window.intlTelInput(input, {
-        initialCountry: initialCountry,
+        initialCountry: useGeoIp ? "auto" : initialIsoCode,
         separateDialCode: true,
-        geoIpLookup: function (callback) {
+        geoIpLookup: useGeoIp ? function (callback) {
             fetch("https://ipapi.co/json")
                 .then(res => res.json())
                 .then(data => callback(data.country_code))
-                .catch(() => callback("us"));
-        },
+                .catch(() => callback("in"));
+        } : undefined,
         utilsScript: "https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.21/js/utils.js",
     });
 
     function updateValues() {
-        let phoneNumber = input.value;
-        let countryCode = iti.getSelectedCountryData().dialCode;
+        let phoneNumber = iti.isValidNumber()
+            ? iti.getNumber(intlTelInputUtils.numberFormat.E164)
+            : input.value;
 
-        livewire.set('state.phone', phoneNumber);
-        livewire.set('state.country_code', `+${countryCode}`);
+        const countryData = iti.getSelectedCountryData();
+        const dialCode = countryData.dialCode || initialDialCode || '91';
+        let justPhone = phoneNumber.startsWith(`+${dialCode}`)
+            ? phoneNumber.replace(`+${dialCode}`, '')
+            : input.value;
+
+        livewire.set(phoneField, justPhone.replace(/\D/g, ''));
+        livewire.set(countryField, `+${dialCode}`);
+    }
+
+    if (initialPhone || initialCountryCode) {
+        const fullNumber = `${initialCountryCode || '+91'}${initialPhone}`.replace(/\s/g, '');
+
+        setTimeout(() => {
+            if (fullNumber.replace('+', '').trim().length) {
+                iti.setNumber(fullNumber);
+            }
+            updateValues();
+        }, 50);
+    } else {
+        updateValues();
     }
 
     input.addEventListener("input", updateValues);
     input.addEventListener("countrychange", updateValues);
-
-    updateValues();
 }
 </script>
 
