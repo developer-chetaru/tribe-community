@@ -39,7 +39,7 @@
         </ul>
     </div>
 
-<div class="tab-content-box pb-15 mt-2" x-data="{ openModal: false, modalUrl: '', modalType: '', watchLink: '', videoId: '' }">
+<div class="tab-content-box pb-15 mt-2" x-data="{ openModal: false, modalUrl: '', modalType: '' }">
     @if($activePrincipleId)
         @php
             $groupedChecklists = collect($learningCheckLists[$activePrincipleId] ?? [])
@@ -115,41 +115,54 @@
                                             $videoId = explode('&', $videoId)[0];
                                         }
                                         
-                                        // Build embed URL with proper parameters to prevent Error 153
-                                        if (!empty($videoId)) {
-                                            // Get origin for embed URL (helps prevent Error 153)
-                                            $origin = '';
-                                            try {
-                                                $origin = request()->getSchemeAndHttpHost();
-                                            } catch (\Exception $e) {
-                                                $origin = config('app.url', '');
-                                            }
-                                            
-                                            // Build embed URL with essential parameters
-                                            $embedParams = ['enablejsapi=1'];
-                                            if (!empty($origin)) {
-                                                $embedParams[] = 'origin=' . urlencode($origin);
-                                            }
-                                            $embedParams[] = 'rel=0';
-                                            $embedParams[] = 'modestbranding=1';
-                                            
-                                            $youtubeUrl = "https://www.youtube.com/embed/{$videoId}?" . implode('&', $embedParams);
-                                        } else {
-                                            // Fallback: if we can't extract video ID, try to use original URL
-                                            // but this might not work if it's a watch URL
-                                            $youtubeUrl = $originalUrl;
-                                        }
-                                        
-                                        // Watch link for fallback
-                                        $watchLink = !empty($videoId) ? "https://www.youtube.com/watch?v={$videoId}" : $originalUrl;
+                                        // Build embed link with minimal parameters to avoid Error 153
+                                        $embedLink = !empty($videoId) ? "https://www.youtube.com/embed/{$videoId}" : '';
                                     @endphp
-                                    <button 
-                                        @click.stop="openModal = true; modalType = 'video'; modalUrl = '{{ $youtubeUrl }}'; watchLink = '{{ $watchLink }}'; videoId = '{{ $videoId }}'" 
-                                        class="flex items-center text-[#EB1C24] text-[12px] sm:text-[14px] mt-3"
-                                    >
-                                        <img src="{{ asset('images/play-circle.svg') }}" class="mr-3" alt="Play Icon"> 
-                                        Watch the video
-                                    </button>
+                                    <div x-data="{ openVideoModal: false }" class="inline-block">
+                                        <button 
+                                            @click.stop="openVideoModal = true" 
+                                            class="flex items-center text-[#EB1C24] text-[12px] sm:text-[14px] mt-3"
+                                        >
+                                            <img src="{{ asset('images/play-circle.svg') }}" class="mr-3" alt="Play Icon"> 
+                                            Watch the video
+                                        </button>
+
+                                        <!-- Video Modal -->
+                                        <div
+                                            x-show="openVideoModal"
+                                            x-cloak
+                                            @click.self="openVideoModal = false"
+                                            class="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+                                        >
+                                            <div class="relative w-[95%] md:w-[85%] lg:w-[75%] h-[85vh] bg-black rounded-lg overflow-hidden">
+                                                <button
+                                                    @click="openVideoModal = false"
+                                                    class="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold z-10 transition-colors"
+                                                >×</button>
+                                                
+                                                @if(!empty($videoId))
+                                                    <iframe 
+                                                        src="{{ $embedLink }}?autoplay=1&rel=0&modestbranding=1" 
+                                                        class="w-full h-full border-0" 
+                                                        frameborder="0" 
+                                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                                        allowfullscreen
+                                                    ></iframe>
+                                                @else
+                                                    <div class="w-full h-full flex items-center justify-center text-white p-8 text-center">
+                                                        <div>
+                                                            <div class="mb-4 text-2xl">⚠️</div>
+                                                            <div class="mb-4 text-xl font-semibold">Invalid video URL</div>
+                                                            <div class="mb-6 text-gray-300">Unable to extract video ID from the provided link.</div>
+                                                            <a href="{{ $originalUrl }}" target="_blank" class="inline-block bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition-colors">
+                                                                Open Original Link
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    </div>
                                 @endif
 
                                 {{-- PDF Link --}}
@@ -172,41 +185,17 @@
 
 
 
-    <!-- Modal -->
-    <div x-show="openModal" x-cloak
+    <!-- Modal for PDF -->
+    <div x-show="openModal && modalType === 'pdf'" x-cloak
           class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50"
          x-transition>
           <div class="relative w-full h-full flex items-center justify-center">
-
             <!-- Close button -->
-            <button @click="openModal = false; modalUrl=''; modalType=''; watchLink=''; videoId='';" 
+            <button @click="openModal = false; modalUrl=''; modalType='';" 
                       class="absolute top-4 right-4 text-white bg-black/50 hover:bg-black rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold">&times;</button>
-                    <!-- Video -->
-                    <template x-if="modalType === 'video'">
-                        <div class="w-[95%] h-[90%] rounded-lg shadow-lg overflow-hidden bg-black flex items-center justify-center relative">
-                            <iframe 
-                                :src="modalUrl" 
-                                class="w-full h-full border-0" 
-                                frameborder="0" 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                allowfullscreen
-                                id="youtube-iframe-modal"
-                            ></iframe>
-                            <!-- Fallback message (hidden by default, shown if video fails) -->
-                            <div x-show="false" x-ref="errorMessage" class="absolute inset-0 flex items-center justify-center bg-black/90 text-white p-4 text-center">
-                                <div>
-                                    <p class="mb-4">Unable to load video player.</p>
-                                    <a :href="watchLink" target="_blank" class="underline text-red-400 hover:text-red-300">Watch on YouTube</a>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                    <!-- PDF -->
-                    <template x-if="modalType === 'pdf'">
-                        <iframe :src="modalUrl"  class="w-[95%] h-[90%] rounded-lg shadow-lg border-0" frameborder="0"></iframe>
-                    </template>
-                </div>
-            </div>
+            <!-- PDF -->
+            <iframe :src="modalUrl" class="w-[95%] h-[90%] rounded-lg shadow-lg border-0" frameborder="0"></iframe>
+          </div>
         </div>
 
 </div>
