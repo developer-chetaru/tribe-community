@@ -115,10 +115,21 @@
                                             $videoId = explode('&', $videoId)[0];
                                         }
                                         
-                                        // Build embed link with minimal parameters to avoid Error 153
-                                        $embedLink = !empty($videoId) ? "https://www.youtube.com/embed/{$videoId}" : '';
+                                        // Build embed link with HTTPS and proper parameters
+                                        // Use HTTPS explicitly to work on both HTTP and HTTPS sites
+                                        if (!empty($videoId)) {
+                                            // Clean video ID one more time to ensure no issues
+                                            $videoId = preg_replace('/[^a-zA-Z0-9_-]/', '', $videoId);
+                                            $embedLink = "https://www.youtube.com/embed/{$videoId}";
+                                        } else {
+                                            $embedLink = '';
+                                        }
                                     @endphp
-                                    <div x-data="{ openVideoModal: false }" class="inline-block">
+                                    <div x-data="{ 
+                                        openVideoModal: false,
+                                        embedUrl: '{{ !empty($embedLink) ? $embedLink . '?autoplay=1&rel=0&modestbranding=1&playsinline=1' : '' }}',
+                                        watchLink: '{{ !empty($videoId) ? "https://www.youtube.com/watch?v=" . $videoId : $originalUrl }}'
+                                    }" class="inline-block">
                                         <button 
                                             @click.stop="openVideoModal = true" 
                                             class="flex items-center text-[#EB1C24] text-[12px] sm:text-[14px] mt-3"
@@ -140,12 +151,12 @@
                                                     class="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold z-10 transition-colors"
                                                 >×</button>
                                                 
-                                                @if(!empty($videoId))
+                                                @if(!empty($videoId) && !empty($embedLink))
                                                     <iframe 
-                                                        src="{{ $embedLink }}?autoplay=1&rel=0&modestbranding=1" 
+                                                        :src="embedUrl" 
                                                         class="w-full h-full border-0" 
                                                         frameborder="0" 
-                                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
                                                         allowfullscreen
                                                     ></iframe>
                                                 @else
