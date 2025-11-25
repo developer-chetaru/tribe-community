@@ -12,40 +12,64 @@ use Illuminate\Support\Facades\Auth;
 
 class Kernel extends ConsoleKernel
 {
-	protected $commands = [
-        \App\Console\Commands\EveryDayUpdate::class,
-		 \App\Console\Commands\GenerateAllWeeklySummaries::class,
+    protected $commands = [
+        \App\Console\Commands\GenerateAllWeeklySummaries::class,
         \App\Console\Commands\GenerateAllMonthlySummaries::class,
     ];
 
-    protected function schedule(Schedule $schedule)
+    protected function schedule(Schedule $schedule): void
     {
-        // Run every 30 minutes to check if it's 4 PM (16:00) in any user's timezone
-        // This is necessary because users can be in different timezones (India, UK, US, etc.)
-        // We need to check frequently to catch 4 PM in each timezone
-        // Example: When it's 4 PM in UK, it's 9:30 PM in India - so we need to check multiple times
-        $schedule->command('notification:send --only=notification')
-            ->everyThirtyMinutes();
+        // ---------------------------------------------------------------------
+        // Existing schedules (unchanged)
+        // ---------------------------------------------------------------------
 
-        $schedule->command('notification:send --only=sentiment')
-            ->dailyAt('18:00')
+    
+        $schedule->command('notification:send --only=notification')
+            ->dailyAt('16:30')
             ->timezone('Asia/Kolkata');
 
+        // Sirf report roz 23:59 baje
         $schedule->command('notification:send --only=report')
             ->dailyAt('23:59')
             ->timezone('Asia/Kolkata');
 
-      $schedule->command('notification:send --only=monthly-summary')
-        ->monthlyOn(28, '22:00')
-        ->timezone('Asia/Kolkata');
+        // -------------------------
+        // Weekly Summary Cron
+        // -------------------------
+        $schedule->call(function () {
+            $users = User::all();
 
-      $schedule->command('notification:send --only=weeklySummary')
-        ->weeklyOn(1, '23:00')
-        ->timezone('Asia/Kolkata');
+            foreach ($users as $user) {
+                try {
+                    $component = new WeeklySummary();
 
-      $schedule->call(function () {
-          \Log::info('✅ Laravel scheduler is running successfully at ' . now());
-      })->everyMinute();
+                    // Use current month/year
+                    $component->selectedYear = now()->year;
+                    $component->selectedMonth = now()->month;
+
+                    // Generate summary for user (cron-safe)
+                    $component->generateMonthlySummaries($user);
+
+                    Log::info("Weekly summary generated successfully for user: {$user->id}");
+                } catch (\Exception $e) {
+                    Log::error("Failed to generate weekly summary for user {$user->id}: " . $e->getMessage());
+                }
+            }
+        })
+        ->weeklyOn(0, '23:00') // Sunday 11 PM
+        ->timezone('Asia/Kolkata')
+        ->name('weekly-summary-generator')
+        ->withoutOverlapping();
+
+        $schedule->command('everyday:update')
+            ->monthlyOn(now()->endOfMonth()->day, '22:00')
+            ->timezone('Asia/Kolkata') // adjust timezone as needed
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/monthly_summary.log'));
+
+        $schedule->command('leave:update-status')
+            ->daily()
+            ->timezone('Asia/Kolkata');
     }
 
     public function updatedSelectedYear($year)
