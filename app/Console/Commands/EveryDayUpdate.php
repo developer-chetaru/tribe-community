@@ -145,6 +145,7 @@ class EveryDayUpdate extends Command
       $users = User::whereNotNull('fcmToken')
           ->where('fcmToken', '!=', '')
           ->with('organisation')
+          ->where('email', 'mousam@chetaru.com')
           ->get();
 
       if ($users->isEmpty()) {
@@ -164,7 +165,7 @@ class EveryDayUpdate extends Command
           $userNow = now($userTimezone);
           
           // Check if it's 4 PM (16:00) in user's timezone (allow 16:00-16:59 range)
-          $isFourPM = $userNow->format('H') === '16';
+          $isFourPM = $userNow->format('H') === '18';
           
           if (!$isFourPM) {
               return false;
