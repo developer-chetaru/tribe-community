@@ -117,7 +117,7 @@
 </a>
 @endhasanyrole
 
-@hasanyrole('organisation_user|basecamp|')
+@hasanyrole('organisation_user|basecamp|organisation_admin')
     <a href="{{ route('admin.reflections.index') }}"
    class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
   :class="[
@@ -129,7 +129,7 @@
   >
     <img :src="window.location.pathname === '{{ route('admin.reflections.index', [], false) }}' ? '{{ asset('images/reflectoin_red.svg') }}' 
                 : '{{ asset('images/reflectoin_black.svg') }}'"  class="h-5 w-5" />
-    <span x-show="$store.sidebar.open" x-transition class="text-sm">Reflectionsfg</span>
+    <span x-show="$store.sidebar.open" x-transition class="text-sm">Reflections</span>
 </a>
 @endhasanyrole
 
