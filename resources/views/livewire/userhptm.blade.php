@@ -39,7 +39,7 @@
         </ul>
     </div>
 
-<div class="tab-content-box pb-15 mt-2" x-data="{ openModal: false, modalUrl: '', modalType: '' }">
+<div class="tab-content-box pb-15 mt-2" x-data="{ openModal: false, modalUrl: '', modalType: '', watchLink: '', videoId: '' }">
     @if($activePrincipleId)
         @php
             $groupedChecklists = collect($learningCheckLists[$activePrincipleId] ?? [])
@@ -87,18 +87,64 @@
                                 {{-- Video Link --}}
                                 @if(!empty($check['link']))
                                     @php
-                                        $youtubeUrl = $check['link'];
-                                        if (str_contains($youtubeUrl, 'youtube.com/watch?v=')) {
-                                            parse_str(parse_url($youtubeUrl, PHP_URL_QUERY), $query);
-                                            $videoId = $query['v'] ?? '';
-                                            $youtubeUrl = "https://www.youtube.com/embed/{$videoId}";
-                                        } elseif (str_contains($youtubeUrl, 'youtu.be/')) {
-                                            $videoId = last(explode('/', $youtubeUrl));
-                                            $youtubeUrl = "https://www.youtube.com/embed/{$videoId}";
+                                        // Extract video ID from various YouTube URL formats
+                                        $videoId = '';
+                                        $originalUrl = trim($check['link']);
+                                        
+                                        if (str_contains($originalUrl, 'youtu.be/')) {
+                                            $path = parse_url($originalUrl, PHP_URL_PATH);
+                                            $videoId = $path ? ltrim($path, '/') : '';
+                                            // Remove any query params or fragments from video ID
+                                            $videoId = explode('?', $videoId)[0];
+                                            $videoId = explode('#', $videoId)[0];
+                                        } elseif (str_contains($originalUrl, 'youtube.com/watch')) {
+                                            parse_str(parse_url($originalUrl, PHP_URL_QUERY) ?? '', $q);
+                                            $videoId = $q['v'] ?? '';
+                                        } elseif (str_contains($originalUrl, 'youtube.com/shorts/')) {
+                                            $path = parse_url($originalUrl, PHP_URL_PATH);
+                                            $videoId = $path ? basename($path) : '';
+                                        } elseif (str_contains($originalUrl, 'youtube.com/embed/')) {
+                                            $path = parse_url($originalUrl, PHP_URL_PATH);
+                                            $videoId = $path ? basename($path) : '';
                                         }
+                                        
+                                        // Clean video ID (remove any remaining query params)
+                                        $videoId = trim($videoId);
+                                        if (!empty($videoId)) {
+                                            $videoId = explode('?', $videoId)[0];
+                                            $videoId = explode('&', $videoId)[0];
+                                        }
+                                        
+                                        // Build embed URL with proper parameters to prevent Error 153
+                                        if (!empty($videoId)) {
+                                            // Get origin for embed URL (helps prevent Error 153)
+                                            $origin = '';
+                                            try {
+                                                $origin = request()->getSchemeAndHttpHost();
+                                            } catch (\Exception $e) {
+                                                $origin = config('app.url', '');
+                                            }
+                                            
+                                            // Build embed URL with essential parameters
+                                            $embedParams = ['enablejsapi=1'];
+                                            if (!empty($origin)) {
+                                                $embedParams[] = 'origin=' . urlencode($origin);
+                                            }
+                                            $embedParams[] = 'rel=0';
+                                            $embedParams[] = 'modestbranding=1';
+                                            
+                                            $youtubeUrl = "https://www.youtube.com/embed/{$videoId}?" . implode('&', $embedParams);
+                                        } else {
+                                            // Fallback: if we can't extract video ID, try to use original URL
+                                            // but this might not work if it's a watch URL
+                                            $youtubeUrl = $originalUrl;
+                                        }
+                                        
+                                        // Watch link for fallback
+                                        $watchLink = !empty($videoId) ? "https://www.youtube.com/watch?v={$videoId}" : $originalUrl;
                                     @endphp
                                     <button 
-                                        @click.stop="openModal = true; modalType = 'video'; modalUrl = '{{ $youtubeUrl }}'" 
+                                        @click.stop="openModal = true; modalType = 'video'; modalUrl = '{{ $youtubeUrl }}'; watchLink = '{{ $watchLink }}'; videoId = '{{ $videoId }}'" 
                                         class="flex items-center text-[#EB1C24] text-[12px] sm:text-[14px] mt-3"
                                     >
                                         <img src="{{ asset('images/play-circle.svg') }}" class="mr-3" alt="Play Icon"> 
@@ -133,13 +179,27 @@
           <div class="relative w-full h-full flex items-center justify-center">
 
             <!-- Close button -->
-            <button @click="openModal = false; modalUrl=''; modalType='';" 
+            <button @click="openModal = false; modalUrl=''; modalType=''; watchLink=''; videoId='';" 
                       class="absolute top-4 right-4 text-white bg-black/50 hover:bg-black rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold">&times;</button>
                     <!-- Video -->
                     <template x-if="modalType === 'video'">
-                        <iframe :src="modalUrl"  class="w-[95%] h-[90%] rounded-lg shadow-lg border-0" frameborder="0" allowfullscreen></iframe>
-                      
-                      
+                        <div class="w-[95%] h-[90%] rounded-lg shadow-lg overflow-hidden bg-black flex items-center justify-center relative">
+                            <iframe 
+                                :src="modalUrl" 
+                                class="w-full h-full border-0" 
+                                frameborder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowfullscreen
+                                id="youtube-iframe-modal"
+                            ></iframe>
+                            <!-- Fallback message (hidden by default, shown if video fails) -->
+                            <div x-show="false" x-ref="errorMessage" class="absolute inset-0 flex items-center justify-center bg-black/90 text-white p-4 text-center">
+                                <div>
+                                    <p class="mb-4">Unable to load video player.</p>
+                                    <a :href="watchLink" target="_blank" class="underline text-red-400 hover:text-red-300">Watch on YouTube</a>
+                                </div>
+                            </div>
+                        </div>
                     </template>
                     <!-- PDF -->
                     <template x-if="modalType === 'pdf'">
