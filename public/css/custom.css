@@ -1,0 +1,38 @@
+body { font-family: "Figtree", sans-serif !important;}
+
+.back-btn:hover ,.btn-hover:hover {
+    background-color: #EB1C24;
+    color: #000;
+}
+.back-btn:hover svg path,.btn-hover:hover svg path {
+    stroke:#fff;
+}
+.tr-bg-alternate tr:nth-child(even) {
+    background-color: #f3f4f6;
+}
+input::placeholder,textarea::placeholder {
+    color: #808080 !important;
+}
+select:has(option:checked:first-child) {
+  color: #808080 !important;
+}
+
+select:invalid {
+    color: #808080 !important;
+}
+option {
+    color: #000;
+}
+input:focus {
+    box-shadow: none !important;
+}
+.select-principle[data-has-alpine-state="true"] button span {
+    color: #000;
+}
+
+.select-principle button span {
+    color: #808080;
+}
+.iti--allow-dropdown {
+    width: 100%;
+}
