@@ -121,15 +121,34 @@
                                             // Clean video ID one more time to ensure no issues
                                             $videoId = preg_replace('/[^a-zA-Z0-9_-]/', '', $videoId);
                                             $embedLink = "https://www.youtube.com/embed/{$videoId}";
+                                            
+                                            // Build parameters - origin is required for HTTPS to prevent Error 153
+                                            $params = [
+                                                'autoplay' => '1',
+                                                'rel' => '0',
+                                                'modestbranding' => '1',
+                                                'playsinline' => '1'
+                                            ];
+                                            
+                                            // Add origin parameter if on HTTPS (will be set client-side for production)
+                                            $embedLinkWithParams = $embedLink . '?' . http_build_query($params);
                                         } else {
                                             $embedLink = '';
+                                            $embedLinkWithParams = '';
                                         }
                                     @endphp
                                     <div x-data="{ 
                                         openVideoModal: false,
-                                        embedUrl: '{{ !empty($embedLink) ? $embedLink . '?autoplay=1&rel=0&modestbranding=1&playsinline=1' : '' }}',
-                                        watchLink: '{{ !empty($videoId) ? "https://www.youtube.com/watch?v=" . $videoId : $originalUrl }}'
-                                    }" class="inline-block">
+                                        embedUrl: '{{ $embedLinkWithParams ?? '' }}',
+                                        watchLink: '{{ !empty($videoId) ? "https://www.youtube.com/watch?v=" . $videoId : $originalUrl }}',
+                                        init() {
+                                            // Add origin parameter for HTTPS sites (required to prevent Error 153)
+                                            if (this.embedUrl && window.location.protocol === 'https:') {
+                                                const separator = this.embedUrl.includes('?') ? '&' : '?';
+                                                this.embedUrl = this.embedUrl + separator + 'origin=' + encodeURIComponent(window.location.origin);
+                                            }
+                                        }
+                                    }" x-init="init()" class="inline-block">
                                         <button 
                                             @click.stop="openVideoModal = true" 
                                             class="flex items-center text-[#EB1C24] text-[12px] sm:text-[14px] mt-3"
@@ -158,6 +177,7 @@
                                                         frameborder="0" 
                                                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
                                                         allowfullscreen
+                                                        referrerpolicy="strict-origin-when-cross-origin"
                                                     ></iframe>
                                                 @else
                                                     <div class="w-full h-full flex items-center justify-center text-white p-8 text-center">
