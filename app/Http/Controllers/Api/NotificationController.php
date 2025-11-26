@@ -47,7 +47,6 @@ class NotificationController extends Controller
             
             $counts['custom_notification'] = IotNotification::where('to_bubble_user_id', $userId)
 				->where('archive', false)
-                ->where('notificationType', 'custom notification')
                 ->where(function ($q) {
                     if (DB::getSchemaBuilder()->hasColumn('iot_notifications', 'is_read')) {
                         $q->where('is_read', 0);
@@ -55,9 +54,9 @@ class NotificationController extends Controller
                 })
                 ->count();
           
+            // Get all notification types (not just custom notification)
             $notifications = IotNotification::where('to_bubble_user_id', $userId)
 				->where('archive', false)
-                ->where('notificationType', 'custom notification')
                 ->orderBy('created_at', 'desc')
                 ->get([
                     'id',

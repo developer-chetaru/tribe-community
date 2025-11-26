@@ -72,6 +72,62 @@ class EveryDayUpdate extends Command
         }
     }
 
+	/**
+     * Helper method to store notification in database
+     * 
+     * @param int $userId
+     * @param string $type Notification type (sentiment, weekly-report, monthly-report, sentiment-reminder, weekly-summary, monthly-summary)
+     * @param string $title
+     * @param string $description
+     * @param string|null $link
+     * @param Carbon|null $date Check for existing notification on this date
+     * @return void
+     */
+    protected function storeNotification($userId, $type, $title, $description, $link = null, $date = null)
+    {
+        try {
+            $now = $date ?: now('Asia/Kolkata');
+            
+            // Check if notification already exists for this type and date
+            $query = \App\Models\IotNotification::where('to_bubble_user_id', $userId)
+                ->where('notificationType', $type);
+            
+            if ($date) {
+                $query->whereDate('created_at', $now->toDateString());
+            }
+            
+            $alreadyExists = $query->exists();
+            
+            if (!$alreadyExists) {
+                \App\Models\IotNotification::create([
+                    'to_bubble_user_id' => $userId,
+                    'from_bubble_user_id' => null,
+                    'notificationType' => $type,
+                    'title' => $title,
+                    'description' => $description,
+                    'notificationLinks' => $link,
+                    'sendNotificationId' => null,
+                    'status' => 'Active',
+                    'archive' => 0,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+                
+                Log::channel('daily')->info("Notification stored in DB", [
+                    'user_id' => $userId,
+                    'type' => $type,
+                    'title' => $title
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::channel('daily')->error("Failed to store notification", [
+                'user_id' => $userId,
+                'type' => $type,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
 	protected function sendNotificationOLD(OneSignalService $oneSignal)
     {
       $playerIds = User::whereNotNull('fcmToken')
@@ -157,26 +213,14 @@ class EveryDayUpdate extends Command
       );
 
       foreach ($usersToNotify as $user) {
-          $alreadyExists = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
-              ->where('notificationType', 'sentiment')
-              ->whereDate('created_at', $now->toDateString())
-              ->exists();
-
-          if (!$alreadyExists) {
-              \App\Models\IotNotification::create([
-                  'to_bubble_user_id' => $user->id,
-                  'from_bubble_user_id' => null,
-                  'notificationType' => 'sentiment',
-                  'title' => "Feedback",
-                  'description' => "How's things at work today?",
-                  'notificationLinks' => null,
-                  'sendNotificationId' => null,
-                  'status' => 'Active',
-                  'archive' => 0,
-                  'created_at' => $now,
-                  'updated_at' => $now,
-              ]);
-          }
+          $this->storeNotification(
+              $user->id,
+              'sentiment',
+              'Feedback',
+              "How's things at work today?",
+              null,
+              $now
+          );
       }
 
       $this->info('Notification response: ' . json_encode($response));
@@ -314,6 +358,17 @@ protected function sendFridayEmail()
                 $message->to($user->email)
                     ->subject('Your Weekly Happy Index Report');
             });
+
+            // Store notification in database
+            $weekLabel = now()->subDays(6)->format('M d') . ' - ' . now()->format('M d');
+            $this->storeNotification(
+                $user->id,
+                'weekly-report',
+                'Your Weekly Happy Index Report',
+                "Your weekly happy index report for {$weekLabel} has been sent to your email.",
+                null,
+                now('Asia/Kolkata')
+            );
         }
 
         Log::channel('daily')->info('Friday HappyIndex emails sent to all users.');
@@ -431,6 +486,17 @@ protected function sendMonthlyEmail()
                 $message->to($user->email)
                     ->subject('Your Monthly Happy Index Report');
             });
+
+            // Store notification in database
+            $monthName = now()->format('F Y');
+            $this->storeNotification(
+                $user->id,
+                'monthly-report',
+                'Your Monthly Happy Index Report',
+                "Your monthly happy index report for {$monthName} has been sent to your email.",
+                null,
+                now('Asia/Kolkata')
+            );
         }
 
         Log::channel('daily')->info('Monthly HappyIndex emails sent to all users.');
@@ -512,6 +578,16 @@ protected function sendMonthlyEmail()
                     $user->email,
                     'Reminder: Please Update Your Sentiment Index',
                     $emailBody
+                );
+
+                // Store notification in database
+                $this->storeNotification(
+                    $user->id,
+                    'sentiment-reminder',
+                    'Reminder: Please Update Your Sentiment Index',
+                    "Please update your sentiment index for today. Your feedback helps us understand how things are going at work.",
+                    null,
+                    $now
                 );
             }
 
@@ -854,6 +930,16 @@ public function generateWeeklySummary()
                     'subject' => "Tribe365 Weekly Summary ({$weekLabel})",
                     'body'    => $emailBody,
                 ]);
+
+                // Store notification in database
+                $this->storeNotification(
+                    $user->id,
+                    'weekly-summary',
+                    "Tribe365 Weekly Summary ({$weekLabel})",
+                    "Your weekly emotional summary for {$weekLabel} has been generated and sent to your email.",
+                    null,
+                    now('Asia/Kolkata')
+                );
 
                 Log::info("✅ OneSignal weekly email sent to {$user->email}");
             } catch (\Throwable $e) {
@@ -1212,6 +1298,16 @@ private function generateAIText(string $prompt, $userId = null): string
                     'subject' => "Tribe365 Monthly Summary ({$monthName})",
                     'body'    => $emailBody,
                 ]);
+
+                // Store notification in database
+                $this->storeNotification(
+                    $user->id,
+                    'monthly-summary',
+                    "Tribe365 Monthly Summary ({$monthName})",
+                    "Your monthly emotional summary for {$monthName} has been generated and sent to your email.",
+                    null,
+                    $today
+                );
 
                 Log::info("✅ OneSignal monthly email sent to {$user->email}");
             } catch (\Throwable $e) {
