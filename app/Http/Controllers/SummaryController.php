@@ -140,7 +140,7 @@ class SummaryController extends Controller
         } else {
             // Only show missed sentiment notification for past days or today after 16:00
             $now = Carbon::now('Asia/Kolkata');
-            $showMissed = !$date->isToday() || ($date->isToday() && $now->hour >= 16);
+            $showMissed = !$date->isToday();
 
             if ($showMissed) {
                 $summary[] = [

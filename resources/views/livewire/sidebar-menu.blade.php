@@ -96,7 +96,7 @@
     </a>
  @endhasanyrole
 
-@hasanyrole('organisation_user|organisation_admin')
+@hasanyrole('organisation_user|organisation_admin|basecamp')
     <a href="{{ route('myteam.list') }}"
    class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
   :class="[

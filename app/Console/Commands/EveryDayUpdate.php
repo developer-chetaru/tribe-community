@@ -156,6 +156,29 @@ class EveryDayUpdate extends Command
           $playerIds
       );
 
+      foreach ($usersToNotify as $user) {
+          $alreadyExists = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
+              ->where('notificationType', 'sentiment')
+              ->whereDate('created_at', $now->toDateString())
+              ->exists();
+
+          if (!$alreadyExists) {
+              \App\Models\IotNotification::create([
+                  'to_bubble_user_id' => $user->id,
+                  'from_bubble_user_id' => null,
+                  'notificationType' => 'sentiment',
+                  'title' => "Feedback",
+                  'description' => "How's things at work today?",
+                  'notificationLinks' => null,
+                  'sendNotificationId' => null,
+                  'status' => 'Active',
+                  'archive' => 0,
+                  'created_at' => $now,
+                  'updated_at' => $now,
+              ]);
+          }
+      }
+
       $this->info('Notification response: ' . json_encode($response));
       Log::channel('daily')->info('Notification sent', ['response' => $response]);
 
