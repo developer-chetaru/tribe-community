@@ -107,7 +107,7 @@
                 >
                     <input
                         x-ref="phoneInput"
-                        type="tel"
+                        type="number"
                         placeholder="Phone Number"
                         class="phone-field border rounded-[8px] px-3 py-2.5 w-full
                             focus:ring-red-500 focus:border-red-500 placeholder-black"
@@ -176,7 +176,15 @@
         class="border rounded-[8px] px-3 py-2.5 w-full text-black invalid:text-gray-400  focus:ring-red-500 focus:border-red-500 text-black">
     <option value="1">Public</option>
     <option value="0">Private</option>
+    <option value="other">Other</option>
 </select>
+
+        @if($profile_visibility === 'other')
+            <input type="text" wire:model="otherProfileVisibility" placeholder="Enter Other Profile Visibility" class="mt-2 border rounded-md px-3 py-2.5 w-full focus:ring-red-500 focus:border-red-500">
+            @error('otherProfileVisibility')
+                <span class="text-red-500 text-sm">{{ $message }}</span>
+            @enderror
+        @endif
 
                 @error('profile_visibility') <span class="text-red-500 text-sm">{{ $message }}</span> @enderror
             </div>

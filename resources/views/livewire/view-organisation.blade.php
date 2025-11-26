@@ -81,7 +81,13 @@
           
             <div class="bg-[#ffdede] text-[12px] rounded-lg flex items-center px-2 py-1 text-[#EB1C24] inline-flex" style="line-height: normal;">
                 <!-- <span class="h-[8px] w-[8px] flex bg-[#EB1C24] rounded-full mr-1"></span> -->
-                {{ $organisation->profile_visibility == 1 ? 'Public' : 'Private' }}
+                @if($organisation->profile_visibility == '1')
+                    Public
+                @elseif($organisation->profile_visibility == '0')
+                    Private
+                @else
+                    {{ $organisation->profile_visibility }}
+                @endif
             </div>
         </div>
 

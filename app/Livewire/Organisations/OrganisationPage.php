@@ -45,6 +45,7 @@ public $offices = [];
 public $branches = [];
 public $csvFile;
 public $profile_visibility; 
+public $otherProfileVisibility;
 public $allOffices;
 public $otherIndustryId;
 public $allIndustry;
@@ -83,7 +84,14 @@ public $otherIndustry;
         	    $this->organisationName   = $organisation->name;
         	    $this->phoneNumber        = $organisation->phone;
            	 	$this->turnover           = $organisation->turnover;
-          	  	$this->profile_visibility = $organisation->profile_visibility;
+          	  	// Handle profile visibility - check if it's a custom value
+          	  	if ($organisation->profile_visibility && $organisation->profile_visibility !== '1' && $organisation->profile_visibility !== '0') {
+          	  	    $this->profile_visibility = 'other';
+          	  	    $this->otherProfileVisibility = $organisation->profile_visibility;
+          	  	} else {
+          	  	    $this->profile_visibility = $organisation->profile_visibility;
+          	  	    $this->otherProfileVisibility = null;
+          	  	}
            	 	$this->website            = $organisation->url;
            	 	$this->founded_year       = $organisation->founded_year;
           	if ($organisation->indus) {
@@ -137,6 +145,12 @@ public $otherIndustry;
             	'founded_year' => 'nullable|digits:4|integer|min:1900|max:' . (date('Y')),
 
             'profile_visibility'=> 'nullable|string',
+            'otherProfileVisibility' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::requiredIf(fn () => $this->profile_visibility === 'other'),
+            ],
            	 'website' => [
                 	'nullable',
                 	'regex:/^(https?:\/\/)?([\w\-]+\.)+[\w\-]+(\/[^\s]*)?$/i'
@@ -146,6 +160,7 @@ public $otherIndustry;
         	], [
            	 'indus.required'         => 'Please select an industry.',
             	'otherIndustry.required' => 'Please enter the name of the other industry.',
+            	'otherProfileVisibility.required' => 'Please enter the other profile visibility.',
         	]);
     	}
     	elseif ($step === 'office') {
@@ -233,6 +248,12 @@ public $otherIndustry;
             $industryId = (int) $this->indus;
         }
 
+        // Handle profile visibility
+        $profileVisibilityValue = $this->profile_visibility;
+        if ($this->profile_visibility === 'other') {
+            $profileVisibilityValue = $this->otherProfileVisibility;
+        }
+
         if ($this->organisationId) {
             $org = \App\Models\Organisation::find($this->organisationId);
 
@@ -244,7 +265,7 @@ public $otherIndustry;
                     'turnover'           => $this->turnover,
                     'industry_id'        => $industryId,
                     'working_days'       => $validated['working_days'],
-                    'profile_visibility' => $this->profile_visibility ?? true,
+                    'profile_visibility' => $profileVisibilityValue ?? '1',
                     'url'                => $this->website,
                     'founded_year'       => $this->founded_year,
                     'image'              => $image ?? $org->image,
@@ -258,7 +279,7 @@ public $otherIndustry;
                 'industry_id'        => $industryId,
                 'turnover'           => $this->turnover,
                 'working_days'       => $validated['working_days'],
-                'profile_visibility' => $this->profile_visibility ?? true,
+                'profile_visibility' => $profileVisibilityValue ?? '1',
                 'url'                => $this->website,
                 'founded_year'       => $this->founded_year,
                 'image'              => $image,
@@ -269,6 +290,7 @@ public $otherIndustry;
         }
 
         $this->otherIndustry = null;
+        $this->otherProfileVisibility = null;
         $this->allIndustry   = \App\Models\Industry::where('status', 1)->get();
         $this->activeTab     = 'office';
     }
@@ -285,7 +307,14 @@ public $otherIndustry;
         	$this->turnover           = $org->turnover;
         	$this->establishedYear    = $org->founded_year;
         	$this->website            = $org->url;
-        	$this->profile_visibility = $org->profile_visibility;
+        	// Handle profile visibility - check if it's a custom value
+        	if ($org->profile_visibility && $org->profile_visibility !== '1' && $org->profile_visibility !== '0') {
+        	    $this->profile_visibility = 'other';
+        	    $this->otherProfileVisibility = $org->profile_visibility;
+        	} else {
+        	    $this->profile_visibility = $org->profile_visibility;
+        	    $this->otherProfileVisibility = null;
+        	}
         	$this->workingDays        = $org->working_days ?? [];
 
         	$this->logoPreview = $org->image ? asset('storage/' . $org->image) : null;

@@ -17,6 +17,7 @@ class UpdateOrganisation extends Component
     public $indus;
     public $turnover;
     public $profile_visibility;
+    public $otherProfileVisibility;
     public $working_days = [];
     public $founded_year;
     public $url;
@@ -57,7 +58,16 @@ class UpdateOrganisation extends Component
         }
 
         $this->turnover          = $org->turnover;
-        $this->profile_visibility= $org->profile_visibility;
+        
+        // Handle profile visibility - check if it's a custom value
+        if ($org->profile_visibility && $org->profile_visibility !== '1' && $org->profile_visibility !== '0') {
+            $this->profile_visibility = 'other';
+            $this->otherProfileVisibility = $org->profile_visibility;
+        } else {
+            $this->profile_visibility = $org->profile_visibility;
+            $this->otherProfileVisibility = null;
+        }
+        
         $this->working_days      = is_array($org->working_days) ? $org->working_days : explode(',', $org->working_days);
         $this->founded_year      = $org->founded_year;
         $this->url               = $org->url;
@@ -76,7 +86,13 @@ public function rules()
       	'country_code'       => 'required|string|max:5',
         'indus'              => 'required',
         'turnover'           => 'required|string',
-        'profile_visibility' => 'required|boolean',
+        'profile_visibility' => 'required|string',
+        'otherProfileVisibility' => [
+            'nullable',
+            'string',
+            'max:255',
+            \Illuminate\Validation\Rule::requiredIf(fn () => $this->profile_visibility === 'other'),
+        ],
         'working_days'       => 'required|array|min:1',
         'founded_year'       => 'nullable|digits:4|integer|min:1900|max:' . date('Y'),
         'url'                => [
@@ -116,6 +132,7 @@ protected $messages = [
     'image.image'                 => 'Only image files are allowed.',
     'image.max'                   => 'Image size must not exceed 2MB.',
    'otherIndustry.required'      => 'Please enter the name of the other industry.',
+   'otherProfileVisibility.required' => 'Please enter the other profile visibility.',
 ];
 
 
@@ -178,6 +195,12 @@ protected $messages = [
         $industryId = (int) $this->indus;
     }
 
+    // 🔹 Handle profile visibility
+    $profileVisibilityValue = $this->profile_visibility;
+    if ($this->profile_visibility === 'other') {
+        $profileVisibilityValue = $this->otherProfileVisibility;
+    }
+
     // 🔹 Update organisation
     $organisation->update([
         'name'               => $this->name,
@@ -185,7 +208,7 @@ protected $messages = [
       	'country_code'       => $this->country_code, 
         'industry_id'        => $industryId,
         'turnover'           => $this->turnover,
-        'profile_visibility' => $this->profile_visibility,
+        'profile_visibility' => $profileVisibilityValue,
         'working_days'       => $this->working_days,
         'founded_year'       => $this->founded_year,
         'url'                => $this->url,
