@@ -24,7 +24,7 @@ class EveryDayUpdate extends Command
     public function handle(OneSignalService $oneSignal)
     {
         $only = $this->option('only');
-        $date = $this->option('date') ?: now()->toDateString();
+        $date = $this->option('date') ?: now('Asia/Kolkata')->toDateString();
         $now  = now('Asia/Kolkata');
 
         Log::info("Cron started for --only={$only} at {$now}");
@@ -156,9 +156,6 @@ class EveryDayUpdate extends Command
   {
       $this->info("Fetching users...");
 
-      // Current India time
-      $now = now('Asia/Kolkata');
-
       // Get all users with a valid FCM token and load organisation
       $users = User::whereNotNull('fcmToken')
           ->where('fcmToken', '!=', '')
@@ -171,8 +168,25 @@ class EveryDayUpdate extends Command
           return;
       }
 
-      // Filter users based on organisation and working days
-      $usersToNotify = $users->filter(function ($user) use ($now) {
+      // Filter users based on timezone (16:30 in their local time), organisation and working days
+      $usersToNotify = $users->filter(function ($user) {
+          // Use user's timezone if available, otherwise default to Asia/Kolkata
+          $timezone = $user->timezone ?? 'Asia/Kolkata';
+          
+          // Validate timezone to prevent errors
+          try {
+              $now = now($timezone);
+          } catch (\Exception $e) {
+              // If timezone is invalid, fall back to Asia/Kolkata
+              Log::channel('daily')->warning("Invalid timezone '{$timezone}' for user {$user->id}, using Asia/Kolkata");
+              $timezone = 'Asia/Kolkata';
+              $now = now($timezone);
+          }
+
+          // Only send if it's 16:30 in user's timezone
+          if ($now->format('H:i') !== '16:30') {
+              return false;
+          }
 
           $today = $now->format('D'); // e.g., Mon, Tue, Wed
 
@@ -213,13 +227,25 @@ class EveryDayUpdate extends Command
       );
 
       foreach ($usersToNotify as $user) {
+          // Use user's timezone for storing notification
+          $timezone = $user->timezone ?? 'Asia/Kolkata';
+          
+          try {
+              $nowForUser = now($timezone);
+          } catch (\Exception $e) {
+              // If timezone is invalid, fall back to Asia/Kolkata
+              Log::channel('daily')->warning("Invalid timezone '{$timezone}' for user {$user->id} in notification storage, using Asia/Kolkata");
+              $timezone = 'Asia/Kolkata';
+              $nowForUser = now($timezone);
+          }
+          
           $this->storeNotification(
               $user->id,
               'sentiment',
               'Feedback',
               "How's things at work today?",
               null,
-              $now
+              $nowForUser
           );
       }
 
@@ -241,27 +267,66 @@ class EveryDayUpdate extends Command
 
     protected function sendReports(string $date)
     {
+        // Get all unique timezones from users
+        $timezones = User::distinct()
+            ->whereNotNull('timezone')
+            ->pluck('timezone')
+            ->toArray();
+        
+        // Add default timezone if no users have timezone set
+        if (empty($timezones)) {
+            $timezones = ['Asia/Kolkata'];
+        } else {
+            $timezones[] = 'Asia/Kolkata'; // Include default
+            $timezones = array_unique($timezones);
+        }
+
+        $shouldSend = false;
+        $reportDate = $date;
+
+        // Check if it's 23:59 in any user's timezone
+        foreach ($timezones as $tz) {
+            try {
+                $nowForTz = now($tz);
+                if ($nowForTz->format('H:i') === '23:59') {
+                    $shouldSend = true;
+                    $reportDate = $nowForTz->toDateString();
+                    break;
+                }
+            } catch (\Exception $e) {
+                // Skip invalid timezones
+                Log::channel('daily')->warning("Invalid timezone '{$tz}' in sendReports, skipping");
+                continue;
+            }
+        }
+
+        // Only send reports if it's 23:59 in at least one user's timezone
+        if (!$shouldSend) {
+            Log::channel('daily')->info('Reports not sent - not 23:59 in any user timezone');
+            return;
+        }
+
         $offices = Office::all();
 
         foreach ($offices as $office) {
             $payload = [
                 'officeId' => $office->id,
-                'date'     => $date,
+                'date'     => $reportDate,
             ];
             Log::channel('daily')->info('Sending report for office: '.$office->id, $payload);
 
             (new AdminReportController())->getHappyIndexReport($payload);
         }
 
-        $this->info('Reports sent for date: ' . $date);
+        $this->info('Reports sent for date: ' . $reportDate);
     }
 protected function sendFridayEmail()
 {
     try {
     
-        $users = User::with('organisation')
-            ->with(['happyindexes' => function ($q) {
-                $q->whereDate('created_at', '>=', now()->subDays(6));
+            $users = User::with('organisation')
+                ->with(['happyindexes' => function ($q) {
+                    $q->whereDate('created_at', '>=', now('Asia/Kolkata')->subDays(6));
             }])
             ->get();
 
@@ -275,7 +340,7 @@ protected function sendFridayEmail()
       
             $days = collect();
             for ($i = 6; $i >= 0; $i--) {
-                $date = now()->subDays($i)->startOfDay();
+                $date = now('Asia/Kolkata')->subDays($i)->startOfDay();
                 $days->push($date);
             }
 
@@ -360,7 +425,7 @@ protected function sendFridayEmail()
             });
 
             // Store notification in database
-            $weekLabel = now()->subDays(6)->format('M d') . ' - ' . now()->format('M d');
+            $weekLabel = now('Asia/Kolkata')->subDays(6)->format('M d') . ' - ' . now('Asia/Kolkata')->format('M d');
             $this->storeNotification(
                 $user->id,
                 'weekly-report',
@@ -387,9 +452,9 @@ protected function sendMonthlyEmail()
 {
     try {
      
-        $users = User::with('organisation')
-            ->with(['happyindexes' => function ($q) {
-                $q->whereMonth('created_at', now()->month);
+            $users = User::with('organisation')
+                ->with(['happyindexes' => function ($q) {
+                $q->whereMonth('created_at', now('Asia/Kolkata')->month);
             }])
             ->get();
 
@@ -400,10 +465,10 @@ protected function sendMonthlyEmail()
 
         foreach ($users as $user) {
             // Prepare days in current month
-            $daysInMonth = now()->daysInMonth;
+            $daysInMonth = now('Asia/Kolkata')->daysInMonth;
             $days = collect();
             for ($i = 1; $i <= $daysInMonth; $i++) {
-                $days->push(now()->startOfMonth()->addDays($i - 1));
+                $days->push(now('Asia/Kolkata')->startOfMonth()->addDays($i - 1));
             }
 
 
@@ -488,7 +553,7 @@ protected function sendMonthlyEmail()
             });
 
             // Store notification in database
-            $monthName = now()->format('F Y');
+            $monthName = now('Asia/Kolkata')->format('F Y');
             $this->storeNotification(
                 $user->id,
                 'monthly-report',
@@ -514,7 +579,7 @@ protected function sendMonthlyEmail()
     {
         try {
 
-            $now = now();
+            $now = now('Asia/Kolkata');
             $todayDate = $now->toDateString();
             $todayShort = $now->format('D'); 
 
@@ -614,7 +679,7 @@ protected function sendMonthlyEmail()
         try {
             $users = User::with('organisation')
                 ->with(['happyindexes' => function ($q) {
-                    $q->whereMonth('created_at', now()->month);
+                    $q->whereMonth('created_at', now('Asia/Kolkata')->month);
                 }])
                 ->get();
 
@@ -625,10 +690,10 @@ protected function sendMonthlyEmail()
 
             foreach ($users as $user) {
                 // Prepare days in current month
-                $daysInMonth = now()->daysInMonth;
+                $daysInMonth = now('Asia/Kolkata')->daysInMonth;
                 $days = collect();
                 for ($i = 1; $i <= $daysInMonth; $i++) {
-                    $days->push(now()->startOfMonth()->addDays($i - 1));
+                    $days->push(now('Asia/Kolkata')->startOfMonth()->addDays($i - 1));
                 }
 
                 $happyData = $user->happyindexes->groupBy(function ($item) {
@@ -744,7 +809,7 @@ protected function sendMonthlyEmail()
     protected function sendAiSentimentReminderEmail()
     {
         try {
-            $today = now()->toDateString();
+            $today = now('Asia/Kolkata')->toDateString();
             $this->info("Checking sentiment reminders for date: $today");
             Log::channel('daily')->info("Checking sentiment reminders for date: $today");
 

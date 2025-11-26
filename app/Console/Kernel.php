@@ -23,29 +23,41 @@ class Kernel extends ConsoleKernel
         // Existing schedules (unchanged)
         // ---------------------------------------------------------------------
 
-    
+        // Notification: Run hourly and let the command filter by user timezone (16:30 in each user's timezone)
         $schedule->command('notification:send --only=notification')
-            ->dailyAt('16:30')
-            ->timezone('Asia/Kolkata');
+            ->hourly()
+            ->timezone('UTC');
 
-        // Sirf report roz 23:59 baje
+        // Report: Run hourly and let the command filter by user timezone (23:59 in each user's timezone)
         $schedule->command('notification:send --only=report')
-            ->dailyAt('23:59')
-            ->timezone('Asia/Kolkata');
+            ->hourly()
+            ->timezone('UTC');
 
         // -------------------------
         // Weekly Summary Cron
         // -------------------------
         $schedule->call(function () {
             $users = User::all();
-
             foreach ($users as $user) {
                 try {
+                    // Use user's timezone if available, otherwise default to Asia/Kolkata
+                    $timezone = $user->timezone ?? 'Asia/Kolkata';
+                    
+                    // Validate timezone to prevent errors
+                    try {
+                        $nowForUser = now($timezone);
+                    } catch (\Exception $e) {
+                        // If timezone is invalid, fall back to Asia/Kolkata
+                        Log::warning("Invalid timezone '{$timezone}' for user {$user->id}, using Asia/Kolkata");
+                        $timezone = 'Asia/Kolkata';
+                        $nowForUser = now($timezone);
+                    }
+
                     $component = new WeeklySummary();
 
-                    // Use current month/year
-                    $component->selectedYear = now()->year;
-                    $component->selectedMonth = now()->month;
+                    // Use current month/year based on user's timezone
+                    $component->selectedYear = $nowForUser->year;
+                    $component->selectedMonth = $nowForUser->month;
 
                     // Generate summary for user (cron-safe)
                     $component->generateMonthlySummaries($user);
@@ -62,7 +74,7 @@ class Kernel extends ConsoleKernel
         ->withoutOverlapping();
 
         $schedule->command('everyday:update')
-            ->monthlyOn(now()->endOfMonth()->day, '22:00')
+            ->monthlyOn(now('Asia/Kolkata')->endOfMonth()->day, '22:00')
             ->timezone('Asia/Kolkata') // adjust timezone as needed
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/monthly_summary.log'));
@@ -76,16 +88,28 @@ class Kernel extends ConsoleKernel
     {
         $user = auth()->user();
         $registerDate = $user->created_at;
-        $currentYear = now()->year;
+        // Use user's timezone if available, fall back to Asia/Kolkata
+        $timezone = $user->timezone ?? 'Asia/Kolkata';
+        
+        // Validate timezone to prevent errors
+        try {
+            $now = now($timezone);
+        } catch (\Exception $e) {
+            // If timezone is invalid, fall back to Asia/Kolkata
+            $timezone = 'Asia/Kolkata';
+            $now = now($timezone);
+        }
+        
+        $currentYear = $now->year;
 
         // Adjust month if year changes
         if ($year == $registerDate->year && $year == $currentYear) {
             $this->selectedMonth = max($this->selectedMonth, $registerDate->month);
-            $this->selectedMonth = min($this->selectedMonth, now()->month);
+            $this->selectedMonth = min($this->selectedMonth, $now->month);
         } elseif ($year == $registerDate->year) {
             $this->selectedMonth = max($this->selectedMonth, $registerDate->month);
         } elseif ($year == $currentYear) {
-            $this->selectedMonth = min($this->selectedMonth, now()->month);
+            $this->selectedMonth = min($this->selectedMonth, $now->month);
         } else {
             if ($this->selectedMonth < 1 || $this->selectedMonth > 12) {
                 $this->selectedMonth = 1;
