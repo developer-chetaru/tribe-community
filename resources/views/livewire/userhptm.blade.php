@@ -127,7 +127,12 @@
                                                 'autoplay' => '1',
                                                 'rel' => '0',
                                                 'modestbranding' => '1',
-                                                'playsinline' => '1'
+                                                'playsinline' => '1',
+                                                'controls' => '1',
+                                                'showinfo' => '0',
+                                                'fs' => '1',
+                                                'enablejsapi' => '1',
+                                                'iv_load_policy' => '3'
                                             ];
                                             
                                             // Add origin parameter if on HTTPS (will be set client-side for production)
@@ -139,6 +144,7 @@
                                     @endphp
                                     <div x-data="{ 
                                         openVideoModal: false,
+                                        isFullscreen: true,
                                         embedUrl: '{{ $embedLinkWithParams ?? '' }}',
                                         watchLink: '{{ !empty($videoId) ? "https://www.youtube.com/watch?v=" . $videoId : $originalUrl }}',
                                         init() {
@@ -147,10 +153,14 @@
                                                 const separator = this.embedUrl.includes('?') ? '&' : '?';
                                                 this.embedUrl = this.embedUrl + separator + 'origin=' + encodeURIComponent(window.location.origin);
                                             }
+                                        },
+                                        openModal() {
+                                            this.openVideoModal = true;
+                                            this.isFullscreen = true;
                                         }
                                     }" x-init="init()" class="inline-block">
                                         <button 
-                                            @click.stop="openVideoModal = true" 
+                                            @click.stop="openModal()" 
                                             class="flex items-center text-[#EB1C24] text-[12px] sm:text-[14px] mt-3"
                                         >
                                             <img src="{{ asset('images/play-circle.svg') }}" class="mr-3" alt="Play Icon"> 
@@ -161,24 +171,36 @@
                                         <div
                                             x-show="openVideoModal"
                                             x-cloak
-                                            @click.self="openVideoModal = false"
-                                            class="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+                                            x-transition:enter="transition ease-out duration-300"
+                                            x-transition:enter-start="opacity-0"
+                                            x-transition:enter-end="opacity-100"
+                                            @click.self="!isFullscreen && (openVideoModal = false)"
+                                            :class="isFullscreen ? 'fixed inset-0 z-[9999] bg-black' : 'fixed inset-0 bg-black/80 flex items-center justify-center z-50'"
                                         >
-                                            <div class="relative w-[95%] md:w-[85%] lg:w-[75%] h-[85vh] bg-black rounded-lg overflow-hidden">
-                                                <button
-                                                    @click="openVideoModal = false"
-                                                    class="absolute top-4 right-4 text-white bg-black/50 hover:bg-black/70 rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold z-10 transition-colors"
-                                                >×</button>
+                                            <div 
+                                                x-ref="videoModalContainer"
+                                                :class="isFullscreen ? 'w-full h-full' : 'relative w-[95%] md:w-[85%] lg:w-[75%] h-[85vh] rounded-lg'"
+                                                class="bg-black overflow-hidden"
+                                            >
+                                                <div class="absolute top-2 right-2 z-[100]">
+                                                    <button
+                                                        @click="openVideoModal = false; isFullscreen = false;"
+                                                        class="text-white bg-[#EB1C24] hover:bg-[#d01820] rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold transition-colors shadow-lg"
+                                                        title="Close"
+                                                    >×</button>
+                                                </div>
                                                 
                                                 @if(!empty($videoId) && !empty($embedLink))
-                                                    <iframe 
-                                                        :src="embedUrl" 
-                                                        class="w-full h-full border-0" 
-                                                        frameborder="0" 
-                                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                                                        allowfullscreen
-                                                        referrerpolicy="strict-origin-when-cross-origin"
-                                                    ></iframe>
+                                                    <div class="relative w-full h-full">
+                                                        <iframe 
+                                                            :src="embedUrl" 
+                                                            class="w-full h-full border-0" 
+                                                            frameborder="0" 
+                                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                                            allowfullscreen
+                                                            referrerpolicy="strict-origin-when-cross-origin"
+                                                        >                                                        </iframe>
+                                                    </div>
                                                 @else
                                                     <div class="w-full h-full flex items-center justify-center text-white p-8 text-center">
                                                         <div>
