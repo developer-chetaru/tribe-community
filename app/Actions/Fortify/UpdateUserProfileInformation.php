@@ -24,6 +24,7 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
             'email'      => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
           	'country_code' => ['nullable', 'string', 'max:10'],
             'phone'      => ['nullable', 'string', 'max:20'],
+            'timezone'   => ['nullable', 'string', 'max:50', Rule::in(timezone_identifiers_list())],
             'photo'      => ['nullable', 'mimes:jpg,jpeg,png', 'max:1024'],
         ])->validateWithBag('updateProfileInformation');
 
@@ -42,8 +43,9 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
                 'first_name' => $input['first_name'],
                 'last_name'  => $input['last_name'],
                 'email'      => $input['email'],
-              	'country_code' => $input['country_code'] ?? +1,
+              	'country_code' => $input['country_code'] ?? '+1',
                 'phone'      => $input['phone'] ?? null,
+                'timezone'   => $input['timezone'] ?? null,
             ])->save();
         }
     }

@@ -810,6 +810,7 @@ class HPTMController extends Controller
                 'last_name'    => 'sometimes|string|max:255',
                 'phone'        => 'sometimes|string|max:20',
                 'country_code' => 'sometimes|string|min:1',
+                'timezone'     => ['sometimes', 'string', 'max:50', \Illuminate\Validation\Rule::in(timezone_identifiers_list())],
                 'profileImage' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
             ]);
 
@@ -829,6 +830,9 @@ class HPTMController extends Controller
                 $user->country_code = $validated['country_code'];
             }
 
+            if (isset($validated['timezone'])) {
+                $user->timezone = $validated['timezone'];
+            }
 
             // Handle profile image upload
             if ($request->hasFile('profileImage')) {

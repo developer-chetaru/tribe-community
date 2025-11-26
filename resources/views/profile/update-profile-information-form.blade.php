@@ -123,6 +123,122 @@
             <x-input-error for="email" class="mt-2" />
         </div>
 
+        <!-- Timezone -->
+        @php
+            $tzToCountry = [
+                'Asia/Kolkata' => 'IN', 'Asia/Dubai' => 'AE', 'Asia/Singapore' => 'SG',
+                'Asia/Tokyo' => 'JP', 'Asia/Shanghai' => 'CN', 'Asia/Hong_Kong' => 'HK',
+                'Asia/Bangkok' => 'TH', 'Asia/Jakarta' => 'ID', 'Asia/Manila' => 'PH',
+                'Asia/Seoul' => 'KR', 'Asia/Kuala_Lumpur' => 'MY',
+                'Europe/London' => 'GB', 'Europe/Paris' => 'FR', 'Europe/Berlin' => 'DE',
+                'Europe/Rome' => 'IT', 'Europe/Madrid' => 'ES', 'Europe/Amsterdam' => 'NL',
+                'Europe/Brussels' => 'BE', 'Europe/Vienna' => 'AT', 'Europe/Zurich' => 'CH',
+                'Europe/Stockholm' => 'SE', 'Europe/Oslo' => 'NO', 'Europe/Copenhagen' => 'DK',
+                'Europe/Helsinki' => 'FI', 'Europe/Warsaw' => 'PL', 'Europe/Prague' => 'CZ',
+                'Europe/Budapest' => 'HU', 'Europe/Athens' => 'GR', 'Europe/Lisbon' => 'PT',
+                'Europe/Dublin' => 'IE',
+                'America/New_York' => 'US', 'America/Chicago' => 'US', 'America/Denver' => 'US',
+                'America/Los_Angeles' => 'US', 'America/Toronto' => 'CA', 'America/Vancouver' => 'CA',
+                'America/Mexico_City' => 'MX', 'America/Sao_Paulo' => 'BR', 'America/Buenos_Aires' => 'AR',
+                'America/Santiago' => 'CL', 'America/Lima' => 'PE', 'America/Bogota' => 'CO',
+                'Australia/Sydney' => 'AU', 'Australia/Melbourne' => 'AU', 'Australia/Brisbane' => 'AU',
+                'Australia/Perth' => 'AU', 'Australia/Adelaide' => 'AU',
+                'Pacific/Auckland' => 'NZ',
+                'Africa/Cairo' => 'EG', 'Africa/Johannesburg' => 'ZA', 'Africa/Lagos' => 'NG',
+                'Africa/Nairobi' => 'KE',
+            ];
+            $timezones = collect(timezone_identifiers_list())->map(function($tz) use ($tzToCountry) {
+                $countryCode = $tzToCountry[$tz] ?? '';
+                $parts = explode('/', $tz);
+                $city = str_replace('_', ' ', end($parts));
+                $display = $countryCode ? $countryCode . ' - ' . $city . ' (' . $tz . ')' : $tz;
+                return ['value' => $tz, 'display' => $display, 'search' => strtolower($tz . ' ' . $city . ' ' . ($countryCode ?? ''))];
+            })->values()->all();
+            $currentTz = $this->user->timezone ?? '';
+            $currentDisplay = collect($timezones)->firstWhere('value', $currentTz)['display'] ?? $currentTz;
+        @endphp
+        <div class="col-span-6 sm:col-span-3" x-data="{
+            search: '',
+            showSuggestions: false,
+            selectedTimezone: @js($currentTz),
+            timezones: @js($timezones),
+            get filteredTimezones() {
+                if (!this.search || this.search.length < 1) return [];
+                const query = this.search.toLowerCase();
+                return this.timezones.filter(tz => tz.search.includes(query)).slice(0, 15);
+            },
+            get displayValue() {
+                if (!this.selectedTimezone) return '';
+                const tz = this.timezones.find(t => t.value === this.selectedTimezone);
+                return tz ? tz.display : this.selectedTimezone;
+            },
+            selectTimezone(tz) {
+                this.selectedTimezone = tz.value;
+                this.search = '';
+                this.showSuggestions = false;
+                @this.set('state.timezone', tz.value);
+            },
+            clearTimezone() {
+                this.selectedTimezone = '';
+                this.search = '';
+                this.showSuggestions = false;
+                @this.set('state.timezone', '');
+            },
+            init() {
+                // Update Livewire when timezone changes
+                this.$watch('selectedTimezone', value => {
+                    @this.set('state.timezone', value);
+                });
+            }
+        }">
+            <label for="timezone" class="block text-sm font-medium text-gray-700">Timezone</label>
+            <div class="relative mt-1">
+                <div class="relative">
+                    <input 
+                        type="text"
+                        :value="search || displayValue"
+                        @input="search = $event.target.value; showSuggestions = search.length > 0"
+                        @focus="if(!search) { search = ''; } showSuggestions = search.length > 0"
+                        @click.away="showSuggestions = false; if(!search) search = '';"
+                        @keydown.escape="showSuggestions = false; search = '';"
+                        placeholder="Type to search timezone..."
+                        class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 pr-8"
+                    />
+                    <button 
+                        type="button"
+                        x-show="selectedTimezone || search"
+                        @click="clearTimezone()"
+                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                        title="Clear timezone"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <input type="hidden" wire:model.defer="state.timezone" x-model="selectedTimezone">
+                
+                <div x-show="showSuggestions && filteredTimezones.length > 0" 
+                     x-cloak
+                     x-transition
+                     class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                    <template x-for="tz in filteredTimezones" :key="tz.value">
+                        <div @click="selectTimezone(tz)" 
+                             class="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                             :class="{'bg-red-50': selectedTimezone === tz.value}">
+                            <span x-text="tz.display"></span>
+                        </div>
+                    </template>
+                </div>
+                <div x-show="showSuggestions && search.length > 0 && filteredTimezones.length === 0" 
+                     x-cloak
+                     class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-4 text-center text-gray-500">
+                    No timezones found
+                </div>
+            </div>
+            <x-input-error for="timezone" class="mt-2" />
+        </div>
+
 		
 @if(Auth::user()->organisation)
     <div class="col-span-6 sm:col-span-4">
