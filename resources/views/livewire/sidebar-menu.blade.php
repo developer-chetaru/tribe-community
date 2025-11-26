@@ -144,8 +144,8 @@
        ]"
     >
         <img :src="window.location.pathname === '{{ route('user.notifications', [], false) }}' 
-                    ? '{{ asset('images/reflectoin_red.svg') }}' 
-                    : '{{ asset('images/reflectoin_black.svg') }}'"  
+                    ? '{{ asset('images/notification-active.svg') }}' 
+                    : '{{ asset('images/notification.svg') }}'"  
              class="h-5 w-5" />
 
         <span x-show="$store.sidebar.open" x-transition class="text-sm">
