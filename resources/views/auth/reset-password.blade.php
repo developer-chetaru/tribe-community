@@ -82,7 +82,8 @@
                             id="submitBtn"
                             disabled
                             type="submit"
-                            class="w-full text-white font-semibold py-2 rounded-full transition bg-red-300 cursor-not-allowed"
+                            class="w-full text-white font-semibold py-3 px-4 rounded-full transition-all duration-200 bg-red-300 cursor-not-allowed opacity-100"
+                            style="background-color: #fca5a5; min-height: 44px;"
                         >
                             Reset Password
                         </button>
@@ -161,10 +162,15 @@
 
         function updateButtonState() {
             submitBtn.disabled = !(isStrong && isMatch);
-            submitBtn.className =
-                (isStrong && isMatch)
-                    ? "w-full text-white font-semibold py-2 rounded-full transition bg-red-500 cursor-pointer hover:bg-red-600"
-                    : "w-full text-white font-semibold py-2 rounded-full transition bg-red-300 cursor-not-allowed";
+            if (isStrong && isMatch) {
+                submitBtn.className = "w-full text-white font-semibold py-3 px-4 rounded-full transition-all duration-200 bg-red-500 cursor-pointer hover:bg-red-600 opacity-100";
+                submitBtn.style.backgroundColor = "#ef4444";
+                submitBtn.style.cursor = "pointer";
+            } else {
+                submitBtn.className = "w-full text-white font-semibold py-3 px-4 rounded-full transition-all duration-200 bg-red-300 cursor-not-allowed opacity-100";
+                submitBtn.style.backgroundColor = "#fca5a5";
+                submitBtn.style.cursor = "not-allowed";
+            }
         }
 
         function triggerPasswordCheck() {
@@ -203,7 +209,9 @@
             if (submitBtn) {
                 submitBtn.disabled = true;
                 submitBtn.textContent = "Redirecting...";
-                submitBtn.className = "w-full text-white font-semibold py-2 rounded-full transition bg-green-500 cursor-wait";
+                submitBtn.className = "w-full text-white font-semibold py-3 px-4 rounded-full transition-all duration-200 bg-green-500 cursor-wait opacity-100";
+                submitBtn.style.backgroundColor = "#22c55e";
+                submitBtn.style.minHeight = "44px";
             }
 
             const countdownTimer = setInterval(() => {
