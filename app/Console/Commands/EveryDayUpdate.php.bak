@@ -349,7 +349,7 @@ protected function sendFridayEmail()
 
             $chartUrl = "https://quickchart.io/chart?c=" . urlencode(json_encode($chartConfig));
 
-            // Send email to this user
+            // Send mail to this user
             \Mail::send('emails.weekly-report', [
                 'user' => $user,
                 'organisation' => $user->organisation,
@@ -365,20 +365,20 @@ protected function sendFridayEmail()
                 $user->id,
                 'weekly-report',
                 'Your Weekly Happy Index Report',
-                "Your weekly happy index report for {$weekLabel} is available.",
+                "Your weekly happy index report for {$weekLabel} has been sent to your email.",
                 null,
                 now('Asia/Kolkata')
             );
         }
 
-        Log::channel('daily')->info('Friday HappyIndex emails sent and notifications stored for all users.');
-        $this->info('Friday HappyIndex emails sent and notifications stored for all users.');
+        Log::channel('daily')->info('Friday HappyIndex emails sent to all users.');
+        $this->info('Friday HappyIndex emails sent to all users.');
 
     } catch (\Exception $e) {
-        Log::channel('daily')->error('Error sending Friday HappyIndex emails and storing notifications', [
+        Log::channel('daily')->error('Error sending Friday HappyIndex emails', [
             'error' => $e->getMessage(),
         ]);
-        $this->error('Error sending Friday HappyIndex emails and storing notifications: ' . $e->getMessage());
+        $this->error('Error sending Friday HappyIndex emails: ' . $e->getMessage());
     }
 }
 
@@ -477,7 +477,7 @@ protected function sendMonthlyEmail()
 
             $chartUrl = "https://quickchart.io/chart?c=" . urlencode(json_encode($chartConfig));
 
-            // Send email to this user
+            // Send mail to this user
             \Mail::send('emails.monthly-report', [
                 'user' => $user,
                 'organisation' => $user->organisation,
@@ -493,20 +493,20 @@ protected function sendMonthlyEmail()
                 $user->id,
                 'monthly-report',
                 'Your Monthly Happy Index Report',
-                "Your monthly happy index report for {$monthName} is available.",
+                "Your monthly happy index report for {$monthName} has been sent to your email.",
                 null,
                 now('Asia/Kolkata')
             );
         }
 
-        Log::channel('daily')->info('Monthly HappyIndex emails sent and notifications stored for all users.');
-        $this->info('Monthly HappyIndex emails sent and notifications stored for all users.');
+        Log::channel('daily')->info('Monthly HappyIndex emails sent to all users.');
+        $this->info('Monthly HappyIndex emails sent to all users.');
 
     } catch (\Exception $e) {
-        Log::channel('daily')->error('Error sending Monthly HappyIndex emails and storing notifications', [
+        Log::channel('daily')->error('Error sending Monthly HappyIndex emails', [
             'error' => $e->getMessage(),
         ]);
-        $this->error('Error sending Monthly HappyIndex emails and storing notifications: ' . $e->getMessage());
+        $this->error('Error sending Monthly HappyIndex emails: ' . $e->getMessage());
     }
 }
   
@@ -591,19 +591,19 @@ protected function sendMonthlyEmail()
                 );
             }
 
-            Log::channel('daily')->info("✔ Sentiment reminder emails sent and notifications stored successfully.", [
+            Log::channel('daily')->info("✔ Sentiment reminders sent successfully.", [
                 'total_sent' => $usersToNotify->count()
             ]);
 
-            $this->info("Sentiment reminder emails sent and notifications stored successfully.");
+            $this->info("Sentiment reminder emails sent successfully.");
 
         } catch (\Throwable $e) {
 
-            Log::channel('daily')->error("❌ Error sending sentiment reminder emails and storing notifications", [
+            Log::channel('daily')->error("❌ Error sending sentiment reminders", [
                 'error' => $e->getMessage()
             ]);
 
-            $this->error("Error sending sentiment reminder emails and storing notifications: " . $e->getMessage());
+            $this->error("Error sending sentiment reminders: " . $e->getMessage());
         }
     }
 
@@ -910,7 +910,7 @@ public function generateWeeklySummary()
         );
 
         /**
-         * IMPORTANT: SEND EMAIL AND STORE NOTIFICATION ONLY IF SUMMARY IS VALID
+         * IMPORTANT: SEND EMAIL ONLY IF SUMMARY IS VALID
          */
         if ($this->isValidSummary($summaryText)) {
             try {
@@ -936,12 +936,12 @@ public function generateWeeklySummary()
                     $user->id,
                     'weekly-summary',
                     "Tribe365 Weekly Summary ({$weekLabel})",
-                    "Your weekly emotional summary for {$weekLabel} has been generated.",
+                    "Your weekly emotional summary for {$weekLabel} has been generated and sent to your email.",
                     null,
                     now('Asia/Kolkata')
                 );
 
-                Log::info("✅ OneSignal weekly email sent and notification stored for user {$user->id}");
+                Log::info("✅ OneSignal weekly email sent to {$user->email}");
             } catch (\Throwable $e) {
                 Log::error("❌ OneSignal email failed for user {$user->id}: {$e->getMessage()}");
             }
@@ -1304,12 +1304,12 @@ private function generateAIText(string $prompt, $userId = null): string
                     $user->id,
                     'monthly-summary',
                     "Tribe365 Monthly Summary ({$monthName})",
-                    "Your monthly emotional summary for {$monthName} has been generated.",
+                    "Your monthly emotional summary for {$monthName} has been generated and sent to your email.",
                     null,
                     $today
                 );
 
-                Log::info("✅ OneSignal monthly email sent and notification stored for user {$user->id}");
+                Log::info("✅ OneSignal monthly email sent to {$user->email}");
             } catch (\Throwable $e) {
                 Log::error("❌ OneSignal monthly email failed for user {$user->id}: {$e->getMessage()}");
             }
