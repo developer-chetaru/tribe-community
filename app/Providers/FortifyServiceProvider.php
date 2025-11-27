@@ -57,7 +57,7 @@ class FortifyServiceProvider extends ServiceProvider
     	if ($user && Hash::check($request->password, $user->password)) {
         	if (!$user->status) {
             	throw ValidationException::withMessages([
-                	'email' => __('Your account is not activated yet.'),
+                	'email' => __('Your account is not activated yet, please check your email and follow the instruction to verify your account.'),
             	]);
         	}
         	return $user;

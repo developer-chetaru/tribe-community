@@ -17,6 +17,6 @@ class RegisteredUserController extends Controller
     public function store(Request $request)
     {
         app(CreateNewUser::class)->create($request->all());
-        return redirect()->route('login')->with('status', 'Registration successful! Please login.');
+        return redirect()->route('login')->with('status', 'Check your email to verify your account. For using Tribe365, account need to be verified. Your account is not activated yet.');
     }
 }

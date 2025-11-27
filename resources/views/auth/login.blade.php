@@ -54,7 +54,7 @@
       @error('email')
        @if (
         $message !== 'These credentials do not match our records.' &&
-        $message !== 'Your account is not activated yet.'
+        $message !== 'Your account is not activated yet, please check your email and follow the instruction to verify your account.'
     )
         <p class="text-sm text-red-500 mt-1 mb-2">{{ $message }}</p>
     @endif 
@@ -90,7 +90,7 @@
         {{ $errors->first('email') }}
     </p>
 @endif
-@if ($errors->has('email') && $errors->first('email') === 'Your account is not activated yet.')
+@if ($errors->has('email') && $errors->first('email') === 'Your account is not activated yet, please check your email and follow the instruction to verify your account.')
     <p class="text-sm text-red-500 mt-2 mb-4 text-center">
         {{ $errors->first('email') }}
     </p>
