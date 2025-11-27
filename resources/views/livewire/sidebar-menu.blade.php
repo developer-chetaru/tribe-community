@@ -97,6 +97,7 @@
  @endhasanyrole
 
 @hasanyrole('organisation_user|organisation_admin|basecamp')
+@if(auth()->user()->orgId)
     <a href="{{ route('myteam.list') }}"
    class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
   :class="[
@@ -115,6 +116,7 @@
 
     <span x-show="$store.sidebar.open" x-transition class="text-sm">My Teammates</span>
 </a>
+@endif
 @endhasanyrole
 
 @hasanyrole('organisation_user|basecamp|organisation_admin')
