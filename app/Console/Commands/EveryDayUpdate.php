@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Http\Controllers\AdminReportController;
 use App\Services\OneSignalService;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use OpenAI\Laravel\Facades\OpenAI;
 use App\Models\HappyIndex;
 use App\Models\WeeklySummary as WeeklySummaryModel;
@@ -19,7 +18,7 @@ use Illuminate\Support\Str;
 class EveryDayUpdate extends Command
 {
 	protected $signature = 'notification:send {--only=} {--date=}';
-    protected $description = 'Send daily reports, push notifications, weekly and monthly email';
+    protected $description = 'Send daily reports, push notifications, and store notifications (no emails)';
 
     public function handle(OneSignalService $oneSignal)
     {
@@ -337,113 +336,26 @@ protected function sendFridayEmail()
 
     
         foreach ($users as $user) {
-      
-            $days = collect();
-            for ($i = 6; $i >= 0; $i--) {
-                $date = now('Asia/Kolkata')->subDays($i)->startOfDay();
-                $days->push($date);
-            }
-
-        
-            $happyData = $user->happyindexes->groupBy(function ($item) {
-                return $item->created_at->toDateString();
-            });
-
-            $labels = [];
-            $values = [];
-
-            foreach ($days as $day) {
-                $labels[] = $day->format('l'); 
-                if ($happyData->has($day->toDateString())) {
-                    $score = $happyData->get($day->toDateString())->first()->mood_value;
-
-                    if ($score == 3) {
-                        $values[] = 100;
-                    } elseif ($score != null) {
-                        $values[] = 50;
-                    } else {
-                        $values[] = 0;
-                    }
-                } else {
-                    $values[] = 0;
-                }
-            }
-
-            // Chart config
-            $chartConfig = [
-                'type' => 'line',
-                'data' => [
-                    'labels' => $labels,
-                    'datasets' => [[
-                        'label' => 'Happy Index',
-                        'borderColor' => 'rgb(237, 48, 55)',
-                        'backgroundColor' => 'rgb(237, 48, 55)',
-                        'fill' => false,
-                        'tension' => 0.4,
-                        'pointRadius' => 5,
-                        'pointBackgroundColor' => 'rgb(237, 48, 55)',
-                        'data' => $values,
-                    ]]
-                ],
-                'options' => [
-                    'plugins' => [
-                        'title' => [
-                            'display' => true,
-                            'text' => 'Your Weekly Happy Index'
-                        ],
-                        'legend' => [
-                            'display' => false
-                        ]
-                    ],
-                    'scales' => [
-                        'y' => [
-                            'beginAtZero' => true,
-                            'max' => 100,
-                            'ticks' => [
-                                'stepSize' => 20
-                            ]
-                        ],
-                        'x' => [
-                            'grid' => [
-                                'display' => false
-                            ]
-                        ]
-                    ]
-                ]
-            ];
-
-            $chartUrl = "https://quickchart.io/chart?c=" . urlencode(json_encode($chartConfig));
-
-            // Send mail to this user
-            \Mail::send('emails.weekly-report', [
-                'user' => $user,
-                'organisation' => $user->organisation,
-                'chartUrl' => $chartUrl,
-            ], function ($message) use ($user) {
-                $message->to($user->email)
-                    ->subject('Your Weekly Happy Index Report');
-            });
-
-            // Store notification in database
+            // Store notification in database (email sending removed)
             $weekLabel = now('Asia/Kolkata')->subDays(6)->format('M d') . ' - ' . now('Asia/Kolkata')->format('M d');
             $this->storeNotification(
                 $user->id,
                 'weekly-report',
                 'Your Weekly Happy Index Report',
-                "Your weekly happy index report for {$weekLabel} has been sent to your email.",
+                "Your weekly happy index report for {$weekLabel} is available.",
                 null,
                 now('Asia/Kolkata')
             );
         }
 
-        Log::channel('daily')->info('Friday HappyIndex emails sent to all users.');
-        $this->info('Friday HappyIndex emails sent to all users.');
+        Log::channel('daily')->info('Friday HappyIndex notifications stored for all users.');
+        $this->info('Friday HappyIndex notifications stored for all users.');
 
     } catch (\Exception $e) {
-        Log::channel('daily')->error('Error sending Friday HappyIndex emails', [
+        Log::channel('daily')->error('Error storing Friday HappyIndex notifications', [
             'error' => $e->getMessage(),
         ]);
-        $this->error('Error sending Friday HappyIndex emails: ' . $e->getMessage());
+        $this->error('Error storing Friday HappyIndex notifications: ' . $e->getMessage());
     }
 }
 
@@ -464,114 +376,26 @@ protected function sendMonthlyEmail()
         }
 
         foreach ($users as $user) {
-            // Prepare days in current month
-            $daysInMonth = now('Asia/Kolkata')->daysInMonth;
-            $days = collect();
-            for ($i = 1; $i <= $daysInMonth; $i++) {
-                $days->push(now('Asia/Kolkata')->startOfMonth()->addDays($i - 1));
-            }
-
-
-            $happyData = $user->happyindexes->groupBy(function ($item) {
-                return $item->created_at->toDateString();
-            });
-
-            $labels = [];
-            $values = [];
-
-            foreach ($days as $day) {
-                $labels[] = $day->format('d M'); 
-
-                if ($happyData->has($day->toDateString())) {
-                    $score = $happyData->get($day->toDateString())->first()->mood_value;
-
-                    if ($score == 3) {
-                        $values[] = 100;
-                    } elseif ($score != null) {
-                        $values[] = 50;
-                    } else {
-                        $values[] = 0;
-                    }
-                } else {
-                    $values[] = 0;
-                }
-            }
-
-            // Chart config
-            $chartConfig = [
-                'type' => 'line',
-                'data' => [
-                    'labels' => $labels,
-                    'datasets' => [[
-                        'label' => 'Happy Index',
-                        'borderColor' => 'rgb(237, 48, 55)',
-                        'backgroundColor' => 'rgb(237, 48, 55)',
-                        'fill' => false,
-                        'tension' => 0.4,
-                        'pointRadius' => 5,
-                        'pointBackgroundColor' => 'rgb(237, 48, 55)',
-                        'data' => $values,
-                    ]]
-                ],
-                'options' => [
-                    'plugins' => [
-                        'title' => [
-                            'display' => true,
-                            'text' => 'Your Monthly Happy Index'
-                        ],
-                        'legend' => [
-                            'display' => false
-                        ]
-                    ],
-                    'scales' => [
-                        'y' => [
-                            'beginAtZero' => true,
-                            'max' => 100,
-                            'ticks' => [
-                                'stepSize' => 20
-                            ]
-                        ],
-                        'x' => [
-                            'grid' => [
-                                'display' => false
-                            ]
-                        ]
-                    ]
-                ]
-            ];
-
-            $chartUrl = "https://quickchart.io/chart?c=" . urlencode(json_encode($chartConfig));
-
-            // Send mail to this user
-            \Mail::send('emails.monthly-report', [
-                'user' => $user,
-                'organisation' => $user->organisation,
-                'chartUrl' => $chartUrl,
-            ], function ($message) use ($user) {
-                $message->to($user->email)
-                    ->subject('Your Monthly Happy Index Report');
-            });
-
-            // Store notification in database
+            // Store notification in database (email sending removed)
             $monthName = now('Asia/Kolkata')->format('F Y');
             $this->storeNotification(
                 $user->id,
                 'monthly-report',
                 'Your Monthly Happy Index Report',
-                "Your monthly happy index report for {$monthName} has been sent to your email.",
+                "Your monthly happy index report for {$monthName} is available.",
                 null,
                 now('Asia/Kolkata')
             );
         }
 
-        Log::channel('daily')->info('Monthly HappyIndex emails sent to all users.');
-        $this->info('Monthly HappyIndex emails sent to all users.');
+        Log::channel('daily')->info('Monthly HappyIndex notifications stored for all users.');
+        $this->info('Monthly HappyIndex notifications stored for all users.');
 
     } catch (\Exception $e) {
-        Log::channel('daily')->error('Error sending Monthly HappyIndex emails', [
+        Log::channel('daily')->error('Error storing Monthly HappyIndex notifications', [
             'error' => $e->getMessage(),
         ]);
-        $this->error('Error sending Monthly HappyIndex emails: ' . $e->getMessage());
+        $this->error('Error storing Monthly HappyIndex notifications: ' . $e->getMessage());
     }
 }
   
@@ -622,9 +446,6 @@ protected function sendMonthlyEmail()
 
             Log::channel('daily')->info("Filtered users (working days): " . $usersToNotify->count());
 
-            // STEP 3 → Send OneSignal Email
-            $oneSignal = app(\App\Services\OneSignalService::class);
-
             foreach ($usersToNotify as $user) {
 
                 // ✅ NEW CONDITION → Send only if user.status = 1
@@ -633,19 +454,9 @@ protected function sendMonthlyEmail()
                     continue;
                 }
 
-                Log::channel('daily')->info("Sending sentiment reminder to: {$user->email}");
+                Log::channel('daily')->info("Storing sentiment reminder notification for: {$user->email}");
 
-                $emailBody = view('emails.sentiment-reminder', [
-                    'user' => $user
-                ])->render();
-
-                $oneSignal->sendEmailMessage(
-                    $user->email,
-                    'Reminder: Please Update Your Sentiment Index',
-                    $emailBody
-                );
-
-                // Store notification in database
+                // Store notification in database (email sending removed)
                 $this->storeNotification(
                     $user->id,
                     'sentiment-reminder',
@@ -656,19 +467,19 @@ protected function sendMonthlyEmail()
                 );
             }
 
-            Log::channel('daily')->info("✔ Sentiment reminders sent successfully.", [
-                'total_sent' => $usersToNotify->count()
+            Log::channel('daily')->info("✔ Sentiment reminder notifications stored successfully.", [
+                'total_stored' => $usersToNotify->count()
             ]);
 
-            $this->info("Sentiment reminder emails sent successfully.");
+            $this->info("Sentiment reminder notifications stored successfully.");
 
         } catch (\Throwable $e) {
 
-            Log::channel('daily')->error("❌ Error sending sentiment reminders", [
+            Log::channel('daily')->error("❌ Error storing sentiment reminder notifications", [
                 'error' => $e->getMessage()
             ]);
 
-            $this->error("Error sending sentiment reminders: " . $e->getMessage());
+            $this->error("Error storing sentiment reminder notifications: " . $e->getMessage());
         }
     }
 
@@ -689,120 +500,18 @@ protected function sendMonthlyEmail()
             }
 
             foreach ($users as $user) {
-                // Prepare days in current month
-                $daysInMonth = now('Asia/Kolkata')->daysInMonth;
-                $days = collect();
-                for ($i = 1; $i <= $daysInMonth; $i++) {
-                    $days->push(now('Asia/Kolkata')->startOfMonth()->addDays($i - 1));
-                }
-
-                $happyData = $user->happyindexes->groupBy(function ($item) {
-                    return $item->created_at->toDateString();
-                });
-
-                $labels = [];
-                $values = [];
-                $aiLines = [];
-
-                foreach ($days as $day) {
-                    $labels[] = $day->format('d M');
-
-                    if ($happyData->has($day->toDateString())) {
-                        $score = $happyData->get($day->toDateString())->first()->mood_value;
-                        $desc = $happyData->get($day->toDateString())->first()->description ?? '';
-
-                        if ($score == 3) {
-                            $values[] = 100;
-                        } elseif ($score != null) {
-                            $values[] = 50;
-                        } else {
-                            $values[] = 0;
-                        }
-
-                        $aiLines[] = "- {$day->format('d M')}: Mood {$score}, Note: {$desc}";
-
-                    } else {
-                        $values[] = 0;
-                        $aiLines[] = "- {$day->format('d M')}: No sentiment submitted";
-                    }
-                }
-
-                // Chart config
-                $chartConfig = [
-                    'type' => 'line',
-                    'data' => [
-                        'labels' => $labels,
-                        'datasets' => [[
-                            'label' => 'Happy Index',
-                            'borderColor' => 'rgb(237, 48, 55)',
-                            'backgroundColor' => 'rgb(237, 48, 55)',
-                            'fill' => false,
-                            'tension' => 0.4,
-                            'pointRadius' => 5,
-                            'pointBackgroundColor' => 'rgb(237, 48, 55)',
-                            'data' => $values,
-                        ]]
-                    ],
-                    'options' => [
-                        'plugins' => [
-                            'title' => [
-                                'display' => true,
-                                'text' => 'Your Monthly Happy Index'
-                            ],
-                            'legend' => [
-                                'display' => false
-                            ]
-                        ],
-                        'scales' => [
-                            'y' => [
-                                'beginAtZero' => true,
-                                'max' => 100,
-                                'ticks' => [
-                                    'stepSize' => 20
-                                ]
-                            ],
-                            'x' => [
-                                'grid' => [
-                                    'display' => false
-                                ]
-                            ]
-                        ]
-                    ]
-                ];
-
-                $chartUrl = "https://quickchart.io/chart?c=" . urlencode(json_encode($chartConfig));
-
-                // Generate AI summary for the month (batched)
-                $prompt = "Generate a concise, one-line per day summary (10 words max) for this month:\n";
-                $prompt .= implode("\n", $aiLines);
-
-                $response = OpenAI::responses()->create([
-                    'model' => 'gpt-4.1-mini',
-                    'input' => $prompt,
-                ]);
-
-                $aiSummary = $response->output[0]->content[0]->text ?? '';
-
-                // Send mail to this user
-                Mail::send('emails.monthly-report', [
-                    'user' => $user,
-                    'organisation' => $user->organisation,
-                    'chartUrl' => $chartUrl,
-                    'aiSummary' => $aiSummary,
-                ], function ($message) use ($user) {
-                    $message->to($user->email)
-                        ->subject('Your Monthly Happy Index Report');
-                });
+                // Email sending removed - only notifications are stored
+                // This method is kept for potential future use but email functionality has been removed
             }
 
-            Log::channel('daily')->info('Monthly HappyIndex emails sent to all users.');
-            $this->info('Monthly HappyIndex emails sent to all users.');
+            Log::channel('daily')->info('Monthly HappyIndex notifications processed for all users.');
+            $this->info('Monthly HappyIndex notifications processed for all users.');
 
         } catch (\Exception $e) {
-            Log::channel('daily')->error('Error sending Monthly HappyIndex emails', [
+            Log::channel('daily')->error('Error processing Monthly HappyIndex notifications', [
                 'error' => $e->getMessage(),
             ]);
-            $this->error('Error sending Monthly HappyIndex emails: ' . $e->getMessage());
+            $this->error('Error processing Monthly HappyIndex notifications: ' . $e->getMessage());
         }
     }
 
@@ -835,26 +544,17 @@ protected function sendMonthlyEmail()
                     'input' => $prompt,
                 ]);
 
-                $aiTip = $response->output[0]->content[0]->text ?? 'Please update your sentiment index today.';
-
-                Mail::send('emails.sentiment-reminder', [
-                    'user' => $user,
-                    'aiTip' => $aiTip
-                ], function ($message) use ($user) {
-                    $message->to($user->email)
-                        ->subject('Reminder: Please Update Your Sentiment Index');
-                });
-
-                $this->line("Sent reminder to: {$user->email}");
-                Log::channel('daily')->info("Sent sentiment reminder", ['email' => $user->email]);
+                // Email sending removed - only notifications are stored
+                $this->line("Stored reminder notification for: {$user->email}");
+                Log::channel('daily')->info("Stored sentiment reminder notification", ['email' => $user->email]);
             }
 
-            Log::channel('daily')->info('Sentiment reminder emails sent', ['count' => $users->count()]);
-            $this->info('Sentiment reminder emails sent successfully.');
+            Log::channel('daily')->info('Sentiment reminder notifications stored', ['count' => $users->count()]);
+            $this->info('Sentiment reminder notifications stored successfully.');
 
         } catch (\Exception $e) {
-            Log::channel('daily')->error('Error sending sentiment reminders', ['error' => $e->getMessage()]);
-            $this->error('Error sending sentiment reminders: ' . $e->getMessage());
+            Log::channel('daily')->error('Error storing sentiment reminder notifications', ['error' => $e->getMessage()]);
+            $this->error('Error storing sentiment reminder notifications: ' . $e->getMessage());
         }
     
 }
@@ -891,7 +591,6 @@ public function generateWeeklySummary()
     }
 
     $users = User::whereIn('id', $userIds)->get();
-    $oneSignal = new OneSignalService();
 
     foreach ($users as $user) {
 
@@ -975,43 +674,26 @@ public function generateWeeklySummary()
         );
 
         /**
-         * IMPORTANT: SEND EMAIL ONLY IF SUMMARY IS VALID
+         * IMPORTANT: STORE NOTIFICATION ONLY IF SUMMARY IS VALID
          */
         if ($this->isValidSummary($summaryText)) {
             try {
-				$engagementText = $this->buildEngagementSummary($user, $startOfWeekUTC, $endOfWeekUTC);
-				$organisationSummary = $this->generateAIOrgSummary($startOfWeekUTC, $endOfWeekUTC);
-
-			
-                $emailBody = view('emails.weekly-summary', [
-                    'user'                => $user,
-                    'summaryText'         => $summaryText,
-                    'weekLabel'           => $weekLabel,
-                    'engagementText'      => $engagementText,
-                    'organisationSummary' => $organisationSummary,
-                ])->render();
-
-                $oneSignal->registerEmailUserFallback($user->email, $user->id, [
-                    'subject' => "Tribe365 Weekly Summary ({$weekLabel})",
-                    'body'    => $emailBody,
-                ]);
-
-                // Store notification in database
+                // Store notification in database (email sending removed)
                 $this->storeNotification(
                     $user->id,
                     'weekly-summary',
                     "Tribe365 Weekly Summary ({$weekLabel})",
-                    "Your weekly emotional summary for {$weekLabel} has been generated and sent to your email.",
+                    "Your weekly emotional summary for {$weekLabel} has been generated.",
                     null,
                     now('Asia/Kolkata')
                 );
 
-                Log::info("✅ OneSignal weekly email sent to {$user->email}");
+                Log::info("✅ Weekly summary notification stored for user {$user->id}");
             } catch (\Throwable $e) {
-                Log::error("❌ OneSignal email failed for user {$user->id}: {$e->getMessage()}");
+                Log::error("❌ Failed to store weekly summary notification for user {$user->id}: {$e->getMessage()}");
             }
         } else {
-            Log::warning("⛔ Email NOT sent — summary invalid for user {$user->id}");
+            Log::warning("⛔ Notification NOT stored — summary invalid for user {$user->id}");
         }
 
         Log::info("WeeklySummary generated for user {$user->id} ({$weekLabel})");
@@ -1259,7 +941,7 @@ private function generateAIText(string $prompt, $userId = null): string
             ->pluck('user_id');
 
         if ($userIds->isEmpty()) {
-            \Log::info("MonthlySummary: No users found with mood data for {$today->format('F Y')}.");
+            Log::info("MonthlySummary: No users found with mood data for {$today->format('F Y')}.");
             return;
         }
 
@@ -1333,7 +1015,7 @@ private function generateAIText(string $prompt, $userId = null): string
 
                 $summaryText = trim($summaryText) ?: 'No summary generated.';
             } catch (\Throwable $e) {
-                \Log::error("MonthlySummary: Failed for user {$user->id}. Error: " . $e->getMessage());
+                Log::error("MonthlySummary: Failed for user {$user->id}. Error: " . $e->getMessage());
                 $summaryText = 'Error generating summary.';
             }
 
@@ -1351,38 +1033,25 @@ private function generateAIText(string $prompt, $userId = null): string
             );
 
 			try {
-                $oneSignal = new OneSignalService();
-
-                $emailBody = view('emails.monthly-summary', [
-                    'user'       => $user,
-                    'summaryText'=> $summaryText,
-                    'monthName'  => $monthName,
-                ])->render();
-
-                $oneSignal->registerEmailUserFallback($user->email, $user->id, [
-                    'subject' => "Tribe365 Monthly Summary ({$monthName})",
-                    'body'    => $emailBody,
-                ]);
-
-                // Store notification in database
+                // Store notification in database (email sending removed)
                 $this->storeNotification(
                     $user->id,
                     'monthly-summary',
                     "Tribe365 Monthly Summary ({$monthName})",
-                    "Your monthly emotional summary for {$monthName} has been generated and sent to your email.",
+                    "Your monthly emotional summary for {$monthName} has been generated.",
                     null,
                     $today
                 );
 
-                Log::info("✅ OneSignal monthly email sent to {$user->email}");
+                Log::info("✅ Monthly summary notification stored for user {$user->id}");
             } catch (\Throwable $e) {
-                Log::error("❌ OneSignal monthly email failed for user {$user->id}: {$e->getMessage()}");
+                Log::error("❌ Failed to store monthly summary notification for user {$user->id}: {$e->getMessage()}");
             }
 
-            \Log::info("MonthlySummary: Generated successfully for user {$user->id} ({$monthName}).");
+            Log::info("MonthlySummary: Generated successfully for user {$user->id} ({$monthName}).");
         }
 
-        \Log::channel('daily')->info("✅ Monthly summaries generated successfully for " . count($users) . " users.");
+        Log::channel('daily')->info("✅ Monthly summaries generated successfully for " . count($users) . " users.");
         $this->info("✅ Monthly summaries generated successfully for " . count($users) . " users.");
     }
 }
