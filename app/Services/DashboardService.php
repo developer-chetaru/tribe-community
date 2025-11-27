@@ -36,22 +36,27 @@ public function getFreeVersionHomeDetails(array $filters = [])
     $HI_include_saturday = $user->HI_include_saturday ?? 2;
     $HI_include_sunday   = $user->HI_include_sunday ?? 2;
 
-    // Filter office & department
-    $filteredUserQuery = User::where('status', 1)->where('orgId', $orgId);
+    // If user doesn't have orgId, show only user-specific data
+    if (empty($orgId)) {
+        $filteredUserIds = [$userId];
+    } else {
+        // Filter office & department
+        $filteredUserQuery = User::where('status', 1)->where('orgId', $orgId);
 
-    if (!empty($officeId)) {
-        $filteredUserQuery->where('officeId', $officeId);
-    }
+        if (!empty($officeId)) {
+            $filteredUserQuery->where('officeId', $officeId);
+        }
 
-    if (!empty($departmentId)) {
-        $filteredUserQuery->where('departmentId', $departmentId);
-    }
+        if (!empty($departmentId)) {
+            $filteredUserQuery->where('departmentId', $departmentId);
+        }
 
-    $filteredUserIds = $filteredUserQuery->pluck('id')->toArray();
+        $filteredUserIds = $filteredUserQuery->pluck('id')->toArray();
 
-    // Include current user if not in filtered list
-    if (!in_array($userId, $filteredUserIds)) {
-        $filteredUserIds[] = $userId;
+        // Include current user if not in filtered list
+        if (!in_array($userId, $filteredUserIds)) {
+            $filteredUserIds[] = $userId;
+        }
     }
 
     // Days in selected month/year
@@ -67,19 +72,33 @@ public function getFreeVersionHomeDetails(array $filters = [])
     foreach ($happyData as $entry) {
         $d = (int) date('d', strtotime($entry->created_at));
         if (!isset($dateData[$d])) {
-            $dateData[$d] = ['total_users' => 0, 'total_score' => 0, 'description' => null];
+            $dateData[$d] = ['total_users' => 0, 'total_score' => 0, 'description' => null, 'mood_value' => null];
         }
 
         $dateData[$d]['total_users'] += 1;
 
-        // ✅ Updated logic: count only users with mood_value = 3
-        if ($entry->mood_value == 3) {
-            $dateData[$d]['total_score'] += 1;
-        }
-
-        // Logged-in user's description only
-        if ($entry->user_id == $userId) {
+        // If user has no orgId, show individual user mood value directly
+        if (empty($orgId)) {
+            // For user-only data, use the mood value directly
+            $dateData[$d]['mood_value'] = $entry->mood_value;
+            if ($entry->mood_value == 3) {
+                $dateData[$d]['total_score'] = 100;
+            } elseif ($entry->mood_value == 2) {
+                $dateData[$d]['total_score'] = 51;
+            } else {
+                $dateData[$d]['total_score'] = 0;
+            }
             $dateData[$d]['description'] = $entry->description;
+        } else {
+            // ✅ Updated logic: count only users with mood_value = 3 for organization
+            if ($entry->mood_value == 3) {
+                $dateData[$d]['total_score'] += 1;
+            }
+
+            // Logged-in user's description only
+            if ($entry->user_id == $userId) {
+                $dateData[$d]['description'] = $entry->description;
+            }
         }
     }
 
@@ -90,14 +109,23 @@ public function getFreeVersionHomeDetails(array $filters = [])
 
     // ✅ Your original for-loop logic remains exactly the same
     for ($i = 1; $i <= $noOfDaysInMonth; $i++) {
-        $dayData = $dateData[$i] ?? ['total_users' => 0, 'total_score' => 0, 'description' => null];
+        $dayData = $dateData[$i] ?? ['total_users' => 0, 'total_score' => 0, 'description' => null, 'mood_value' => null];
 
         $score = null;
         $mood_value = null;
 
-        if ($dayData['total_users'] > 0) {
-            $score = round(($dayData['total_score'] / $dayData['total_users']) * 100);
-            $mood_value = $score >= 81 ? 3 : ($score >= 51 ? 2 : 1);
+        if (empty($orgId)) {
+            // For user-only data, use the mood_value and score directly from the entry
+            if (isset($dayData['mood_value']) && $dayData['mood_value'] !== null) {
+                $mood_value = $dayData['mood_value'];
+                $score = $dayData['total_score'];
+            }
+        } else {
+            // For organization data, calculate average
+            if ($dayData['total_users'] > 0) {
+                $score = round(($dayData['total_score'] / $dayData['total_users']) * 100);
+                $mood_value = $score >= 81 ? 3 : ($score >= 51 ? 2 : 1);
+            }
         }
 
         // Hide today's data if current month & year
@@ -114,9 +142,14 @@ public function getFreeVersionHomeDetails(array $filters = [])
     }
 
     // Year & month lists
-    $createdTime  = $user->hasRole('basecamp') 
-        ? strtotime($user->created_at) 
-        : strtotime(Organisation::find($orgId)?->created_at ?? now());
+    if (empty($orgId)) {
+        // For user-only data, use user's created date
+        $createdTime  = strtotime($user->created_at);
+    } else {
+        $createdTime  = $user->hasRole('basecamp') 
+            ? strtotime($user->created_at) 
+            : strtotime(Organisation::find($orgId)?->created_at ?? now());
+    }
     $createdYear  = (int) date('Y', $createdTime);
     $createdMonth = (int) date('n', $createdTime);
     $currentYear  = (int) date('Y');
@@ -204,6 +237,12 @@ public function getFreeVersionHomeDetails(array $filters = [])
 	{
     	$user  = auth()->user();
    	 	$orgId = $filters['orgId'] ?? $user->orgId;
+    	
+    	// If user has no orgId, return empty array
+    	if (empty($orgId)) {
+    	    return [];
+    	}
+    	
     	$query = Department::with('allDepartment')
         	->where('organisation_id', $orgId);
 
@@ -236,6 +275,14 @@ public function getFreeVersionHomeDetails(array $filters = [])
 	{
    	 $orgId = $filters['orgId'] ?? auth()->user()->orgId;
         $resultArray = [];
+
+        // If user has no orgId, return empty arrays
+        if (empty($orgId)) {
+            return [
+                'offices' => [],
+                'departments' => []
+            ];
+        }
 
         $offices = Office::where('organisation_id', $orgId)
             ->with(['departments' => function ($query) use ($orgId) {

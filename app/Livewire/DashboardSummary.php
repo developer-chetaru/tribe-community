@@ -74,22 +74,32 @@ class DashboardSummary extends Component
         if ($user->hasRole('basecamp')) {
             $this->showHappyIndex = $now->between($now->copy()->setTime(16, 0), $now->copy()->setTime(23, 59));
         } else {
-            $organisation = Organisation::find($user->orgId);
-            $workingDays = [];
-
-            if ($organisation && $organisation->working_days) {
-                $workingDaysRaw = $organisation->working_days;
-                if (is_string($workingDaysRaw)) {
-                    $workingDays = json_decode($workingDaysRaw, true);
-                } elseif (is_array($workingDaysRaw)) {
-                    $workingDays = $workingDaysRaw;
+            // If user has no orgId, use default working days
+            if (empty($user->orgId)) {
+                $workingDays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+                if (in_array($dayOfWeek, $workingDays)) {
+                    $this->showHappyIndex = $now->between($now->copy()->setTime(16, 0), $now->copy()->setTime(23, 59));
+                } else {
+                    $this->showHappyIndex = false;
                 }
-            }
-
-            if (in_array($dayOfWeek, $workingDays)) {
-                $this->showHappyIndex = $now->between($now->copy()->setTime(16, 0), $now->copy()->setTime(23, 59));
             } else {
-                $this->showHappyIndex = false;
+                $organisation = Organisation::find($user->orgId);
+                $workingDays = [];
+
+                if ($organisation && $organisation->working_days) {
+                    $workingDaysRaw = $organisation->working_days;
+                    if (is_string($workingDaysRaw)) {
+                        $workingDays = json_decode($workingDaysRaw, true);
+                    } elseif (is_array($workingDaysRaw)) {
+                        $workingDays = $workingDaysRaw;
+                    }
+                }
+
+                if (in_array($dayOfWeek, $workingDays)) {
+                    $this->showHappyIndex = $now->between($now->copy()->setTime(16, 0), $now->copy()->setTime(23, 59));
+                } else {
+                    $this->showHappyIndex = false;
+                }
             }
         }
 

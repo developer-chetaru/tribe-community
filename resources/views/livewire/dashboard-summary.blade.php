@@ -126,6 +126,7 @@
       <!-- Filters -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
         @hasanyrole('organisation_user')
+        @if(auth()->user()->orgId)
         <!-- Offices -->
         <select wire:model.live="selectedOffice" class="border capitalize border-gray-100 rounded-sm py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#808080] focus:ring-red-500 focus:border-red-500">
             <option value="">All Offices</option>
@@ -141,6 +142,7 @@
                 <option value="{{ $dep['id'] }}">{{ $dep['department'] }}</option>
             @endforeach
         </select>
+        @endif
         @endhasanyrole
 
         <!-- Month -->
