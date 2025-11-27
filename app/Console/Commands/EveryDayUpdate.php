@@ -156,9 +156,6 @@ class EveryDayUpdate extends Command
   {
       $this->info("Fetching users...");
 
-      // Current India time
-      $now = now('Asia/Kolkata');
-
       // Get all users with a valid FCM token and load organisation
       $users = User::whereNotNull('fcmToken')
           ->where('fcmToken', '!=', '')
@@ -171,10 +168,27 @@ class EveryDayUpdate extends Command
           return;
       }
 
-      // Filter users based on organisation and working days
-      $usersToNotify = $users->filter(function ($user) use ($now) {
+      // Filter users based on their timezone, target time (16:30), organisation and working days
+      $usersToNotify = $users->filter(function ($user) {
+          // Get user's timezone or default to Asia/Kolkata
+          $userTimezone = $user->timezone ?: 'Asia/Kolkata';
+          
+          // Validate timezone to prevent errors
+          if (!in_array($userTimezone, timezone_identifiers_list())) {
+              Log::channel('daily')->warning("Invalid timezone for user {$user->id}: {$userTimezone}, using Asia/Kolkata");
+              $userTimezone = 'Asia/Kolkata';
+          }
+          
+          // Get current time in user's timezone
+          $userNow = now($userTimezone);
+          
+          // Check if it's 16:30 in user's timezone
+          $targetTime = $userNow->format('H:i');
+          if ($targetTime !== '16:30') {
+              return false;
+          }
 
-          $today = $now->format('D'); // e.g., Mon, Tue, Wed
+          $today = $userNow->format('D'); // e.g., Mon, Tue, Wed
 
           // Organisation users: notify only on working days
           if ($user->organisation) {
@@ -213,13 +227,21 @@ class EveryDayUpdate extends Command
       );
 
       foreach ($usersToNotify as $user) {
+          $userTimezone = $user->timezone ?: 'Asia/Kolkata';
+          
+          // Validate timezone (already validated in filter, but double-check for safety)
+          if (!in_array($userTimezone, timezone_identifiers_list())) {
+              $userTimezone = 'Asia/Kolkata';
+          }
+          
+          $userNow = now($userTimezone);
           $this->storeNotification(
               $user->id,
               'sentiment',
               'Feedback',
               "How's things at work today?",
               null,
-              $now
+              $userNow
           );
       }
 
@@ -241,19 +263,71 @@ class EveryDayUpdate extends Command
 
     protected function sendReports(string $date)
     {
-        $offices = Office::all();
-
+        // Get all offices with their users
+        $offices = Office::with('users')->get();
+        
+        $officesToReport = [];
+        
         foreach ($offices as $office) {
+            // Get users for this office
+            $users = $office->users;
+            
+            if ($users->isEmpty()) {
+                continue;
+            }
+            
+            // Check if it's 23:59 in any user's timezone for this office
+            $shouldSendReport = false;
+            $reportDate = $date;
+            
+            foreach ($users as $user) {
+                $userTimezone = $user->timezone ?: 'Asia/Kolkata';
+                
+                // Validate timezone to prevent errors
+                if (!in_array($userTimezone, timezone_identifiers_list())) {
+                    Log::channel('daily')->warning("Invalid timezone for user {$user->id}: {$userTimezone}, using Asia/Kolkata");
+                    $userTimezone = 'Asia/Kolkata';
+                }
+                
+                $userNow = now($userTimezone);
+                
+                // Check if it's 23:59 in user's timezone
+                if ($userNow->format('H:i') === '23:59') {
+                    $shouldSendReport = true;
+                    // Use the date in user's timezone
+                    $reportDate = $userNow->toDateString();
+                    break;
+                }
+            }
+            
+            if ($shouldSendReport) {
+                $officesToReport[] = [
+                    'office' => $office,
+                    'date' => $reportDate
+                ];
+            }
+        }
+        
+        if (empty($officesToReport)) {
+            $this->info('No offices need reports at this time (23:59 in their users\' timezones).');
+            Log::channel('daily')->info('No offices need reports at this time.');
+            return;
+        }
+        
+        foreach ($officesToReport as $item) {
+            $office = $item['office'];
+            $reportDate = $item['date'];
+            
             $payload = [
                 'officeId' => $office->id,
-                'date'     => $date,
+                'date'     => $reportDate,
             ];
             Log::channel('daily')->info('Sending report for office: '.$office->id, $payload);
 
             (new AdminReportController())->getHappyIndexReport($payload);
         }
 
-        $this->info('Reports sent for date: ' . $date);
+        $this->info('Reports sent for ' . count($officesToReport) . ' office(s) at 23:59 in their users\' timezones.');
     }
 protected function sendFridayEmail()
 {

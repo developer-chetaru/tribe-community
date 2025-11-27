@@ -24,14 +24,19 @@ class Kernel extends ConsoleKernel
         // ---------------------------------------------------------------------
 
     
+        // Run every minute to check each user's timezone for notification time (16:30)
+        // This ensures we catch 16:30 regardless of which timezone the user is in
         $schedule->command('notification:send --only=notification')
-            ->dailyAt('16:30')
-            ->timezone('Asia/Kolkata');
+            ->everyMinute()
+            ->withoutOverlapping()
+            ->runInBackground();
 
-        // Sirf report roz 23:59 baje
+        // Run every minute to check each user's timezone for report time (23:59)
+        // This ensures we catch 23:59 regardless of which timezone the user is in
         $schedule->command('notification:send --only=report')
-            ->dailyAt('23:59')
-            ->timezone('Asia/Kolkata');
+            ->everyMinute()
+            ->withoutOverlapping()
+            ->runInBackground();
 
         // -------------------------
         // Weekly Summary Cron
