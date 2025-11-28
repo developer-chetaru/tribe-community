@@ -29,7 +29,8 @@ class NotificationController extends Controller
                 return response()->json([
                     'code' => 400,
                     'status' => false,
-                    'message' => 'User is not linked to any organisation.'
+                    'message' => ''
+                    // 'message' => 'User is not linked to any organisation.'
                 ], 400);
             }
 
