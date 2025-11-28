@@ -124,7 +124,7 @@
                                             
                                             // Build parameters - origin is required for HTTPS to prevent Error 153
                                             $params = [
-                                                'autoplay' => '1',
+                                                'autoplay' => '0', // Disable autoplay - user must click play
                                                 'rel' => '0',
                                                 'modestbranding' => '1',
                                                 'playsinline' => '1',
@@ -145,18 +145,35 @@
                                     <div x-data="{ 
                                         openVideoModal: false,
                                         isFullscreen: true,
-                                        embedUrl: '{{ $embedLinkWithParams ?? '' }}',
+                                        embedUrlBase: '{{ $embedLinkWithParams ?? '' }}',
+                                        embedUrl: '',
                                         watchLink: '{{ !empty($videoId) ? "https://www.youtube.com/watch?v=" . $videoId : $originalUrl }}',
                                         init() {
-                                            // Add origin parameter for HTTPS sites (required to prevent Error 153)
-                                            if (this.embedUrl && window.location.protocol === 'https:') {
-                                                const separator = this.embedUrl.includes('?') ? '&' : '?';
-                                                this.embedUrl = this.embedUrl + separator + 'origin=' + encodeURIComponent(window.location.origin);
+                                            // Prepare embed URL with origin parameter for HTTPS sites
+                                            if (this.embedUrlBase && window.location.protocol === 'https:') {
+                                                const separator = this.embedUrlBase.includes('?') ? '&' : '?';
+                                                this.embedUrlBase = this.embedUrlBase + separator + 'origin=' + encodeURIComponent(window.location.origin);
                                             }
                                         },
                                         openModal() {
                                             this.openVideoModal = true;
                                             this.isFullscreen = true;
+                                            // Only set embedUrl when modal opens to prevent autoplay on page load
+                                            if (this.embedUrlBase) {
+                                                // Change autoplay from 0 to 1 when user explicitly opens the modal
+                                                this.embedUrl = this.embedUrlBase.replace(/autoplay=0/, 'autoplay=1');
+                                                // If autoplay wasn't in the URL, add it
+                                                if (!this.embedUrl.includes('autoplay=')) {
+                                                    const separator = this.embedUrl.includes('?') ? '&' : '?';
+                                                    this.embedUrl = this.embedUrl + separator + 'autoplay=1';
+                                                }
+                                            }
+                                        },
+                                        closeModal() {
+                                            this.openVideoModal = false;
+                                            this.isFullscreen = false;
+                                            // Clear embedUrl to stop video playback
+                                            this.embedUrl = '';
                                         }
                                     }" x-init="init()" class="inline-block">
                                         <button 
@@ -174,7 +191,7 @@
                                             x-transition:enter="transition ease-out duration-300"
                                             x-transition:enter-start="opacity-0"
                                             x-transition:enter-end="opacity-100"
-                                            @click.self="!isFullscreen && (openVideoModal = false)"
+                                            @click.self="!isFullscreen && closeModal()"
                                             :class="isFullscreen ? 'fixed inset-0 z-[9999] bg-black' : 'fixed inset-0 bg-black/80 flex items-center justify-center z-50'"
                                         >
                                             <div 
@@ -184,7 +201,7 @@
                                             >
                                                 <div class="absolute top-2 right-2 z-[100]">
                                                     <button
-                                                        @click="openVideoModal = false; isFullscreen = false;"
+                                                        @click="closeModal()"
                                                         class="text-white bg-[#EB1C24] hover:bg-[#d01820] rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold transition-colors shadow-lg"
                                                         title="Close"
                                                     >×</button>
@@ -193,13 +210,14 @@
                                                 @if(!empty($videoId) && !empty($embedLink))
                                                     <div class="relative w-full h-full">
                                                         <iframe 
+                                                            x-show="embedUrl"
                                                             :src="embedUrl" 
                                                             class="w-full h-full border-0" 
                                                             frameborder="0" 
                                                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
                                                             allowfullscreen
                                                             referrerpolicy="strict-origin-when-cross-origin"
-                                                        >                                                        </iframe>
+                                                        ></iframe>
                                                     </div>
                                                 @else
                                                     <div class="w-full h-full flex items-center justify-center text-white p-8 text-center">
