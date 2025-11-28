@@ -59,7 +59,7 @@ class ReflectionList extends Component
     {
         $user = Auth::user();
 
-        $availableRoles = Role::whereIn('name', ['super_admin', 'organisation_user'])
+        $availableRoles = Role::whereIn('name', ['super_admin', 'organisation_user', 'basecamp'])
             ->where('guard_name', 'web')
             ->pluck('name')
             ->toArray();
@@ -112,12 +112,20 @@ class ReflectionList extends Component
 
     public function openChat($reflectionId)
     {
+        $user = Auth::user();
         $this->reflectionId = $reflectionId;
         $reflection = Reflection::find($reflectionId);
 
         if (!$reflection) {
             $this->alertType = 'error';
             $this->alertMessage = 'Reflection not found.';
+            return;
+        }
+
+        // Security check: basecamp and organisation_user can only access their own reflections
+        if (($user->hasRole('basecamp') || $user->hasRole('organisation_user')) && $reflection->userId !== $user->id) {
+            $this->alertType = 'error';
+            $this->alertMessage = 'You do not have permission to access this reflection.';
             return;
         }
 
@@ -135,12 +143,21 @@ class ReflectionList extends Component
 
     public function loadChatMessages()
     {
+        $user = Auth::user();
+        
+        // Security check: basecamp and organisation_user can only load messages for their own reflections
+        $reflection = Reflection::find($this->reflectionId);
+        if ($reflection && ($user->hasRole('basecamp') || $user->hasRole('organisation_user')) && $reflection->userId !== $user->id) {
+            $this->chatMessages = [];
+            return;
+        }
+
         $messages = ReflectionMessage::where('reflectionId', $this->reflectionId)
             ->with('user')
             ->orderBy('id', 'asc')
             ->get();
 
-        $userTimezone = Auth::user()->timezone ?? config('app.timezone');
+        $userTimezone = $user->timezone ?? config('app.timezone');
 
         $this->chatMessages = $messages->map(function ($msg) use ($userTimezone) {
             $dt = new DateTime($msg->created_at, new DateTimeZone('UTC'));
@@ -180,6 +197,14 @@ class ReflectionList extends Component
         if (!$this->reflectionId || !$this->sendTo) {
             $this->alertType = 'error';
             $this->alertMessage = 'Invalid conversation.';
+            return;
+        }
+
+        // Security check: basecamp and organisation_user can only send messages to their own reflections
+        $reflection = Reflection::find($this->reflectionId);
+        if ($reflection && ($user->hasRole('basecamp') || $user->hasRole('organisation_user')) && $reflection->userId !== $user->id) {
+            $this->alertType = 'error';
+            $this->alertMessage = 'You do not have permission to send messages to this reflection.';
             return;
         }
 
@@ -396,7 +421,7 @@ public function statusCancelResolved()
         // Load organisation list
             $this->organisationsList = Organisation::where('status', '1') ->select('id', 'name') ->get();
 
-        if ($user->hasRole('organisation_user')) {
+        if ($user->hasRole('organisation_user') || $user->hasRole('basecamp')) {
             $query->where('userId', $user->id);
         }
 
