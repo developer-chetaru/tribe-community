@@ -11,7 +11,7 @@
 
     {{-- Right Side (HPTM + Profile) --}}
     <div class="flex items-center space-x-2 ml-auto">
- @hasanyrole('basecamp|organisation_user')
+ @hasanyrole('basecamp|organisation_user|organisation_admin')
 		{{-- Notification Badge --}}
         <a href="{{ route('user.notifications') }}"
         class="flex items-center bg-red-50 border border-red-200 text-red-700 font-semibold text-[0px] px-1 py-1 sm:px-4 sm:py-2 rounded-md sm:rounded-full shadow-sm hover:bg-red-100 transition duration-200 sm:text-sm">
