@@ -59,7 +59,7 @@ class ReflectionList extends Component
     {
         $user = Auth::user();
 
-        $availableRoles = Role::whereIn('name', ['super_admin', 'organisation_user', 'basecamp'])
+        $availableRoles = Role::whereIn('name', ['super_admin', 'organisation_user', 'basecamp', 'organisation_admin'])
             ->where('guard_name', 'web')
             ->pluck('name')
             ->toArray();
@@ -122,8 +122,8 @@ class ReflectionList extends Component
             return;
         }
 
-        // Security check: basecamp and organisation_user can only access their own reflections
-        if (($user->hasRole('basecamp') || $user->hasRole('organisation_user')) && $reflection->userId !== $user->id) {
+        // Security check: basecamp, organisation_user, and organisation_admin (team lead) can only access their own reflections
+        if (($user->hasRole('basecamp') || $user->hasRole('organisation_user') || $user->hasRole('organisation_admin')) && $reflection->userId !== $user->id) {
             $this->alertType = 'error';
             $this->alertMessage = 'You do not have permission to access this reflection.';
             return;
@@ -145,9 +145,9 @@ class ReflectionList extends Component
     {
         $user = Auth::user();
         
-        // Security check: basecamp and organisation_user can only load messages for their own reflections
+        // Security check: basecamp, organisation_user, and organisation_admin (team lead) can only load messages for their own reflections
         $reflection = Reflection::find($this->reflectionId);
-        if ($reflection && ($user->hasRole('basecamp') || $user->hasRole('organisation_user')) && $reflection->userId !== $user->id) {
+        if ($reflection && ($user->hasRole('basecamp') || $user->hasRole('organisation_user') || $user->hasRole('organisation_admin')) && $reflection->userId !== $user->id) {
             $this->chatMessages = [];
             return;
         }
@@ -200,9 +200,9 @@ class ReflectionList extends Component
             return;
         }
 
-        // Security check: basecamp and organisation_user can only send messages to their own reflections
+        // Security check: basecamp, organisation_user, and organisation_admin (team lead) can only send messages to their own reflections
         $reflection = Reflection::find($this->reflectionId);
-        if ($reflection && ($user->hasRole('basecamp') || $user->hasRole('organisation_user')) && $reflection->userId !== $user->id) {
+        if ($reflection && ($user->hasRole('basecamp') || $user->hasRole('organisation_user') || $user->hasRole('organisation_admin')) && $reflection->userId !== $user->id) {
             $this->alertType = 'error';
             $this->alertMessage = 'You do not have permission to send messages to this reflection.';
             return;
@@ -421,7 +421,7 @@ public function statusCancelResolved()
         // Load organisation list
             $this->organisationsList = Organisation::where('status', '1') ->select('id', 'name') ->get();
 
-        if ($user->hasRole('organisation_user') || $user->hasRole('basecamp')) {
+        if ($user->hasRole('organisation_user') || $user->hasRole('basecamp') || $user->hasRole('organisation_admin')) {
             $query->where('userId', $user->id);
         }
 

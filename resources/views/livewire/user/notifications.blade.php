@@ -3,7 +3,7 @@
 </x-slot>
 
 <div>
-    @hasanyrole('organisation_user|basecamp')
+    @hasanyrole('organisation_user|basecamp|organisation_admin')
     <main class="p-6 flex-1">
         <div class="bg-white shadow-sm rounded-lg p-6 border border-[#E5E5E5]">
 
@@ -57,10 +57,17 @@
                     @forelse($notifications as $note)
                         @php $isSelected = $selectedNotification && $selectedNotification->id === $note->id; @endphp
 
-                        <div wire:click="openNotification({{ $note->id }})"
-                            class="cursor-pointer flex items-start gap-3 p-4 border rounded-lg transition-all duration-200 
-                            {{ $isSelected ? 'bg-[#FFEFF0] border-red-300 shadow-md animate-slideLeftActive'
-                                            : 'bg-white border-gray-200 hover:bg-[#FFF5F5] hover:border-red-200 hover:shadow-sm' }}">
+                        <div 
+                            @if($tab === 'active')
+                                wire:click="openNotification({{ $note->id }})"
+                                class="cursor-pointer flex items-start gap-3 p-4 border rounded-lg transition-all duration-200 
+                                {{ $isSelected ? 'bg-[#FFEFF0] border-red-300 shadow-md animate-slideLeftActive'
+                                                : 'bg-white border-gray-200 hover:bg-[#FFF5F5] hover:border-red-200 hover:shadow-sm' }}"
+                            @else
+                                class="flex items-start gap-3 p-4 border rounded-lg transition-all duration-200 
+                                bg-gray-50 border-gray-300 opacity-75 cursor-not-allowed"
+                            @endif
+                        >
 
                             {{-- Icon --}}
                             <div class="mt-1 bg-red-100 p-2 rounded-full">

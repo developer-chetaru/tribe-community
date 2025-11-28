@@ -135,9 +135,9 @@
 </a>
 @endhasanyrole
 
-@hasanyrole('organisation_user|basecamp')
+@hasanyrole('organisation_user|basecamp|organisation_admin')
     <a href="{{ route('user.notifications') }}"
-       class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
+       class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition relative"
        :class="[
            $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
            window.location.pathname === '{{ route('user.notifications', [], false) }}' 
@@ -145,10 +145,22 @@
                : 'text-gray-700 hover:bg-gray-100'
        ]"
     >
-        <img :src="window.location.pathname === '{{ route('user.notifications', [], false) }}' 
-                    ? '{{ asset('images/notification-active.svg') }}' 
-                    : '{{ asset('images/notification.svg') }}'"  
-             class="h-5 w-5" />
+        <div class="relative">
+            <img :src="window.location.pathname === '{{ route('user.notifications', [], false) }}' 
+                        ? '{{ asset('images/notification-active.svg') }}' 
+                        : '{{ asset('images/notification.svg') }}'"  
+                 class="h-5 w-5" />
+            @php
+                $notificationCount = \App\Models\IotNotification::where('to_bubble_user_id', auth()->id())
+                    ->where('archive', false)
+                    ->count();
+            @endphp
+            @if($notificationCount > 0)
+                <span class="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                    {{ $notificationCount > 9 ? '9+' : $notificationCount }}
+                </span>
+            @endif
+        </div>
 
         <span x-show="$store.sidebar.open" x-transition class="text-sm">
              Notification
