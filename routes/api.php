@@ -52,6 +52,7 @@ Route::post('/reflections/{reflection}/chats', [ReflectionApiController::class, 
 
 Route::get('/view-notification-list', [NotificationController::class, 'viewNotificationList']);
 Route::post('/notification-archive', [NotificationController::class, 'notificationArchive']);
+Route::post('/notification/archive-single', [NotificationController::class, 'archiveSingleNotification']);
 Route::get('/view-archive-list', [NotificationController::class, 'getArchivedNotifications']);
 Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
 Route::post('/reflections/update-status', [ReflectionApiController::class, 'statusReflection']);

@@ -228,4 +228,80 @@ class NotificationController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Archive a single notification by ID
+     * Accepts notificationId and userId in request body
+     */
+    public function archiveSingleNotification(Request $request)
+    {
+        try {
+            $request->validate([
+                'notificationId' => 'required|integer',
+                'userId' => 'required|integer',
+            ]);
+
+            $notificationId = $request->input('notificationId');
+            $userId = $request->input('userId');
+
+            // Find the notification and verify it belongs to the user
+            $notification = IotNotification::where('id', $notificationId)
+                ->where('to_bubble_user_id', $userId)
+                ->first();
+
+            if (!$notification) {
+                return response()->json([
+                    'code' => 404,
+                    'status' => false,
+                    'message' => 'Notification not found or does not belong to this user.'
+                ], 404);
+            }
+
+            // Check if already archived
+            if ($notification->archive) {
+                return response()->json([
+                    'code' => 200,
+                    'status' => true,
+                    'message' => 'Notification is already archived.',
+                    'data' => [
+                        'notificationId' => $notification->id,
+                        'archived' => true,
+                    ]
+                ]);
+            }
+
+            // Archive the notification
+            $notification->update(['archive' => true]);
+
+            // Get updated notification count
+            $unreadCount = IotNotification::where('to_bubble_user_id', $userId)
+                ->where('archive', false)
+                ->count();
+
+            return response()->json([
+                'code' => 200,
+                'status' => true,
+                'message' => 'Notification archived successfully.',
+                'data' => [
+                    'notificationId' => $notification->id,
+                    'archived' => true,
+                    'unreadCount' => $unreadCount,
+                ]
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'code' => 400,
+                'status' => false,
+                'message' => 'Validation failed.',
+                'errors' => $e->errors()
+            ], 400);
+        } catch (\Exception $e) {
+            return response()->json([
+                'code' => 500,
+                'status' => false,
+                'message' => 'Failed to archive notification.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
