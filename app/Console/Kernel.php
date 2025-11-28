@@ -19,41 +19,9 @@ class Kernel extends ConsoleKernel
 
     protected function schedule(Schedule $schedule): void
     {
-        // Log that scheduler is being called
-        Log::info('Laravel Scheduler: schedule() method called at ' . now('Asia/Kolkata')->toDateTimeString());
-
-        // ---------------------------------------------------------------------
-        // Existing schedules (unchanged)
-        // ---------------------------------------------------------------------
-
-    
-        // Run every minute to check each user's timezone for notification time (16:30)
-        // This ensures we catch 16:30 regardless of which timezone the user is in
-        $schedule->command('notification:send --only=notification')
-            ->everyMinute()
-            ->withoutOverlapping()
-            ->runInBackground()
-            ->appendOutputTo(storage_path('logs/scheduler.log'))
-            ->onSuccess(function () {
-                Log::info('Scheduler: notification:send --only=notification executed successfully');
-            })
-            ->onFailure(function () {
-                Log::error('Scheduler: notification:send --only=notification failed');
-            });
-
-        // Run every minute to check each user's timezone for report time (23:59)
-        // This ensures we catch 23:59 regardless of which timezone the user is in
-        $schedule->command('notification:send --only=report')
-            ->everyMinute()
-            ->withoutOverlapping()
-            ->runInBackground()
-            ->appendOutputTo(storage_path('logs/scheduler.log'))
-            ->onSuccess(function () {
-                Log::info('Scheduler: notification:send --only=report executed successfully');
-            })
-            ->onFailure(function () {
-                Log::error('Scheduler: notification:send --only=report failed');
-            });
+        // NOTE: notification and report schedules are in routes/console.php
+        // because they need to run every minute and routes/console.php schedules
+        // are properly detected by the scheduler in Laravel 11
 
         // -------------------------
         // Weekly Summary Cron

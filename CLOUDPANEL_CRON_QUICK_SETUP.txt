@@ -1,0 +1,76 @@
+===========================================
+CLOUDPANEL CRON JOB SETUP - QUICK REFERENCE
+===========================================
+
+STEP 1: Go to CloudPanel
+- URL: 69.62.122.238:8443
+- Navigate: Sites → community.tribe365.co → Cron Jobs
+- Click: "Add Cron Job"
+
+STEP 2: Fill in the form:
+
+Name:
+Laravel Scheduler
+
+Schedule:
+* * * * *
+
+Command:
+cd /home/tribe365-community/community.tribe365.co && /usr/bin/php artisan schedule:run >> /home/tribe365-community/community.tribe365.co/storage/logs/cron.log 2>&1
+
+===========================================
+IMPORTANT: Find the correct path first!
+===========================================
+
+The path above is a guess. To find the ACTUAL path:
+
+Option 1: Via CloudPanel File Manager
+- Go to File Manager
+- Navigate to your Laravel project root (where artisan file is)
+- Copy the full path from the address bar
+
+Option 2: Via SSH
+- SSH into server
+- Run: sudo su - tribe365-community
+- Run: cd ~ && pwd
+- Run: ls -la (look for your project folder)
+- The path will be something like: /home/tribe365-community/community.tribe365.co
+
+Option 3: Use the find script
+- Run: ./find-cron-path.sh
+- It will show you the correct command
+
+===========================================
+AFTER SETUP - VERIFY IT'S WORKING
+===========================================
+
+1. Wait 2-3 minutes after adding the cron job
+
+2. Check cron.log:
+   tail -f /path/to/project/storage/logs/cron.log
+
+3. Check Laravel logs:
+   tail -f /path/to/project/storage/logs/laravel.log | grep -i "cron\|scheduler"
+
+4. You should see entries like:
+   - "Cron started for --only=notification at ..."
+   - "Cron started for --only=report at ..."
+
+===========================================
+IF STILL NOT WORKING
+===========================================
+
+1. Test manually first:
+   cd /path/to/project
+   /usr/bin/php artisan schedule:run
+   
+2. Check permissions:
+   chmod -R 775 storage/logs/
+   chown -R tribe365-community:tribe365-community storage/logs/
+
+3. Verify PHP path:
+   which php
+   (Should be: /usr/bin/php)
+
+4. Check CloudPanel cron logs for errors
+

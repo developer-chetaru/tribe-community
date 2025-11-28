@@ -11,6 +11,18 @@ Artisan::command('inspire', function () {
 // NOTE: notification and report schedules moved to Kernel.php for timezone-based scheduling
 // They now run every minute and filter users based on their individual timezones
 
+// Run every minute to check each user's timezone for notification time (16:30)
+Schedule::command('notification:send --only=notification')
+        ->everyMinute()
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+// Run every minute to check each user's timezone for report time (23:59)
+Schedule::command('notification:send --only=report')
+        ->everyMinute()
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/scheduler.log'));
+
 Schedule::command('notification:send --only=sentiment')
         ->dailyAt('18:00')
         ->timezone('Asia/Kolkata');
