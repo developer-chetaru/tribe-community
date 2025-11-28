@@ -52,7 +52,7 @@
             <div class="grid grid-cols-12 gap-5 h-[calc(100vh-280px)] overflow-hidden">
                 
                 {{-- LEFT: Notification list --}}
-                <div class="col-span-5 space-y-3 overflow-y-auto pr-2" style="max-height: calc(100vh - 280px);">
+                <div class="{{ $selectedNotification ? 'col-span-5' : 'col-span-12' }} space-y-3 overflow-y-auto pr-2" style="max-height: calc(100vh - 280px);">
 
                     @forelse($notifications as $note)
                         @php $isSelected = $selectedNotification && $selectedNotification->id === $note->id; @endphp
@@ -105,46 +105,37 @@
                 </div>
 
 
-                {{-- RIGHT: Detail Panel --}}
+                {{-- RIGHT: Detail Panel -- Only show when notification is selected --}}
+                @if($selectedNotification)
                 <div class="col-span-7 bg-[#F8F9FA] rounded-xl border border-[#E5E5E5] overflow-hidden flex flex-col" style="max-height: calc(100vh - 280px);">
-                    @if($selectedNotification)
-                        {{-- Header --}}
-                        <div class="flex justify-between items-start p-5 bg-white border-b border-[#E5E5E5]">
-                            <div class="flex-1">
-                                <h2 class="text-lg font-semibold text-red-600 mb-1">
-                                    {{ $selectedNotification->title }}
-                                </h2>
-                                <span class="text-xs text-gray-500">
-                                    {{ $selectedNotification->created_at->format('d M Y, h:i A') }}
-                                </span>
-                            </div>
-
-                            @if($tab === 'active')
-                            <div class="flex gap-2 ml-4">
-                                {{-- Single Archive --}}
-                                <button wire:click="moveToArchive({{ $selectedNotification->id }})"
-                                    class="bg-red-500 text-white px-4 py-2 rounded-md text-sm hover:bg-red-600 transition-colors">
-                                    Archive
-                                </button>
-                            </div>
-                            @endif
+                    {{-- Header --}}
+                    <div class="flex justify-between items-start p-5 bg-white border-b border-[#E5E5E5]">
+                        <div class="flex-1">
+                            <h2 class="text-lg font-semibold text-red-600 mb-1">
+                                {{ $selectedNotification->title }}
+                            </h2>
+                            <span class="text-xs text-gray-500">
+                                {{ $selectedNotification->created_at->format('d M Y, h:i A') }}
+                            </span>
                         </div>
 
-                        {{-- Body --}}
-                        <div class="px-5 py-6 text-sm text-gray-800 leading-relaxed overflow-y-auto flex-1">
-                            <div class="whitespace-pre-wrap">{{ $selectedNotification->description }}</div>
+                        @if($tab === 'active')
+                        <div class="flex gap-2 ml-4">
+                            {{-- Single Archive --}}
+                            <button wire:click="moveToArchive({{ $selectedNotification->id }})"
+                                class="bg-red-500 text-white px-4 py-2 rounded-md text-sm hover:bg-red-600 transition-colors">
+                                Archive
+                            </button>
                         </div>
-                    @else
-                        {{-- Empty State --}}
-                        <div class="flex flex-col items-center justify-center h-full text-gray-400 p-8">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-5-5.917V4a1 1 0 10-2 0v1.083A6.002 6.002 0 006 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                            </svg>
-                            <p class="text-base font-medium text-gray-500 mb-1">No notification selected</p>
-                            <p class="text-sm text-gray-400 text-center max-w-xs">Click on a notification from the list to view its details here.</p>
-                        </div>
-                    @endif
+                        @endif
+                    </div>
+
+                    {{-- Body --}}
+                    <div class="px-5 py-6 text-sm text-gray-800 leading-relaxed overflow-y-auto flex-1">
+                        <div class="whitespace-pre-wrap">{{ $selectedNotification->description }}</div>
+                    </div>
                 </div>
+                @endif
 
 
             </div>
