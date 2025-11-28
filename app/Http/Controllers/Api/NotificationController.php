@@ -25,13 +25,13 @@ class NotificationController extends Controller
                 ], 400);
             }
 
-            if (!$orgId) {
-                return response()->json([
-                    'code' => 400,
-                    'status' => false,
-                    // 'message' => 'User is not linked to any organisation.'
-                ], 400);
-            }
+            // if (!$orgId) {
+            //     return response()->json([
+            //         'code' => 400,
+            //         'status' => false,
+            //         'message' => 'User is not linked to any organisation.'
+            //     ], 400);
+            // }
 
             
             $organisation = Organisation::where('id', $orgId)
