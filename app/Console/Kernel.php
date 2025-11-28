@@ -19,6 +19,9 @@ class Kernel extends ConsoleKernel
 
     protected function schedule(Schedule $schedule): void
     {
+        // Log that scheduler is being called
+        Log::info('Laravel Scheduler: schedule() method called at ' . now('Asia/Kolkata')->toDateTimeString());
+
         // ---------------------------------------------------------------------
         // Existing schedules (unchanged)
         // ---------------------------------------------------------------------
@@ -29,14 +32,28 @@ class Kernel extends ConsoleKernel
         $schedule->command('notification:send --only=notification')
             ->everyMinute()
             ->withoutOverlapping()
-            ->runInBackground();
+            ->runInBackground()
+            ->appendOutputTo(storage_path('logs/scheduler.log'))
+            ->onSuccess(function () {
+                Log::info('Scheduler: notification:send --only=notification executed successfully');
+            })
+            ->onFailure(function () {
+                Log::error('Scheduler: notification:send --only=notification failed');
+            });
 
         // Run every minute to check each user's timezone for report time (23:59)
         // This ensures we catch 23:59 regardless of which timezone the user is in
         $schedule->command('notification:send --only=report')
             ->everyMinute()
             ->withoutOverlapping()
-            ->runInBackground();
+            ->runInBackground()
+            ->appendOutputTo(storage_path('logs/scheduler.log'))
+            ->onSuccess(function () {
+                Log::info('Scheduler: notification:send --only=report executed successfully');
+            })
+            ->onFailure(function () {
+                Log::error('Scheduler: notification:send --only=report failed');
+            });
 
         // -------------------------
         // Weekly Summary Cron
@@ -74,30 +91,11 @@ class Kernel extends ConsoleKernel
 
         $schedule->command('leave:update-status')
             ->daily()
-            ->timezone('Asia/Kolkata');
-    }
+            ->timezone('Asia/Kolkata')
+            ->appendOutputTo(storage_path('logs/scheduler.log'));
 
-    public function updatedSelectedYear($year)
-    {
-        $user = auth()->user();
-        $registerDate = $user->created_at;
-        $currentYear = now()->year;
-
-        // Adjust month if year changes
-        if ($year == $registerDate->year && $year == $currentYear) {
-            $this->selectedMonth = max($this->selectedMonth, $registerDate->month);
-            $this->selectedMonth = min($this->selectedMonth, now()->month);
-        } elseif ($year == $registerDate->year) {
-            $this->selectedMonth = max($this->selectedMonth, $registerDate->month);
-        } elseif ($year == $currentYear) {
-            $this->selectedMonth = min($this->selectedMonth, now()->month);
-        } else {
-            if ($this->selectedMonth < 1 || $this->selectedMonth > 12) {
-                $this->selectedMonth = 1;
-            }
-        }
-
-        $this->loadSummariesFromDatabase();
+        // Log scheduled tasks count
+        Log::info('Laravel Scheduler: All scheduled tasks registered successfully');
     }
 
     protected function commands(): void
