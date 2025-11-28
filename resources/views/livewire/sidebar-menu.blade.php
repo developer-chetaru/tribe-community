@@ -290,7 +290,7 @@
     <!-- Text + Arrow only if sidebar open -->
     <template x-if="$store.sidebar.open">
         <div class="flex items-center flex-1 ml-2">
-            <span class="text-sm">Setting</span>
+            <span class="text-sm">Universal Setting</span>
             <svg class="w-3 h-3 transition-transform ml-auto"
                  :class="open ? 'rotate-180' : ''"
                  fill="currentColor" viewBox="0 0 448 512">
