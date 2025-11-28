@@ -49,7 +49,7 @@ class AuthController extends Controller
     if (! $user->status) {
         return response()->json([
             'status'  => false,
-            'message' => 'Your account is not active. Please activate your account.',
+            'message' => 'Check your email to verify your account. For using Tribe365, account need to be verified. Your account is not activated yet.',
         ], 401);
     }
 
