@@ -17,9 +17,11 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use App\Http\Controllers\Concerns\UpdatesUserTimezone;
 
 class HPTMController extends Controller
 {
+    use UpdatesUserTimezone;
    /**
     * Get the authenticated user's profile with role, office,
     * department, organisation, COT/SOT data, etc.
@@ -30,6 +32,9 @@ class HPTMController extends Controller
     public function userProfile(Request $request)
     {
         try {
+            // Auto-detect and update user timezone from request or IP
+            $this->updateUserTimezoneIfNeeded($request);
+            
             $user = auth()->user();
 
             if (! $user) {
@@ -246,6 +251,9 @@ class HPTMController extends Controller
      */
  	public function getFreeVersionHomeDetails(Request $request)
     {
+        // Auto-detect and update user timezone from request or IP
+        $this->updateUserTimezoneIfNeeded($request);
+        
         $user = Auth::user();
         if (!$user) {
             return response()->json([

@@ -12,6 +12,8 @@ use Carbon\Carbon;
 use App\Models\HappyIndex;
 use App\Models\HptmLearningChecklist;
 use App\Models\HptmLearningType;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 
 class DashboardSummary extends Component
 {
@@ -45,7 +47,61 @@ class DashboardSummary extends Component
 
     public function mount()
     {
-        $tz = 'Asia/Kolkata';
+        // Auto-detect timezone from IP if user doesn't have one
+        $user = auth()->user();
+        if ($user && (empty($user->timezone) || $user->timezone === null || trim($user->timezone) === '')) {
+            try {
+                $request = request();
+                $ipAddress = $request->ip();
+                
+                Log::info("Dashboard mount: Checking timezone for user {$user->id}, IP: {$ipAddress}, Current timezone: " . ($user->timezone ?? 'null'));
+                
+                // For localhost, use a default or try to get real IP from headers
+                if (in_array($ipAddress, ['127.0.0.1', '::1', 'localhost'])) {
+                    // Try to get real IP from headers
+                    $ipAddress = $request->header('X-Forwarded-For') 
+                        ?? $request->header('X-Real-IP')
+                        ?? $request->ip();
+                    
+                    // If still localhost, use a test IP or default timezone
+                    if (in_array($ipAddress, ['127.0.0.1', '::1', 'localhost'])) {
+                        Log::info("Dashboard mount: Localhost detected, using default timezone Asia/Kolkata");
+                        $user->timezone = 'Asia/Kolkata';
+                        $user->save();
+                        $user->refresh();
+                        return;
+                    }
+                }
+                
+                if ($ipAddress) {
+                    $response = Http::timeout(5)
+                        ->get("https://ipapi.co/{$ipAddress}/json/");
+                    
+                    if ($response->successful()) {
+                        $data = $response->json();
+                        $timezone = $data['timezone'] ?? null;
+                        
+                        if ($timezone && in_array($timezone, timezone_identifiers_list())) {
+                            $user->timezone = $timezone;
+                            $user->save();
+                            
+                            Log::info("Dashboard mount: Auto-detected timezone for user {$user->id} from IP {$ipAddress}: {$timezone}");
+                            
+                            // Refresh user to get updated timezone
+                            $user->refresh();
+                        } else {
+                            Log::warning("Dashboard mount: Invalid timezone from IP API: " . ($timezone ?? 'null'));
+                        }
+                    } else {
+                        Log::warning("Dashboard mount: IP API request failed: " . $response->status());
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error("Dashboard mount: Failed to detect timezone from IP: " . $e->getMessage());
+            }
+        }
+        
+        $tz = $user->timezone ?? 'Asia/Kolkata';
         $today = Carbon::now($tz)->startOfDay();
 
         $this->month = $today->month;
@@ -104,6 +160,93 @@ class DashboardSummary extends Component
         }
 
         $this->loadData();
+    }
+
+    /**
+     * Update user timezone from browser or IP
+     *
+     * @return void
+     */
+    public function updateTimezoneFromBrowser()
+    {
+        try {
+            $user = auth()->user();
+            
+            if (!$user) {
+                return;
+            }
+
+            // If user already has timezone, don't override
+            if (!empty($user->timezone)) {
+                return;
+            }
+
+            // Try to detect from IP if no timezone is set
+            $request = request();
+            $ipAddress = $request->ip();
+            
+            if ($ipAddress && !in_array($ipAddress, ['127.0.0.1', '::1', 'localhost'])) {
+                try {
+                    $response = \Illuminate\Support\Facades\Http::timeout(3)
+                        ->get("https://ipapi.co/{$ipAddress}/json/");
+                    
+                    if ($response->successful()) {
+                        $data = $response->json();
+                        $timezone = $data['timezone'] ?? null;
+                        
+                        if ($timezone && in_array($timezone, timezone_identifiers_list())) {
+                            $user->timezone = $timezone;
+                            $user->save();
+                            
+                            Log::info("Auto-detected timezone for user {$user->id} from IP {$ipAddress}: {$timezone}");
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("Failed to detect timezone from IP {$ipAddress}: " . $e->getMessage());
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error("Error in updateTimezoneFromBrowser: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Update user timezone
+     *
+     * @param string $timezone
+     * @return void
+     */
+    public function updateTimezone($timezone)
+    {
+        try {
+            $user = auth()->user();
+            
+            if (!$user) {
+                return;
+            }
+
+            // If timezone is blank/null, try to detect from IP
+            if (empty($timezone) || $timezone === 'null' || $timezone === 'undefined') {
+                $this->updateTimezoneFromBrowser();
+                return;
+            }
+
+            // Validate timezone
+            if (!in_array($timezone, timezone_identifiers_list())) {
+                Log::warning("Invalid timezone provided: {$timezone} for user {$user->id}");
+                return;
+            }
+
+            // Update only if different or if user has no timezone set
+            if (empty($user->timezone) || $user->timezone !== $timezone) {
+                $user->timezone = $timezone;
+                $user->save();
+                
+                Log::info("Updated timezone for user {$user->id} to '{$timezone}' from dashboard");
+            }
+        } catch (\Exception $e) {
+            Log::error("Error updating user timezone: " . $e->getMessage());
+        }
     }
 
     public function updated($propertyName)

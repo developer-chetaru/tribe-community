@@ -8,9 +8,11 @@ use App\Models\UserLeave;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
+use App\Http\Controllers\Concerns\UpdatesUserTimezone;
 
 class SummaryController extends Controller
 {
+    use UpdatesUserTimezone;
   
   /**
    * Get user's Happy Index and leave summary.
@@ -21,6 +23,9 @@ class SummaryController extends Controller
    */
   public function getSummary($filterType, Request $request)
 {
+    // Update user timezone if provided in request
+    $this->updateUserTimezoneIfNeeded($request);
+    
     $userId = Auth::id();
     $startDate = $request->get('start_date');
     $endDate = $request->get('end_date');

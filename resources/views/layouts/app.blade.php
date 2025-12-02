@@ -58,6 +58,72 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.21/js/utils.js"></script>
    <!-- Include Flatpickr JS -->
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    
+    <!-- Auto-detect and update timezone -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                // Get browser timezone (may be blank/null)
+                const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+                
+                // Update timezone via existing APIs for dashboard/profile pages
+                const currentPath = window.location.pathname;
+                const isDashboardOrProfile = currentPath.includes('/dashboard') || 
+                                              currentPath.includes('/user-profile') || 
+                                              currentPath.includes('/user/profile');
+                
+                if (isDashboardOrProfile) {
+                    // Wait for Livewire to be ready, then update timezone
+                    if (window.Livewire) {
+                        // Try immediately if Livewire is already loaded
+                        setTimeout(() => {
+                            Livewire.all().forEach(component => {
+                                if (component.updateTimezone) {
+                                    // Pass browser timezone or null to trigger IP detection
+                                    component.updateTimezone(browserTimezone || null);
+                                }
+                            });
+                        }, 500);
+                        
+                        // Also listen for Livewire load event
+                        document.addEventListener('livewire:load', function() {
+                            setTimeout(() => {
+                                Livewire.all().forEach(component => {
+                                    if (component.updateTimezone) {
+                                        component.updateTimezone(browserTimezone || null);
+                                    }
+                                });
+                            }, 100);
+                        });
+                    }
+                    
+                    // Also add timezone header to API calls
+                    const originalFetch = window.fetch;
+                    window.fetch = function(...args) {
+                        const url = args[0];
+                        const options = args[1] || {};
+                        
+                        // Add timezone header to user-profile and dashboard API calls
+                        if (typeof url === 'string' && (
+                            url.includes('/api/user-profile') || 
+                            url.includes('/api/get-free-version-home-details') ||
+                            url.includes('/user-profile')
+                        )) {
+                            options.headers = options.headers || {};
+                            if (browserTimezone) {
+                                options.headers['X-Timezone'] = browserTimezone;
+                            }
+                        }
+                        
+                        return originalFetch.apply(this, args);
+                    };
+                }
+            } catch (error) {
+                console.log('Error setting up timezone detection:', error);
+            }
+        });
+    </script>
+    
     @stack('scripts')
 </body>
 </html>
