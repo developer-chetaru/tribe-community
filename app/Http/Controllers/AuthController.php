@@ -193,6 +193,38 @@ class AuthController extends Controller
                 return response()->json(['error' => 'Token not provided'], 400);
             }
 
+            // Get user before invalidating token
+            $user = JWTAuth::setToken($token)->authenticate();
+            
+            // Clear OneSignal device token (fcmToken) from database
+            if ($user && $user->fcmToken) {
+                $fcmToken = $user->fcmToken;
+                
+                // Optionally remove device from OneSignal
+                try {
+                    $oneSignal = new OneSignalService();
+                    $oneSignal->removePushDevice($fcmToken);
+                } catch (\Exception $e) {
+                    Log::warning('Failed to remove OneSignal device on logout', [
+                        'user_id' => $user->id,
+                        'fcmToken' => $fcmToken,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+                
+                // Clear fcmToken from database
+                $user->update([
+                    'fcmToken' => null,
+                    'deviceType' => null,
+                    'deviceId' => null,
+                ]);
+                
+                Log::info('OneSignal device token cleared on logout', [
+                    'user_id' => $user->id,
+                ]);
+            }
+
+            // Invalidate JWT token
             JWTAuth::setToken($token)->invalidate();
 
             return response()->json([

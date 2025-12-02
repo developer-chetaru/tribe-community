@@ -359,4 +359,48 @@ class OneSignalService
 
 		return $response->json();
 	}
+
+    /**
+     * Remove/Delete Push Device from OneSignal
+     * 
+     * @param string $playerId The OneSignal player ID (device token)
+     * @return bool
+     */
+    public function removePushDevice(string $playerId): bool
+    {
+        if (empty($playerId)) {
+            Log::warning('⚠️ Empty player ID provided for OneSignal device removal');
+            return false;
+        }
+
+        try {
+            // Delete player device from OneSignal
+            // Note: OneSignal delete endpoint format may vary, but clearing DB token is primary fix
+            $response = Http::withHeaders([
+                'Authorization' => "Basic {$this->restApiKey}",
+                'Content-Type'  => 'application/json',
+            ])->delete("https://api.onesignal.com/api/v1/players/{$playerId}?app_id={$this->appId}");
+
+            if ($response->failed()) {
+                Log::warning('⚠️ OneSignal device removal failed', [
+                    'player_id' => $playerId,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return false;
+            }
+
+            Log::info('✅ Push device removed from OneSignal', [
+                'player_id' => $playerId,
+            ]);
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::error('❌ OneSignal device removal exception', [
+                'player_id' => $playerId,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
 }
