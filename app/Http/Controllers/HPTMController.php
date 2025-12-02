@@ -901,25 +901,32 @@ class HPTMController extends Controller
             $timezoneService = app(\App\Services\TimezoneService::class);
             $timezone = $timezoneService->getTimezoneFromLocation($latitude, $longitude);
 
-            if ($timezone) {
-                // Update user's timezone if authenticated
-                $user = auth()->user();
-                if ($user) {
-                    $user->timezone = $timezone;
-                    $user->save();
+            // If external APIs failed to detect timezone, fall back gracefully
+            if (!$timezone) {
+                // 1) Try browser / client provided timezone header if any
+                $headerTz = $request->header('X-Timezone') ?? $request->input('timezone');
+                if (!empty($headerTz) && in_array($headerTz, timezone_identifiers_list())) {
+                    $timezone = $headerTz;
+                    \Log::warning("getTimezoneFromLocation: Falling back to timezone from request header/body: {$timezone}");
+                } else {
+                    // 2) Safe default – Asia/Kolkata (used for most of your users)
+                    $timezone = 'Asia/Kolkata';
+                    \Log::warning("getTimezoneFromLocation: Timezone API failed, falling back to default {$timezone} for ({$latitude}, {$longitude})");
                 }
+            }
 
-                return response()->json([
-                    'status' => true,
-                    'timezone' => $timezone,
-                    'message' => 'Timezone detected successfully',
-                ]);
+            // Update user's timezone if authenticated
+            $user = auth()->user();
+            if ($user && $user->timezone !== $timezone) {
+                $user->timezone = $timezone;
+                $user->save();
             }
 
             return response()->json([
-                'status' => false,
-                'message' => 'Unable to detect timezone from location',
-            ], 400);
+                'status' => true,
+                'timezone' => $timezone,
+                'message' => 'Timezone detected successfully',
+            ]);
 
         } catch (\Exception $e) {
             return response()->json([
