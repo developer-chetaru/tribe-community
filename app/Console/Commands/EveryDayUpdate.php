@@ -168,7 +168,7 @@ class EveryDayUpdate extends Command
           return;
       }
 
-      // Filter users based on their timezone, target time (16:30), organisation and working days
+      // Filter users based on their timezone, target time (16:00), organisation and working days
       $usersToNotify = $users->filter(function ($user) {
           // Get user's timezone or default to Asia/Kolkata
           $userTimezone = $user->timezone ?: 'Asia/Kolkata';
@@ -182,9 +182,9 @@ class EveryDayUpdate extends Command
           // Get current time in user's timezone
           $userNow = now($userTimezone);
           
-          // Check if it's 16:30 in user's timezone
+          // Check if it's 16:00 in user's timezone
           $targetTime = $userNow->format('H:i');
-          if ($targetTime !== '16:30') {
+          if ($targetTime !== '16:00') {
               return false;
           }
 
