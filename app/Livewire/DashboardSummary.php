@@ -47,7 +47,7 @@ class DashboardSummary extends Component
 
     public function mount()
     {
-        // Auto-detect timezone from IP (always check and update if needed)
+        // Auto-detect timezone from IP (force update based on current location)
         $user = auth()->user();
         if ($user) {
             try {
@@ -68,45 +68,59 @@ class DashboardSummary extends Component
                     $ipAddress = $request->ip();
                 }
                 
-                Log::info("Dashboard mount: Checking timezone for user {$user->id}, IP: {$ipAddress}, Current timezone: " . ($user->timezone ?? 'null'));
+                $currentTimezone = $user->timezone ?? 'not set';
+                Log::info("Dashboard mount: User {$user->id} | IP: {$ipAddress} | Current timezone: {$currentTimezone}");
+                Log::info("Dashboard mount: Headers - X-Forwarded-For: " . ($request->header('X-Forwarded-For') ?? 'none') . " | X-Real-IP: " . ($request->header('X-Real-IP') ?? 'none'));
                 
-                // Skip localhost IPs
+                // Skip localhost IPs only if we can't get real IP from headers
                 if (!$ipAddress || in_array($ipAddress, ['127.0.0.1', '::1', 'localhost'])) {
-                    Log::info("Dashboard mount: Localhost detected, skipping IP detection");
-                    return;
+                    // Try one more time with all headers
+                    $allHeaders = $request->headers->all();
+                    Log::info("Dashboard mount: All headers: " . json_encode($allHeaders));
+                    
+                    // If still localhost and no headers, skip
+                    if (in_array($ipAddress, ['127.0.0.1', '::1', 'localhost']) && 
+                        !$request->header('X-Forwarded-For') && 
+                        !$request->header('X-Real-IP')) {
+                        Log::info("Dashboard mount: Localhost detected with no proxy headers, skipping IP detection");
+                        return;
+                    }
                 }
                 
-                // Always try to detect timezone from IP (update if different or empty)
-                $response = Http::timeout(5)
+                // Always try to detect timezone from IP and update
+                $response = Http::timeout(10)
                     ->get("https://ipapi.co/{$ipAddress}/json/");
                 
                 if ($response->successful()) {
                     $data = $response->json();
                     $detectedTimezone = $data['timezone'] ?? null;
+                    $country = $data['country_name'] ?? 'Unknown';
+                    $city = $data['city'] ?? 'Unknown';
+                    
+                    Log::info("Dashboard mount: API Response - Timezone: {$detectedTimezone}, Country: {$country}, City: {$city}");
                     
                     if ($detectedTimezone && in_array($detectedTimezone, timezone_identifiers_list())) {
-                        // Update if timezone is empty or different
-                        if (empty($user->timezone) || $user->timezone !== $detectedTimezone) {
-                            $oldTimezone = $user->timezone;
-                            $user->timezone = $detectedTimezone;
-                            $user->save();
-                            
-                            Log::info("Dashboard mount: Updated timezone for user {$user->id} from IP {$ipAddress}: {$detectedTimezone} (was: " . ($oldTimezone ?? 'null') . ")");
-                            
-                            // Refresh user to get updated timezone
-                            $user->refresh();
-                        } else {
-                            Log::info("Dashboard mount: Timezone already set correctly for user {$user->id}: {$detectedTimezone}");
-                        }
+                        // ALWAYS update to match current location (force update)
+                        $oldTimezone = $user->timezone;
+                        $user->timezone = $detectedTimezone;
+                        $user->save();
+                        
+                        Log::info("Dashboard mount: ✅ UPDATED timezone for user {$user->id} | IP: {$ipAddress} | From: {$oldTimezone} | To: {$detectedTimezone} | Location: {$city}, {$country}");
+                        
+                        // Refresh user to get updated timezone
+                        $user->refresh();
                     } else {
-                        Log::warning("Dashboard mount: Invalid timezone from IP API: " . ($detectedTimezone ?? 'null'));
+                        Log::warning("Dashboard mount: ❌ Invalid timezone from IP API: " . ($detectedTimezone ?? 'null') . " | Full response: " . json_encode($data));
                     }
                 } else {
-                    Log::warning("Dashboard mount: IP API request failed: " . $response->status() . " - " . $response->body());
+                    $errorBody = $response->body();
+                    Log::warning("Dashboard mount: ❌ IP API request failed | Status: " . $response->status() . " | Response: " . substr($errorBody, 0, 200));
                 }
             } catch (\Exception $e) {
-                Log::error("Dashboard mount: Failed to detect timezone from IP: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
+                Log::error("Dashboard mount: ❌ Exception: " . $e->getMessage() . " | File: " . $e->getFile() . ":" . $e->getLine());
             }
+        } else {
+            Log::warning("Dashboard mount: No authenticated user found");
         }
         
         $tz = $user->timezone ?? 'Asia/Kolkata';

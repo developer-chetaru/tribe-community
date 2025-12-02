@@ -34,12 +34,19 @@ trait UpdatesUserTimezone
                 ?? $request->input('timezone')
                 ?? $request->query('timezone');
 
-            // If timezone is blank or empty, try to detect from IP
-            if (empty($timezone) || $timezone === 'null' || $timezone === 'undefined') {
-                $timezone = $this->detectTimezoneFromIP($request);
+            // ALWAYS try to detect from IP to get current location (even if timezone is provided)
+            // This ensures timezone always matches user's current location
+            $detectedTimezone = $this->detectTimezoneFromIP($request);
+            
+            // Use detected timezone from IP if available (most accurate for current location)
+            if ($detectedTimezone) {
+                $timezone = $detectedTimezone;
+                Log::info("Using timezone detected from IP (current location): {$timezone}");
             }
-
-            if (empty($timezone)) {
+            
+            // If still no timezone, try the one from request
+            if (empty($timezone) || $timezone === 'null' || $timezone === 'undefined') {
+                Log::warning("No timezone detected from IP or request for user {$user->id}");
                 return;
             }
 
@@ -49,14 +56,12 @@ trait UpdatesUserTimezone
                 return;
             }
 
-            // Update only if different or if user has no timezone set
+            // ALWAYS update to match current location (force update based on IP)
             $currentTimezone = $user->timezone;
-            if (empty($currentTimezone) || $currentTimezone !== $timezone) {
-                $user->timezone = $timezone;
-                $user->save();
-                
-                Log::info("Updated timezone for user {$user->id} from '{$currentTimezone}' to '{$timezone}'");
-            }
+            $user->timezone = $timezone;
+            $user->save();
+            
+            Log::info("Updated timezone for user {$user->id} from '{$currentTimezone}' to '{$timezone}' (based on current location)");
         } catch (\Exception $e) {
             Log::error("Error updating user timezone: " . $e->getMessage());
             // Don't throw - this is a non-critical update

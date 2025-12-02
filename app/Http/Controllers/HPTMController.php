@@ -32,8 +32,11 @@ class HPTMController extends Controller
     public function userProfile(Request $request)
     {
         try {
-            // Auto-detect and update user timezone from request or IP
-            $this->updateUserTimezoneIfNeeded($request);
+            // Force timezone detection from IP if user doesn't have one or if request has no timezone
+            $user = auth()->user();
+            if ($user && (empty($user->timezone) || !$request->header('X-Timezone'))) {
+                $this->updateUserTimezoneIfNeeded($request);
+            }
             
             $user = auth()->user();
 

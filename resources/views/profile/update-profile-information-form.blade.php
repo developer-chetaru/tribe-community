@@ -154,10 +154,11 @@
                 $display = $countryCode ? $countryCode . ' - ' . $city . ' (' . $tz . ')' : $tz;
                 return ['value' => $tz, 'display' => $display, 'search' => strtolower($tz . ' ' . $city . ' ' . ($countryCode ?? ''))];
             })->values()->all();
-            $currentTz = $this->user->timezone ?? '';
+            $currentTz = $this->user->timezone ?? ($this->state['timezone'] ?? '');
             $currentDisplay = collect($timezones)->firstWhere('value', $currentTz)['display'] ?? $currentTz;
         @endphp
-        <div class="col-span-6 sm:col-span-3" x-data="{
+        <div class="col-span-6 sm:col-span-3" 
+             x-data="{
             search: '',
             showSuggestions: false,
             selectedTimezone: @js($currentTz),
@@ -188,6 +189,14 @@
                 // Update Livewire when timezone changes
                 this.$watch('selectedTimezone', value => {
                     @this.set('state.timezone', value);
+                });
+                
+                // Listen for timezone updates from Livewire
+                @this.on('timezone-updated', (timezone) => {
+                    if (timezone) {
+                        this.selectedTimezone = timezone;
+                        @this.set('state.timezone', timezone);
+                    }
                 });
             }
         }">
