@@ -32,11 +32,29 @@ class Notifications extends Component
     {
         $userId = Auth::id();
 
-        $this->notificationCount = IotNotification::where('to_bubble_user_id', $userId)
+        // Base query to exclude sentiment reminder notifications
+        // Exclude if notificationType = 'sentiment-reminder' OR title = 'Reminder: Please Update Your Sentiment Index'
+        $baseQuery = IotNotification::where('to_bubble_user_id', $userId)
+            ->where(function($q) {
+                // Show only notifications that are NOT sentiment reminders
+                // Both conditions must be true (notificationType != sentiment-reminder AND title != reminder title)
+                $q->where(function($subQuery) {
+                    $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                             ->orWhereNull('notificationType');
+                })
+                ->where(function($subQuery) {
+                    $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                             ->orWhereNull('title');
+                });
+            });
+
+        // Count notifications excluding sentiment reminders
+        $this->notificationCount = (clone $baseQuery)
             ->where('archive', false)
             ->count();
 
-        $query = IotNotification::where('to_bubble_user_id', $userId)->orderBy('created_at', 'desc');
+        // Get notifications excluding sentiment reminders
+        $query = (clone $baseQuery)->orderBy('created_at', 'desc');
 
         if ($this->tab === 'active') {
             $this->notifications = $query->where('archive', false)->get();

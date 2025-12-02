@@ -52,11 +52,34 @@ class NotificationController extends Controller
                         $q->where('is_read', 0);
                     }
                 })
+                ->where(function($q) {
+                    // Exclude sentiment reminder notifications
+                    $q->where(function($subQuery) {
+                        $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                                 ->orWhereNull('notificationType');
+                    })
+                    ->where(function($subQuery) {
+                        $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                                 ->orWhereNull('title');
+                    });
+                })
                 ->count();
           
             // Get all notification types (not just custom notification)
+            // Exclude sentiment reminder notifications from the list
             $notifications = IotNotification::where('to_bubble_user_id', $userId)
 				->where('archive', false)
+                ->where(function($q) {
+                    // Exclude sentiment reminder notifications
+                    $q->where(function($subQuery) {
+                        $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                                 ->orWhereNull('notificationType');
+                    })
+                    ->where(function($subQuery) {
+                        $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                                 ->orWhereNull('title');
+                    });
+                })
                 ->orderBy('created_at', 'desc')
                 ->get([
                     'id',
@@ -211,6 +234,17 @@ class NotificationController extends Controller
 
             $unreadCount = IotNotification::where('to_bubble_user_id', $userId)
                 ->where('status', 'Active')
+                ->where(function($q) {
+                    // Exclude sentiment reminder notifications
+                    $q->where(function($subQuery) {
+                        $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                                 ->orWhereNull('notificationType');
+                    })
+                    ->where(function($subQuery) {
+                        $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                                 ->orWhereNull('title');
+                    });
+                })
                 ->count();
 
             return response()->json([
