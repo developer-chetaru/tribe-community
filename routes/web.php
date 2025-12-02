@@ -52,6 +52,7 @@ use App\Livewire\Admin\SendNotifications;
 use App\Livewire\Admin\SendNotificationList;
 use App\Livewire\User\Notifications;
 use App\Http\Controllers\Auth\ForgotResetPasswordController;
+use App\Http\Controllers\HPTMController;
 
 
 use App\Http\Controllers\ForgotController;
@@ -91,6 +92,7 @@ Route::middleware([
         return view('profile.change-password');
     })->name('password.change');
 	Route::middleware(['auth'])->get('/user-profile', [HPTMController::class, 'userProfile']);
+	Route::middleware(['auth'])->post('/get-timezone-from-location', [HPTMController::class, 'getTimezoneFromLocation']);
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
   	Route::get('/weekly-summary', WeeklySummary::class)->name('weekly.summary');
     Route::get('/monthly-summary', MonthlySummary::class)->name('monthly.summary');

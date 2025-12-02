@@ -32,11 +32,8 @@ class HPTMController extends Controller
     public function userProfile(Request $request)
     {
         try {
-            // Force timezone detection from IP if user doesn't have one or if request has no timezone
-            $user = auth()->user();
-            if ($user && (empty($user->timezone) || !$request->header('X-Timezone'))) {
-                $this->updateUserTimezoneIfNeeded($request);
-            }
+            // Update user timezone from request if provided
+            $this->updateUserTimezoneIfNeeded($request);
             
             $user = auth()->user();
 
@@ -254,7 +251,7 @@ class HPTMController extends Controller
      */
  	public function getFreeVersionHomeDetails(Request $request)
     {
-        // Auto-detect and update user timezone from request or IP
+        // Update user timezone from request if provided
         $this->updateUserTimezoneIfNeeded($request);
         
         $user = Auth::user();
@@ -880,6 +877,55 @@ class HPTMController extends Controller
                 'status'  => false,
                 'message' => 'Failed to update profile',
                 'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get timezone from latitude and longitude (for mobile and web)
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTimezoneFromLocation(Request $request)
+    {
+        try {
+            $request->validate([
+                'latitude' => 'required|numeric|between:-90,90',
+                'longitude' => 'required|numeric|between:-180,180',
+            ]);
+
+            $latitude = $request->input('latitude');
+            $longitude = $request->input('longitude');
+
+            $timezoneService = app(\App\Services\TimezoneService::class);
+            $timezone = $timezoneService->getTimezoneFromLocation($latitude, $longitude);
+
+            if ($timezone) {
+                // Update user's timezone if authenticated
+                $user = auth()->user();
+                if ($user) {
+                    $user->timezone = $timezone;
+                    $user->save();
+                }
+
+                return response()->json([
+                    'status' => true,
+                    'timezone' => $timezone,
+                    'message' => 'Timezone detected successfully',
+                ]);
+            }
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Unable to detect timezone from location',
+            ], 400);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to get timezone from location',
+                'error' => $e->getMessage(),
             ], 500);
         }
     }

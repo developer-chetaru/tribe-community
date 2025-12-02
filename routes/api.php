@@ -24,6 +24,7 @@ Route::middleware('auth:api')->group(function () {
     // flutter api
     Route::get('/user-profile', [HPTMController::class, 'userProfile']);
   	Route::Post('/update-user-profile', [HPTMController::class, 'updateUserProfile']);
+    Route::post('/get-timezone-from-location', [HPTMController::class, 'getTimezoneFromLocation']);
     Route::get('/get-department-list', [HPTMController::class, 'getDepartmentList']);
     Route::post('/all-offices-and-departments', [HPTMController::class, 'getAllOfficenDepartments']);
     Route::post('/get-free-version-home-details', [HPTMController::class, 'getFreeVersionHomeDetails']);

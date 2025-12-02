@@ -23,7 +23,7 @@ class SummaryController extends Controller
    */
   public function getSummary($filterType, Request $request)
 {
-    // Update user timezone if provided in request
+    // Update user timezone from request if provided
     $this->updateUserTimezoneIfNeeded($request);
     
     $userId = Auth::id();

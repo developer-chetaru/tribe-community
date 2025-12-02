@@ -59,69 +59,119 @@
    <!-- Include Flatpickr JS -->
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     
-    <!-- Auto-detect and update timezone -->
+    <!-- Get timezone from current location using browser geolocation -->
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            try {
-                // Get browser timezone (may be blank/null)
-                const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        (function() {
+            'use strict';
+            
+            const currentPath = window.location.pathname;
+            const isDashboardOrProfile = currentPath.includes('/dashboard') || 
+                                          currentPath.includes('/user-profile') || 
+                                          currentPath.includes('/user/profile');
+            
+            if (!isDashboardOrProfile) {
+                return;
+            }
+            
+            // Check if geolocation is supported
+            if (!navigator.geolocation) {
+                console.log('Geolocation is not supported by this browser');
+                return;
+            }
+            
+            // Function to get timezone from location
+            function getTimezoneFromLocation(latitude, longitude) {
+                const formData = new FormData();
+                formData.append('latitude', latitude);
+                formData.append('longitude', longitude);
                 
-                // Update timezone via existing APIs for dashboard/profile pages
-                const currentPath = window.location.pathname;
-                const isDashboardOrProfile = currentPath.includes('/dashboard') || 
-                                              currentPath.includes('/user-profile') || 
-                                              currentPath.includes('/user/profile');
-                
-                if (isDashboardOrProfile) {
-                    // Wait for Livewire to be ready, then update timezone
-                    if (window.Livewire) {
-                        // Try immediately if Livewire is already loaded
-                        setTimeout(() => {
-                            Livewire.all().forEach(component => {
-                                if (component.updateTimezone) {
-                                    // Pass browser timezone or null to trigger IP detection
-                                    component.updateTimezone(browserTimezone || null);
-                                }
-                            });
-                        }, 500);
+                fetch('/get-timezone-from-location', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+                    },
+                    body: formData,
+                    credentials: 'same-origin'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status && data.timezone) {
+                        console.log('✅ Timezone detected from location:', data.timezone);
                         
-                        // Also listen for Livewire load event
-                        document.addEventListener('livewire:load', function() {
+                        // Update Livewire components
+                        if (window.Livewire) {
                             setTimeout(() => {
                                 Livewire.all().forEach(component => {
-                                    if (component.updateTimezone) {
-                                        component.updateTimezone(browserTimezone || null);
+                                    if (component.updateTimezoneFromLocation) {
+                                        component.updateTimezoneFromLocation(data.timezone);
                                     }
                                 });
                             }, 100);
-                        });
+                        }
+                    } else {
+                        console.log('❌ Failed to get timezone from location');
                     }
-                    
-                    // Also add timezone header to API calls
-                    const originalFetch = window.fetch;
-                    window.fetch = function(...args) {
-                        const url = args[0];
-                        const options = args[1] || {};
-                        
-                        // Add timezone header to user-profile and dashboard API calls
-                        if (typeof url === 'string' && (
-                            url.includes('/api/user-profile') || 
-                            url.includes('/api/get-free-version-home-details') ||
-                            url.includes('/user-profile')
-                        )) {
-                            options.headers = options.headers || {};
-                            if (browserTimezone) {
-                                options.headers['X-Timezone'] = browserTimezone;
-                            }
+                })
+                .catch(err => {
+                    console.log('Error getting timezone from location:', err);
+                });
+            }
+            
+            // Function to show permission popup and request location
+            function requestLocationAndGetTimezone() {
+                // Show permission request (browser will show native popup)
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        const latitude = position.coords.latitude;
+                        const longitude = position.coords.longitude;
+                        console.log('📍 Location obtained:', latitude, longitude);
+                        getTimezoneFromLocation(latitude, longitude);
+                    },
+                    function(error) {
+                        let errorMessage = 'Unable to get your location. ';
+                        if (error.code === error.PERMISSION_DENIED) {
+                            errorMessage += 'Please allow location access to automatically set your timezone.';
+                            console.log('❌ User denied location permission');
+                        } else if (error.code === error.POSITION_UNAVAILABLE) {
+                            errorMessage += 'Location information is unavailable.';
+                            console.log('❌ Location information unavailable');
+                        } else if (error.code === error.TIMEOUT) {
+                            errorMessage += 'Location request timed out.';
+                            console.log('❌ Location request timeout');
+                        } else {
+                            errorMessage += 'An unknown error occurred.';
+                            console.log('❌ Error getting location:', error.message);
                         }
                         
-                        return originalFetch.apply(this, args);
-                    };
-                }
-            } catch (error) {
-                console.log('Error setting up timezone detection:', error);
+                        // Optional: Show user-friendly message
+                        // You can uncomment this to show an alert
+                        // alert(errorMessage);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 15000,
+                        maximumAge: 0
+                    }
+                );
             }
-        });
+            
+            // Try to get location on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                // Always request location to get current timezone
+                requestLocationAndGetTimezone();
+            });
+            
+            // Also try when Livewire is ready
+            if (window.Livewire) {
+                document.addEventListener('livewire:load', function() {
+                    setTimeout(() => {
+                        requestLocationAndGetTimezone();
+                    }, 500);
+                });
+            }
+        })();
     </script>
     
     @stack('scripts')
