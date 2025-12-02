@@ -17,57 +17,64 @@ class UpdateProfileInformationForm extends BaseUpdateProfileInformationForm
     {
         parent::mount();
         
-        // Auto-detect timezone from IP if user doesn't have one
+        // Auto-detect timezone from IP (always check and update if needed)
         $user = Auth::user();
-        if ($user && (empty($user->timezone) || $user->timezone === null || trim($user->timezone) === '')) {
+        if ($user) {
             try {
                 $request = request();
-                $ipAddress = $request->ip();
+                
+                // Get real IP address (handle proxies/load balancers)
+                $ipAddress = $request->header('X-Forwarded-For');
+                if ($ipAddress) {
+                    // X-Forwarded-For can contain multiple IPs, get the first one
+                    $ipAddress = trim(explode(',', $ipAddress)[0]);
+                }
+                
+                if (!$ipAddress) {
+                    $ipAddress = $request->header('X-Real-IP');
+                }
+                
+                if (!$ipAddress) {
+                    $ipAddress = $request->ip();
+                }
                 
                 Log::info("Profile mount: Checking timezone for user {$user->id}, IP: {$ipAddress}, Current timezone: " . ($user->timezone ?? 'null'));
                 
-                // For localhost, use a default or try to get real IP from headers
-                if (in_array($ipAddress, ['127.0.0.1', '::1', 'localhost'])) {
-                    // Try to get real IP from headers
-                    $ipAddress = $request->header('X-Forwarded-For') 
-                        ?? $request->header('X-Real-IP')
-                        ?? $request->ip();
-                    
-                    // If still localhost, use a test IP or default timezone
-                    if (in_array($ipAddress, ['127.0.0.1', '::1', 'localhost'])) {
-                        Log::info("Profile mount: Localhost detected, using default timezone Asia/Kolkata");
-                        $user->timezone = 'Asia/Kolkata';
-                        $user->save();
-                        $this->state['timezone'] = 'Asia/Kolkata';
-                        return;
-                    }
+                // Skip localhost IPs
+                if (!$ipAddress || in_array($ipAddress, ['127.0.0.1', '::1', 'localhost'])) {
+                    Log::info("Profile mount: Localhost detected, skipping IP detection");
+                    return;
                 }
                 
-                if ($ipAddress) {
-                    $response = \Illuminate\Support\Facades\Http::timeout(5)
-                        ->get("https://ipapi.co/{$ipAddress}/json/");
+                // Always try to detect timezone from IP (update if different or empty)
+                $response = \Illuminate\Support\Facades\Http::timeout(5)
+                    ->get("https://ipapi.co/{$ipAddress}/json/");
+                
+                if ($response->successful()) {
+                    $data = $response->json();
+                    $detectedTimezone = $data['timezone'] ?? null;
                     
-                    if ($response->successful()) {
-                        $data = $response->json();
-                        $timezone = $data['timezone'] ?? null;
-                        
-                        if ($timezone && in_array($timezone, timezone_identifiers_list())) {
-                            $user->timezone = $timezone;
+                    if ($detectedTimezone && in_array($detectedTimezone, timezone_identifiers_list())) {
+                        // Update if timezone is empty or different
+                        if (empty($user->timezone) || $user->timezone !== $detectedTimezone) {
+                            $user->timezone = $detectedTimezone;
                             $user->save();
                             
                             // Update state
-                            $this->state['timezone'] = $timezone;
+                            $this->state['timezone'] = $detectedTimezone;
                             
-                            Log::info("Profile mount: Auto-detected timezone for user {$user->id} from IP {$ipAddress}: {$timezone}");
+                            Log::info("Profile mount: Updated timezone for user {$user->id} from IP {$ipAddress}: {$detectedTimezone} (was: " . ($user->getOriginal('timezone') ?? 'null') . ")");
                         } else {
-                            Log::warning("Profile mount: Invalid timezone from IP API: " . ($timezone ?? 'null'));
+                            Log::info("Profile mount: Timezone already set correctly for user {$user->id}: {$detectedTimezone}");
                         }
                     } else {
-                        Log::warning("Profile mount: IP API request failed: " . $response->status());
+                        Log::warning("Profile mount: Invalid timezone from IP API: " . ($detectedTimezone ?? 'null'));
                     }
+                } else {
+                    Log::warning("Profile mount: IP API request failed: " . $response->status() . " - " . $response->body());
                 }
             } catch (\Exception $e) {
-                Log::error("Profile mount: Failed to detect timezone from IP: " . $e->getMessage());
+                Log::error("Profile mount: Failed to detect timezone from IP: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());
             }
         }
         

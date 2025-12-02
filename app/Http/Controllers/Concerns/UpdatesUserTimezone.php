@@ -72,7 +72,20 @@ trait UpdatesUserTimezone
     protected function detectTimezoneFromIP($request)
     {
         try {
-            $ipAddress = $request->ip();
+            // Get real IP address (handle proxies/load balancers)
+            $ipAddress = $request->header('X-Forwarded-For');
+            if ($ipAddress) {
+                // X-Forwarded-For can contain multiple IPs, get the first one
+                $ipAddress = trim(explode(',', $ipAddress)[0]);
+            }
+            
+            if (!$ipAddress) {
+                $ipAddress = $request->header('X-Real-IP');
+            }
+            
+            if (!$ipAddress) {
+                $ipAddress = $request->ip();
+            }
             
             // Skip localhost IPs
             if (!$ipAddress || in_array($ipAddress, ['127.0.0.1', '::1', 'localhost'])) {
