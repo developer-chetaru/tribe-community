@@ -54,16 +54,28 @@ class FortifyServiceProvider extends ServiceProvider
             Fortify::authenticateUsing(function (Request $request) {
 	    $user = User::where('email', $request->email)->first();
 
-    	if ($user && Hash::check($request->password, $user->password)) {
-        	if (!$user->status) {
-            	throw ValidationException::withMessages([
-                	'email' => __('Your account is not activated yet, please check your email and follow the instruction to verify your account.'),
-            	]);
-        	}
-        	return $user;
+    	// Check if email exists
+    	if (!$user) {
+    	    throw ValidationException::withMessages([
+    	        'email' => __('The provided email address is not registered.'),
+    	    ]);
     	}
 
-    	return null;
+    	// Check if password is correct
+    	if (!Hash::check($request->password, $user->password)) {
+    	    throw ValidationException::withMessages([
+    	        'password' => __('The provided password is incorrect.'),
+    	    ]);
+    	}
+
+    	// Check if account is activated
+    	if (!$user->status) {
+    	    throw ValidationException::withMessages([
+    	        'email' => __('Your account is not activated yet, please check your email and follow the instruction to verify your account.'),
+    	    ]);
+    	}
+
+    	return $user;
 	});
         RateLimiter::for('login', function (Request $request) {
             $throttleKey = Str::transliterate(Str::lower($request->input(Fortify::username())).'|'.$request->ip());
