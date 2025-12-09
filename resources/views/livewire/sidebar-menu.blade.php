@@ -135,7 +135,8 @@
 </a>
 @endhasanyrole
 
-@hasanyrole('organisation_user|basecamp|organisation_admin')
+{{-- Notification button removed for users --}}
+{{-- @hasanyrole('organisation_user|basecamp|organisation_admin')
     <a href="{{ route('user.notifications') }}"
        class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition relative"
        :class="[
@@ -166,7 +167,7 @@
              Notification
         </span>
     </a>
-@endhasanyrole
+@endhasanyrole --}}
 
  <!-- @hasanyrole('super_admin')
     <a href="#"
