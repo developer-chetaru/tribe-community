@@ -88,11 +88,27 @@ class EveryDayUpdate extends Command
         try {
             $now = $date ?: now('Asia/Kolkata');
             
-            // Check if notification already exists for this type and date
+            // Check if notification already exists for this type, title, and date range
             $query = \App\Models\IotNotification::where('to_bubble_user_id', $userId)
-                ->where('notificationType', $type);
+                ->where('notificationType', $type)
+                ->where('title', $title);
             
-            if ($date) {
+            // For weekly/monthly notifications, check within the week/month
+            if ($type === 'weekly-report' || $type === 'weekly-summary') {
+                $startOfWeek = $now->copy()->startOfWeek(Carbon::MONDAY);
+                $endOfWeek = $now->copy()->endOfWeek(Carbon::SUNDAY);
+                $query->whereBetween('created_at', [
+                    $startOfWeek->startOfDay()->toDateTimeString(),
+                    $endOfWeek->endOfDay()->toDateTimeString()
+                ]);
+            } elseif ($type === 'monthly-report' || $type === 'monthly-summary') {
+                $startOfMonth = $now->copy()->startOfMonth();
+                $endOfMonth = $now->copy()->endOfMonth();
+                $query->whereBetween('created_at', [
+                    $startOfMonth->startOfDay()->toDateTimeString(),
+                    $endOfMonth->endOfDay()->toDateTimeString()
+                ]);
+            } elseif ($date) {
                 $query->whereDate('created_at', $now->toDateString());
             }
             
@@ -118,6 +134,16 @@ class EveryDayUpdate extends Command
                     'type' => $type,
                     'title' => $title
                 ]);
+                
+                return true; // Notification was stored successfully
+            } else {
+                Log::channel('daily')->info("Notification already exists, skipping", [
+                    'user_id' => $userId,
+                    'type' => $type,
+                    'title' => $title
+                ]);
+                
+                return false; // Notification already exists
             }
         } catch (\Throwable $e) {
             Log::channel('daily')->error("Failed to store notification", [
@@ -125,6 +151,8 @@ class EveryDayUpdate extends Command
                 'type' => $type,
                 'error' => $e->getMessage()
             ]);
+            
+            return false; // Failed to store
         }
     }
 
@@ -211,6 +239,34 @@ class EveryDayUpdate extends Command
           return;
       }
 
+      // ✅ Filter out users who already received notification today to prevent duplicates
+      $usersToNotify = $usersToNotify->filter(function ($user) {
+          $userTimezone = $user->timezone ?: 'Asia/Kolkata';
+          if (!in_array($userTimezone, timezone_identifiers_list())) {
+              $userTimezone = 'Asia/Kolkata';
+          }
+          $userNow = now($userTimezone);
+          
+          // Check if notification already sent today
+          $notificationAlreadySent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
+              ->where('notificationType', 'sentiment')
+              ->whereDate('created_at', $userNow->toDateString())
+              ->exists();
+
+          if ($notificationAlreadySent) {
+              Log::channel('daily')->info("Skipping user - notification already sent today: {$user->id}");
+              return false;
+          }
+          
+          return true;
+      });
+
+      if ($usersToNotify->isEmpty()) {
+          $this->warn('No users to notify (all already received notification today).');
+          Log::channel('daily')->info('No users to notify (all already received notification today).');
+          return;
+      }
+
       $playerIds = $usersToNotify->pluck('fcmToken')
           ->filter(fn($token) => preg_match('/^[a-z0-9-]{8,}$/i', $token))
           ->unique()
@@ -235,6 +291,7 @@ class EveryDayUpdate extends Command
           }
           
           $userNow = now($userTimezone);
+          
           $this->storeNotification(
               $user->id,
               'sentiment',
@@ -344,8 +401,39 @@ protected function sendFridayEmail()
             return;
         }
 
+        // Get current week range for duplicate check (week starts on Monday)
+        $now = now('Asia/Kolkata');
+        $startOfWeek = $now->copy()->startOfWeek(Carbon::MONDAY);
+        $endOfWeek = $now->copy()->endOfWeek(Carbon::SUNDAY);
     
         foreach ($users as $user) {
+            // ✅ Check if weekly email already sent this week to prevent duplicates
+            // Check more broadly to catch any duplicate in the week
+            $emailAlreadySent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
+                ->where('notificationType', 'weekly-report')
+                ->where('title', 'Your Weekly Happy Index Report')
+                ->whereBetween('created_at', [
+                    $startOfWeek->startOfDay()->toDateTimeString(),
+                    $endOfWeek->endOfDay()->toDateTimeString()
+                ])
+                ->exists();
+
+            if ($emailAlreadySent) {
+                Log::channel('daily')->info("Skipping user - weekly email already sent this week: {$user->email}");
+                continue;
+            }
+            
+            // ✅ Additional safety check: also check if email was sent in the last 7 days
+            $recentEmailSent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
+                ->where('notificationType', 'weekly-report')
+                ->where('title', 'Your Weekly Happy Index Report')
+                ->where('created_at', '>=', now()->subDays(7)->startOfDay())
+                ->exists();
+                
+            if ($recentEmailSent) {
+                Log::channel('daily')->info("Skipping user - weekly email sent in last 7 days: {$user->email}");
+                continue;
+            }
       
             $days = collect();
             for ($i = 6; $i >= 0; $i--) {
@@ -423,19 +511,9 @@ protected function sendFridayEmail()
 
             $chartUrl = "https://quickchart.io/chart?c=" . urlencode(json_encode($chartConfig));
 
-            // Send email to this user
-            \Mail::send('emails.weekly-report', [
-                'user' => $user,
-                'organisation' => $user->organisation,
-                'chartUrl' => $chartUrl,
-            ], function ($message) use ($user) {
-                $message->to($user->email)
-                    ->subject('Your Weekly Happy Index Report');
-            });
-
-            // Store notification in database
+            // Store notification in database FIRST to prevent race conditions
             $weekLabel = now()->subDays(6)->format('M d') . ' - ' . now()->format('M d');
-            $this->storeNotification(
+            $notificationStored = $this->storeNotification(
                 $user->id,
                 'weekly-report',
                 'Your Weekly Happy Index Report',
@@ -443,6 +521,23 @@ protected function sendFridayEmail()
                 null,
                 now('Asia/Kolkata')
             );
+            
+            // Only send email if notification was successfully stored (not duplicate)
+            if ($notificationStored) {
+                // Send email to this user
+                \Mail::send('emails.weekly-report', [
+                    'user' => $user,
+                    'organisation' => $user->organisation,
+                    'chartUrl' => $chartUrl,
+                ], function ($message) use ($user) {
+                    $message->to($user->email)
+                        ->subject('Your Weekly Happy Index Report');
+                });
+                
+                Log::channel('daily')->info("Weekly report email sent to: {$user->email}");
+            } else {
+                Log::channel('daily')->info("Skipping email - notification already exists for: {$user->email}");
+            }
         }
 
         Log::channel('daily')->info('Friday HappyIndex emails sent and notifications stored for all users.');
@@ -472,7 +567,21 @@ protected function sendMonthlyEmail()
             return;
         }
 
+        // Get current month range for duplicate check
+        $startOfMonth = now()->startOfMonth()->toDateString();
+        $endOfMonth = now()->endOfMonth()->toDateString();
+
         foreach ($users as $user) {
+            // ✅ Check if monthly email already sent this month to prevent duplicates
+            $emailAlreadySent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
+                ->where('notificationType', 'monthly-report')
+                ->whereBetween('created_at', [$startOfMonth . ' 00:00:00', $endOfMonth . ' 23:59:59'])
+                ->exists();
+
+            if ($emailAlreadySent) {
+                Log::channel('daily')->info("Skipping user - monthly email already sent this month: {$user->email}");
+                continue;
+            }
             // Prepare days in current month
             $daysInMonth = now()->daysInMonth;
             $days = collect();
@@ -639,6 +748,17 @@ protected function sendMonthlyEmail()
                 // ✅ NEW CONDITION → Send only if user.status = 1
                 if ($user->status != 1) {
                     Log::channel('daily')->info("Skipping user (status != 1): {$user->email}");
+                    continue;
+                }
+
+                // ✅ Check if email already sent today to prevent duplicates
+                $emailAlreadySent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
+                    ->where('notificationType', 'sentiment-reminder')
+                    ->whereDate('created_at', $todayDate)
+                    ->exists();
+
+                if ($emailAlreadySent) {
+                    Log::channel('daily')->info("Skipping user - email already sent today: {$user->email}");
                     continue;
                 }
 
@@ -987,37 +1107,69 @@ public function generateWeeklySummary()
          * IMPORTANT: SEND EMAIL AND STORE NOTIFICATION ONLY IF SUMMARY IS VALID
          */
         if ($this->isValidSummary($summaryText)) {
-            try {
-				$engagementText = $this->buildEngagementSummary($user, $startOfWeekUTC, $endOfWeekUTC);
-				$organisationSummary = $this->generateAIOrgSummary($startOfWeekUTC, $endOfWeekUTC);
+            // ✅ Check if weekly summary email already sent for this week to prevent duplicates
+            // Use proper datetime range for better matching
+            $emailAlreadySent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
+                ->where('notificationType', 'weekly-summary')
+                ->where('title', 'LIKE', "%Weekly Summary ({$weekLabel})%")
+                ->whereBetween('created_at', [
+                    $startOfWeekIST->startOfDay()->toDateTimeString(),
+                    $endOfWeekIST->endOfDay()->toDateTimeString()
+                ])
+                ->exists();
 
-			
-                $emailBody = view('emails.weekly-summary', [
-                    'user'                => $user,
-                    'summaryText'         => $summaryText,
-                    'weekLabel'           => $weekLabel,
-                    'engagementText'      => $engagementText,
-                    'organisationSummary' => $organisationSummary,
-                ])->render();
+            if ($emailAlreadySent) {
+                Log::warning("⛔ Email NOT sent — weekly summary already sent this week for user {$user->id}");
+                continue;
+            }
+            
+            // ✅ Additional safety check: also check if email was sent in the last 7 days with same week label
+            $recentEmailSent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
+                ->where('notificationType', 'weekly-summary')
+                ->where('title', 'LIKE', "%Weekly Summary ({$weekLabel})%")
+                ->where('created_at', '>=', now()->subDays(7)->startOfDay())
+                ->exists();
+                
+            if ($recentEmailSent) {
+                Log::warning("⛔ Email NOT sent — weekly summary with same week label sent in last 7 days for user {$user->id}");
+                continue;
+            }
 
-                $oneSignal->registerEmailUserFallback($user->email, $user->id, [
-                    'subject' => "Tribe365 Weekly Summary ({$weekLabel})",
-                    'body'    => $emailBody,
-                ]);
+            // Store notification in database FIRST to prevent race conditions
+            $notificationStored = $this->storeNotification(
+                $user->id,
+                'weekly-summary',
+                "Tribe365 Weekly Summary ({$weekLabel})",
+                "Your weekly emotional summary for {$weekLabel} has been generated.",
+                null,
+                now('Asia/Kolkata')
+            );
+            
+            // Only send email if notification was successfully stored (not duplicate)
+            if ($notificationStored) {
+                try {
+                    $engagementText = $this->buildEngagementSummary($user, $startOfWeekUTC, $endOfWeekUTC);
+                    $organisationSummary = $this->generateAIOrgSummary($startOfWeekUTC, $endOfWeekUTC);
 
-                // Store notification in database
-                $this->storeNotification(
-                    $user->id,
-                    'weekly-summary',
-                    "Tribe365 Weekly Summary ({$weekLabel})",
-                    "Your weekly emotional summary for {$weekLabel} has been generated.",
-                    null,
-                    now('Asia/Kolkata')
-                );
+                    $emailBody = view('emails.weekly-summary', [
+                        'user'                => $user,
+                        'summaryText'         => $summaryText,
+                        'weekLabel'           => $weekLabel,
+                        'engagementText'      => $engagementText,
+                        'organisationSummary' => $organisationSummary,
+                    ])->render();
 
-                Log::info("✅ OneSignal weekly email sent and notification stored for user {$user->id}");
-            } catch (\Throwable $e) {
-                Log::error("❌ OneSignal email failed for user {$user->id}: {$e->getMessage()}");
+                    $oneSignal->registerEmailUserFallback($user->email, $user->id, [
+                        'subject' => "Tribe365 Weekly Summary ({$weekLabel})",
+                        'body'    => $emailBody,
+                    ]);
+
+                    Log::info("✅ OneSignal weekly email sent and notification stored for user {$user->id}");
+                } catch (\Throwable $e) {
+                    Log::error("❌ OneSignal email failed for user {$user->id}: {$e->getMessage()}");
+                }
+            } else {
+                Log::warning("⛔ Email NOT sent — notification already exists for user {$user->id}");
             }
         } else {
             Log::warning("⛔ Email NOT sent — summary invalid for user {$user->id}");
@@ -1359,7 +1511,20 @@ private function generateAIText(string $prompt, $userId = null): string
                 ]
             );
 
-			try {
+			// ✅ Check if monthly summary email already sent for this month to prevent duplicates
+            $monthStartDate = $startOfMonthIST->toDateString();
+            $monthEndDate = $endOfMonthIST->toDateString();
+            $emailAlreadySent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
+                ->where('notificationType', 'monthly-summary')
+                ->whereBetween('created_at', [$monthStartDate . ' 00:00:00', $monthEndDate . ' 23:59:59'])
+                ->exists();
+
+            if ($emailAlreadySent) {
+                Log::warning("⛔ Email NOT sent — monthly summary already sent this month for user {$user->id}");
+                continue;
+            }
+
+            try {
                 $oneSignal = new OneSignalService();
 
                 $emailBody = view('emails.monthly-summary', [
