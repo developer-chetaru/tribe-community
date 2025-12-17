@@ -64,7 +64,7 @@ Route::get('/test-email', [TestEmailController::class, 'sendTestEmail']);
  Route::post('/forgot-password', [ForgotResetPasswordController::class, 'sendResetLinkEmail'])
     ->name('password.email');
     Route::get('/reset-password', [ForgotResetPasswordController::class, 'showResetForm'])
-    ->name('password.reset')
+    ->name('custom.password.reset')
     ->middleware('guest');
 
 Route::post('/reset-password', [ForgotResetPasswordController::class, 'store'])
@@ -81,7 +81,7 @@ Route::get('/', function () {
     return redirect()->to('/login');
 });
 
-Route::post('/register', [RegisteredUserController::class, 'store'])->name('register');
+Route::post('/register', [RegisteredUserController::class, 'store'])->name('custom.register');
 
 Route::middleware([
     'auth:sanctum',

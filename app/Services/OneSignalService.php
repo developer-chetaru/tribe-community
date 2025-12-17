@@ -258,71 +258,92 @@ class OneSignalService
      * Unified Email Registration + Sending with Fallback
      */
     public function registerEmailUserFallback(string $email, $userId = null, ?array $payload = null)
-{
-    try {
-        // Register email in OneSignal
-        $registerPayload = [
-            'subscriptions' => [
-                [
-                    'type'  => 'email',
-                    'token' => $email,
-                ],
-            ],
-            'alias_label' => 'external_id',
-            'alias_id'    => (string) ($userId ?? uniqid('user_')),
-        ];
-        $registerResponse = Http::withHeaders([
-            'Authorization' => "Basic {$this->restApiKey}",
-            'Content-Type'  => 'application/json',
-        ])->post("https://api.onesignal.com/apps/{$this->appId}/users", $registerPayload);
-        if ($registerResponse->failed()) {
-            Log::warning('OneSignal email register failed', [
+    {
+        try {
+            Log::info('📧 registerEmailUserFallback() called', [
                 'email' => $email,
-                'status' => $registerResponse->status(),
-                'body' => $registerResponse->body(),
-            ]);
-        } else {
-            Log::info('OneSignal user registered for email', [
-                'email' => $email,
-                'response' => $registerResponse->json(),
-            ]);
-        }
-        // If OneSignal email payload exists → send email
-        if ($payload && isset($payload['subject'], $payload['body'])) {
-            $sendPayload = [
+                'user_id' => $userId,
+                'has_payload' => !empty($payload),
                 'app_id' => $this->appId,
-                'include_email_tokens' => [$email],
-                'email_subject' => $payload['subject'],
-                'email_body' => $payload['body'],
+                'has_api_key' => !empty($this->restApiKey),
+            ]);
+
+            // Register email in OneSignal
+            $registerPayload = [
+                'subscriptions' => [
+                    [
+                        'type'  => 'email',
+                        'token' => $email,
+                    ],
+                ],
+                'alias_label' => 'external_id',
+                'alias_id'    => (string) ($userId ?? uniqid('user_')),
             ];
-            $sendResponse = Http::withHeaders([
+
+            Log::info('📧 Registering user in OneSignal', ['payload' => $registerPayload]);
+
+            $registerResponse = Http::withHeaders([
                 'Authorization' => "Basic {$this->restApiKey}",
                 'Content-Type'  => 'application/json',
-            ])->post('https://onesignal.com/api/v1/notifications', $sendPayload);
-            if ($sendResponse->failed()) {
-                Log::error('OneSignal email send failed', [
+            ])->post("https://api.onesignal.com/apps/{$this->appId}/users", $registerPayload);
+
+            if ($registerResponse->failed()) {
+                Log::warning('⚠️ OneSignal email register failed', [
                     'email' => $email,
-                    'status' => $sendResponse->status(),
-                    'body' => $sendResponse->body(),
+                    'status' => $registerResponse->status(),
+                    'body' => $registerResponse->body(),
                 ]);
-                // :x: REMOVE Laravel fallback email
-                // No Mail::raw() → avoids SMTP error completely
-                return false;
+            } else {
+                Log::info('✅ OneSignal user registered for email', [
+                    'email' => $email,
+                    'response' => $registerResponse->json(),
+                ]);
             }
-            Log::info('OneSignal email sent successfully', [
+
+            // If OneSignal email payload exists → send email
+            if ($payload && isset($payload['subject'], $payload['body'])) {
+                $sendPayload = [
+                    'app_id' => $this->appId,
+                    'include_email_tokens' => [$email],
+                    'email_subject' => $payload['subject'],
+                    'email_body' => $payload['body'],
+                ];
+
+                Log::info('📧 Sending email via OneSignal', [
+                    'email' => $email,
+                    'subject' => $payload['subject'],
+                ]);
+
+                $sendResponse = Http::withHeaders([
+                    'Authorization' => "Basic {$this->restApiKey}",
+                    'Content-Type'  => 'application/json',
+                ])->post('https://onesignal.com/api/v1/notifications', $sendPayload);
+
+                if ($sendResponse->failed()) {
+                    Log::error('❌ OneSignal email send failed', [
+                        'email' => $email,
+                        'status' => $sendResponse->status(),
+                        'body' => $sendResponse->body(),
+                    ]);
+                    return false;
+                }
+
+                Log::info('✅ OneSignal email sent successfully', [
+                    'email' => $email,
+                    'response' => $sendResponse->json(),
+                ]);
+            }
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::error('❌ registerEmailUserFallback() failed', [
                 'email' => $email,
-                'response' => $sendResponse->json(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
+            return false;
         }
-        return true;
-    } catch (\Throwable $e) {
-        Log::error('registerEmailUserFallback() failed', [
-            'email' => $email,
-            'error' => $e->getMessage(),
-        ]);
-        return false;
     }
-}
 
 	public function sendEmailMessage(string $email, string $subject, string $html)
 	{

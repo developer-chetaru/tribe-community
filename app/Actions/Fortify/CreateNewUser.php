@@ -51,28 +51,40 @@ class CreateNewUser implements CreatesNewUsers
         $user->assignRole('basecamp');
       
         try {
-            $oneSignal = new OneSignalService();
+            Log::info('📧 Starting email send for new user registration', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'verification_url' => $verificationUrl,
+            ]);
 
-            $oneSignal->registerEmailUserFallback($user->email, $user->id);
+            $oneSignal = new OneSignalService();
 
             $verifyBody = view('emails.verify-user-inline', [
                 'user' => $user,
                 'verificationUrl' => $verificationUrl,
             ])->render();
 
-            $oneSignal->registerEmailUserFallback($user->email, $user->id, [
+            Log::info('📧 Email body rendered, calling OneSignal', [
+                'email' => $user->email,
+                'body_length' => strlen($verifyBody),
+            ]);
+
+            $result = $oneSignal->registerEmailUserFallback($user->email, $user->id, [
                 'subject' => 'Activate Your Tribe365 Account',
                 'body'    => $verifyBody,
             ]);
 
-            \Log::info('✅ OneSignal verification email sent (with inline Blade)', [
+            Log::info('✅ OneSignal verification email sent', [
                 'email' => $user->email,
+                'result' => $result,
             ]);            
 
         } catch (\Throwable $e) {
-            \Log::error('❌ OneSignal registration/email failed for new user', [
+            Log::error('❌ OneSignal registration/email failed for new user', [
                 'user_id' => $user->id,
+                'email' => $user->email,
                 'error'   => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
         }
 
