@@ -151,7 +151,10 @@ class AuthController extends Controller
 			try {
                 $oneSignal = new OneSignalService();
 
-                $oneSignal->registerEmailUserFallback($user->email, $user->id);
+                $expires = Carbon::now()->addMinutes(1440);
+                $verificationUrl = URL::temporarySignedRoute(
+                    'user.verify', $expires, ['id' => $user->id]
+                );
 
                 $verifyBody = view('emails.verify-user-inline', [
                     'user' => $user,
