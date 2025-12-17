@@ -314,6 +314,15 @@ class AuthController extends Controller
         if (Hash::check($request->password, $user->password)) {
             $token = JWTAuth::fromUser($user);
 
+            // Send welcome email on login
+            try {
+                $oneSignal = new OneSignalService();
+                $oneSignal->registerEmailUser($user->email, $user->id);
+                Log::info('✅ Welcome email sent on login', ['email' => $user->email]);
+            } catch (\Throwable $e) {
+                Log::error('❌ Welcome email failed', ['email' => $user->email, 'error' => $e->getMessage()]);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Login successful!',
@@ -347,22 +356,19 @@ class AuthController extends Controller
 
    // Mail::to($user->email)->send(new VerifyUserEmail($user, $verificationUrl));
 
-	try {
-        // Render Mailable into HTML
+    try {
+        $oneSignal = new OneSignalService();
+        
         $htmlBody = (new VerifyUserEmail($user, $verificationUrl))->render();
-        $payload = [
-            'app_id' => config('services.onesignal.app_id'),
-            'include_email_tokens' => [$user->email],
-            'email_subject' => 'Verify Your Email - Tribe365',
-            'email_body' => $htmlBody,
-        ];
-        Http::withHeaders([
-            'Authorization' => 'Basic ' . config('services.onesignal.rest_api_key'),
-            'Content-Type'  => 'application/json',
-        ])->post('https://onesignal.com/api/v1/notifications', $payload);
-        Log::info('OneSignal verification email sent', ['email' => $user->email]);
+        
+        $oneSignal->registerEmailUserFallback($user->email, $user->id, [
+            'subject' => 'Activate Your Tribe365 Account',
+            'body'    => $htmlBody,
+        ]);
+        
+        Log::info('✅ OneSignal verification email sent', ['email' => $user->email]);
     } catch (\Throwable $e) {
-        Log::error('OneSignal verification email failed', [
+        Log::error('❌ OneSignal verification email failed', [
             'email' => $user->email,
             'error' => $e->getMessage(),
         ]);
