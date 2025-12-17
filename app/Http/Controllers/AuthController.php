@@ -368,24 +368,11 @@ class AuthController extends Controller
         ]);
     }
 
-	try {
-        $oneSignal = new OneSignalService();
-        $oneSignal->registerEmailUser($user->email, $user->id);
-        
-        // ✅ Set initial OneSignal tags on registration
-        $oneSignal->setUserTagsOnLogin($user);
-    } catch (\Throwable $e) {
-        \Log::error('❌ OneSignal registration failed for new user', [
-            'user_id' => $user->id,
-            'error'   => $e->getMessage(),
-        ]);
-    }
-
     return response()->json([
         'success' => true,
         'message' => 'Registration successful! Please check your email to activate your account.',
-        	'user'    => $user,
-        	'token'   => $token,
-    	]);
-	}
+        'user'    => $user,
+        'token'   => $token,
+    ]);
+}
 }
