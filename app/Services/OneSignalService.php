@@ -8,18 +8,18 @@ use Illuminate\Support\Facades\Mail;
 
 class OneSignalService
 {
-    protected string $appId;
-    protected string $restApiKey;
-    protected string $userAuthKey;
+    protected ?string $appId;
+    protected ?string $restApiKey;
+    protected ?string $userAuthKey;
 
     /**
      * Constructor — initialize config values from services.php
      */
     public function __construct()
     {
-        $this->appId = config('services.onesignal.app_id');
-        $this->restApiKey = config('services.onesignal.rest_api_key');
-        $this->userAuthKey = (string) config('services.onesignal.user_auth_key', $this->restApiKey);
+        $this->appId = config('services.onesignal.app_id') ?? '';
+        $this->restApiKey = config('services.onesignal.rest_api_key') ?? '';
+        $this->userAuthKey = (string) (config('services.onesignal.user_auth_key') ?? $this->restApiKey);
     }
 
     /**
