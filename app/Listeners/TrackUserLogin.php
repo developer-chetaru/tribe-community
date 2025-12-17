@@ -5,6 +5,7 @@ namespace App\Listeners;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Services\OneSignalService;
 
 class TrackUserLogin
 {
@@ -48,5 +49,17 @@ class TrackUserLogin
         
         $saved = $user->save();
         \Log::info("Login save result: " . ($saved ? "success" : "fail"));
+
+        // ✅ Set OneSignal tags on login (for automation)
+        try {
+            $oneSignal = new OneSignalService();
+            $oneSignal->setUserTagsOnLogin($user);
+            Log::info("OneSignal tags set for user: " . $user->id);
+        } catch (\Throwable $e) {
+            Log::warning('OneSignal tag update failed on login', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

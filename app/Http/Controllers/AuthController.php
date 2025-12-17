@@ -67,6 +67,17 @@ class AuthController extends Controller
         'deviceId'   => $request->deviceId,
     ]);
 
+    // ✅ Set OneSignal tags on login (for automation)
+    try {
+        $oneSignal = new OneSignalService();
+        $oneSignal->setUserTagsOnLogin($user);
+    } catch (\Throwable $e) {
+        Log::warning('OneSignal tag update failed on login', [
+            'user_id' => $user->id,
+            'error' => $e->getMessage(),
+        ]);
+    }
+
   
     	$data = [
         	'name'              => $user->first_name,
@@ -151,6 +162,9 @@ class AuthController extends Controller
                     'subject' => 'Activate Your Tribe365 Account',
                     'body'    => $verifyBody,
                 ]);
+
+                // ✅ Set initial OneSignal tags on registration
+                $oneSignal->setUserTagsOnLogin($user);
 
                 \Log::info('✅ OneSignal verification email sent (with inline Blade)', [
                     'email' => $user->email,
@@ -354,6 +368,9 @@ class AuthController extends Controller
 	try {
         $oneSignal = new OneSignalService();
         $oneSignal->registerEmailUser($user->email, $user->id);
+        
+        // ✅ Set initial OneSignal tags on registration
+        $oneSignal->setUserTagsOnLogin($user);
     } catch (\Throwable $e) {
         \Log::error('❌ OneSignal registration failed for new user', [
             'user_id' => $user->id,

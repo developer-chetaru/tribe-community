@@ -6,8 +6,10 @@ use App\Models\HappyIndex;
 use App\Models\User;
 use App\Models\HptmLearningChecklist;
 use App\Models\HptmLearningType;
+use App\Services\OneSignalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class HappyIndexController extends Controller
 {
@@ -22,6 +24,11 @@ class HappyIndexController extends Controller
         $userId      = $request->input('userId');
         $moodValue   = $request->input('moodStatus');
         $description = $request->input('description');
+
+        Log::info('addHappyIndex called', [
+            'user_id' => $userId,
+            'moodValue' => $moodValue,
+        ]);
 
         $existing = HappyIndex::where('user_id', $userId)
             ->whereDate('created_at', now()->toDateString())
@@ -55,6 +62,21 @@ class HappyIndexController extends Controller
         $user->lastHIDate = now()->toDateString();
         $user->updated_at = now();
         $user->save();
+
+        // ✅ Mark sentiment submitted in OneSignal (stops 6PM email reminder)
+        try {
+            $oneSignal = new OneSignalService();
+            $result = $oneSignal->markSentimentSubmitted($userId);
+            Log::info('OneSignal markSentimentSubmitted called', [
+                'user_id' => $userId,
+                'result' => $result,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('OneSignal markSentimentSubmitted failed', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         $learningChecklistTotalScore = HptmLearningChecklist::leftJoin('hptm_learning_types', 'hptm_learning_types.id', '=', 'hptm_learning_checklist.output')
             ->sum('hptm_learning_types.score');

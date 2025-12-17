@@ -360,6 +360,277 @@ class OneSignalService
 		return $response->json();
 	}
 
+    // =========================================================================
+    // TAG MANAGEMENT FOR AUTOMATION (Backend updates these, OneSignal automates)
+    // =========================================================================
+
+    /**
+     * Update user tags by external_id (your app's user ID)
+     * Use this on login, sentiment submission, etc.
+     *
+     * @param int|string $userId Your app's user ID
+     * @param array $tags Key-value pairs
+     * @return bool
+     */
+    public function updateUserTags($userId, array $tags): bool
+    {
+        $externalId = "user_{$userId}";
+
+        $response = Http::withHeaders([
+            'Authorization' => "Basic {$this->restApiKey}",
+            'Content-Type'  => 'application/json',
+        ])->patch("https://api.onesignal.com/apps/{$this->appId}/users/by/external_id/{$externalId}", [
+            'properties' => [
+                'tags' => $tags,
+            ],
+        ]);
+
+        if ($response->failed()) {
+            Log::error('❌ OneSignal updateUserTags failed', [
+                'user_id' => $userId,
+                'external_id' => $externalId,
+                'tags' => $tags,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+            return false;
+        }
+
+        Log::info('✅ OneSignal tags updated', [
+            'user_id' => $userId,
+            'external_id' => $externalId,
+            'tags' => $tags,
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Set initial tags on user login/registration
+     * Call this when user logs in or opens app
+     *
+     * @param \App\Models\User $user
+     * @return bool
+     */
+    public function setUserTagsOnLogin($user): bool
+    {
+        // Determine user type
+        $userType = $user->orgId ? 'org' : 'basecamp';
+
+        // Get working days (org users only)
+        $workingDays = '';
+        if ($user->organisation && $user->organisation->working_days) {
+            $days = is_string($user->organisation->working_days)
+                ? json_decode($user->organisation->working_days, true)
+                : $user->organisation->working_days;
+
+            // Convert day names to numbers (Mon=1, Tue=2, etc.)
+            $dayMap = ['Mon' => 1, 'Tue' => 2, 'Wed' => 3, 'Thu' => 4, 'Fri' => 5, 'Sat' => 6, 'Sun' => 7];
+            $dayNumbers = array_map(fn($d) => $dayMap[$d] ?? null, $days ?? []);
+            $workingDays = implode(',', array_filter($dayNumbers));
+        } else {
+            $workingDays = '1,2,3,4,5'; // Default Mon-Fri
+        }
+
+        // Check if user submitted sentiment today
+        $hasSubmittedToday = \App\Models\HappyIndex::where('user_id', $user->id)
+            ->whereDate('created_at', now()->toDateString())
+            ->exists();
+
+        $tags = [
+            'user_type' => $userType,
+            'working_days' => $workingDays,
+            'timezone' => $user->timezone ?? 'Asia/Kolkata',
+            'has_submitted_today' => $hasSubmittedToday ? 'true' : 'false',
+            'email_subscribed' => 'true',
+            'status' => (string) $user->status,
+        ];
+
+        // First, ensure user exists in OneSignal with external_id
+        $this->createOrUpdateOneSignalUser($user, $tags);
+
+        return true;
+    }
+
+    /**
+     * Create or update user in OneSignal with external_id and tags
+     * This ensures the user exists before we try to update tags
+     *
+     * @param \App\Models\User $user
+     * @param array $tags
+     * @return bool
+     */
+    public function createOrUpdateOneSignalUser($user, array $tags = []): bool
+    {
+        $externalId = "user_{$user->id}";
+
+        // Build subscriptions array
+        $subscriptions = [];
+
+        // Add push subscription if fcmToken exists
+        if (!empty($user->fcmToken)) {
+            $deviceType = match($user->deviceType) {
+                'android' => 1,
+                'ios' => 0,
+                default => 5, // web
+            };
+            $subscriptions[] = [
+                'type' => $deviceType === 1 ? 'AndroidPush' : ($deviceType === 0 ? 'iOSPush' : 'ChromePush'),
+                'token' => $user->fcmToken,
+            ];
+        }
+
+        // Add email subscription
+        if (!empty($user->email)) {
+            $subscriptions[] = [
+                'type' => 'Email',
+                'token' => $user->email,
+            ];
+        }
+
+        $payload = [
+            'properties' => [
+                'tags' => $tags,
+                'timezone_id' => $user->timezone ?? 'Asia/Kolkata',
+            ],
+            'identity' => [
+                'external_id' => $externalId,
+            ],
+        ];
+
+        if (!empty($subscriptions)) {
+            $payload['subscriptions'] = $subscriptions;
+        }
+
+        // Use POST to create/update user
+        $response = Http::withHeaders([
+            'Authorization' => "Basic {$this->restApiKey}",
+            'Content-Type' => 'application/json',
+        ])->post("https://api.onesignal.com/apps/{$this->appId}/users", $payload);
+
+        if ($response->failed()) {
+            // If user exists, try PATCH to update
+            $patchResponse = Http::withHeaders([
+                'Authorization' => "Basic {$this->restApiKey}",
+                'Content-Type' => 'application/json',
+            ])->patch("https://api.onesignal.com/apps/{$this->appId}/users/by/external_id/{$externalId}", [
+                'properties' => [
+                    'tags' => $tags,
+                    'timezone_id' => $user->timezone ?? 'Asia/Kolkata',
+                ],
+            ]);
+
+            if ($patchResponse->failed()) {
+                Log::error('❌ OneSignal createOrUpdateUser failed', [
+                    'user_id' => $user->id,
+                    'external_id' => $externalId,
+                    'post_status' => $response->status(),
+                    'post_body' => $response->body(),
+                    'patch_status' => $patchResponse->status(),
+                    'patch_body' => $patchResponse->body(),
+                ]);
+                return false;
+            }
+
+            Log::info('✅ OneSignal user updated (PATCH)', [
+                'user_id' => $user->id,
+                'external_id' => $externalId,
+                'tags' => $tags,
+            ]);
+            return true;
+        }
+
+        Log::info('✅ OneSignal user created/updated', [
+            'user_id' => $user->id,
+            'external_id' => $externalId,
+            'tags' => $tags,
+            'response' => $response->json(),
+        ]);
+
+        return true;
+    }
+
+    /**
+     * Mark sentiment as submitted (call after user submits sentiment)
+     *
+     * @param int|string $userId
+     * @return bool
+     */
+    public function markSentimentSubmitted($userId): bool
+    {
+        return $this->updateUserTags($userId, [
+            'has_submitted_today' => 'true',
+        ]);
+    }
+
+    /**
+     * Reset has_submitted_today tag (for daily reset)
+     * Can be called via OneSignal webhook or a simple midnight cron
+     *
+     * @param int|string $userId
+     * @return bool
+     */
+    public function resetDailySentimentTag($userId): bool
+    {
+        return $this->updateUserTags($userId, [
+            'has_submitted_today' => 'false',
+        ]);
+    }
+
+    /**
+     * Bulk reset all users' has_submitted_today tag
+     * Call this at midnight (simple cron, no notification logic)
+     *
+     * @param array $userIds Array of user IDs
+     * @return int Number of successful updates
+     */
+    public function bulkResetDailySentimentTags(array $userIds): int
+    {
+        $successCount = 0;
+        foreach ($userIds as $userId) {
+            if ($this->resetDailySentimentTag($userId)) {
+                $successCount++;
+            }
+        }
+        Log::info("✅ Bulk reset sentiment tags", [
+            'total' => count($userIds),
+            'success' => $successCount,
+        ]);
+        return $successCount;
+    }
+
+    /**
+     * Update user timezone tag
+     *
+     * @param int|string $userId
+     * @param string $timezone
+     * @return bool
+     */
+    public function updateUserTimezone($userId, string $timezone): bool
+    {
+        return $this->updateUserTags($userId, [
+            'timezone' => $timezone,
+        ]);
+    }
+
+    /**
+     * Update email subscription status
+     *
+     * @param int|string $userId
+     * @param bool $subscribed
+     * @return bool
+     */
+    public function updateEmailSubscription($userId, bool $subscribed): bool
+    {
+        return $this->updateUserTags($userId, [
+            'email_subscribed' => $subscribed ? 'true' : 'false',
+        ]);
+    }
+
+    // =========================================================================
+    // END TAG MANAGEMENT
+    // =========================================================================
+
     /**
      * Remove/Delete Push Device from OneSignal
      * 
