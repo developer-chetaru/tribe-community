@@ -18,14 +18,50 @@ use App\Mail\VerifyUserEmail;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * @OA\Tag(
+ *     name="Authentication",
+ *     description="User authentication endpoints"
+ * )
+ */
 class AuthController extends Controller
 {
   
-      /**
-     * Authenticate user and return JWT token with user details.
-     *
-     * @param  \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
+    /**
+     * @OA\Post(
+     *     path="/api/login-admin",
+     *     tags={"Authentication"},
+     *     summary="Admin/User Login",
+     *     description="Authenticate user and return JWT token with user details",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"email", "password", "deviceType", "deviceId", "fcmToken"},
+     *             @OA\Property(property="email", type="string", format="email", example="user@example.com"),
+     *             @OA\Property(property="password", type="string", format="password", example="password123"),
+     *             @OA\Property(property="deviceType", type="string", example="ios"),
+     *             @OA\Property(property="deviceId", type="string", example="device-uuid-123"),
+     *             @OA\Property(property="fcmToken", type="string", example="fcm-token-123")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Login successful",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="token", type="string", example="eyJ0eXAiOiJKV1QiLCJhbGc..."),
+     *             @OA\Property(property="user", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Invalid credentials",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Invalid credentials")
+     *         )
+     *     )
+     * )
      */
  	public function adminLogin(Request $request)
 	{
@@ -71,6 +107,12 @@ class AuthController extends Controller
     try {
         $oneSignal = new OneSignalService();
         $oneSignal->setUserTagsOnLogin($user);
+        
+        // ✅ Login user to OneSignal (associate device with external_user_id)
+        // Equivalent to OneSignal.login("user_{userId}") on client-side
+        if ($request->fcmToken) {
+            $oneSignal->loginUser($request->fcmToken, $user->id);
+        }
     } catch (\Throwable $e) {
         Log::warning('OneSignal tag update failed on login', [
             'user_id' => $user->id,
@@ -107,11 +149,36 @@ class AuthController extends Controller
 	}
 
   /**
-  * Register a new user and assign default role.
-  *
-  * @param  \Illuminate\Http\Request $request
-  * @return \Illuminate\Http\JsonResponse
-  */
+   * @OA\Post(
+   *     path="/api/register",
+   *     tags={"Authentication"},
+   *     summary="Register a new user",
+   *     description="Register a new user account and assign default role",
+   *     @OA\RequestBody(
+   *         required=true,
+   *         @OA\JsonContent(
+   *             required={"first_name", "last_name", "email", "password", "password_confirmation"},
+   *             @OA\Property(property="first_name", type="string", example="John"),
+   *             @OA\Property(property="last_name", type="string", example="Doe"),
+   *             @OA\Property(property="email", type="string", format="email", example="john@example.com"),
+   *             @OA\Property(property="password", type="string", format="password", example="Password123!@#"),
+   *             @OA\Property(property="password_confirmation", type="string", format="password", example="Password123!@#")
+   *         )
+   *     ),
+   *     @OA\Response(
+   *         response=200,
+   *         description="Registration successful",
+   *         @OA\JsonContent(
+   *             @OA\Property(property="status", type="boolean", example=true),
+   *             @OA\Property(property="message", type="string", example="User registered successfully")
+   *         )
+   *     ),
+   *     @OA\Response(
+   *         response=422,
+   *         description="Validation error"
+   *     )
+   * )
+   */
   public function register(Request $request)
   {
     	try {
@@ -216,6 +283,19 @@ class AuthController extends Controller
             // Clear OneSignal device token (fcmToken) from database
             if ($user && $user->fcmToken) {
                 $fcmToken = $user->fcmToken;
+                
+                // ✅ Logout user from OneSignal (clear external_user_id)
+                // Equivalent to await OneSignal.logout() on client-side
+                try {
+                    $oneSignal = new OneSignalService();
+                    $oneSignal->logoutUser($fcmToken);
+                } catch (\Exception $e) {
+                    Log::warning('Failed to logout OneSignal user on logout', [
+                        'user_id' => $user->id,
+                        'fcmToken' => $fcmToken,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
                 
                 // Optionally remove device from OneSignal
                 try {

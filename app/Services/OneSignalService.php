@@ -781,4 +781,109 @@ class OneSignalService
             return false;
         }
     }
+
+    /**
+     * Login user to OneSignal by associating device with external_user_id
+     * Equivalent to OneSignal.login("user_{userId}") on client-side
+     * 
+     * @param string $playerId The OneSignal player ID (device token/fcmToken)
+     * @param int $userId The user ID
+     * @return bool
+     */
+    public function loginUser(string $playerId, int $userId): bool
+    {
+        if (empty($playerId) || empty($userId)) {
+            Log::warning('⚠️ Empty player ID or user ID provided for OneSignal login');
+            return false;
+        }
+
+        try {
+            $externalUserId = "user_{$userId}";
+            
+            $payload = [
+                'app_id' => $this->appId,
+                'external_user_id' => $externalUserId,
+            ];
+
+            $response = Http::withHeaders([
+                'Authorization' => "Basic {$this->restApiKey}",
+                'Content-Type'  => 'application/json',
+            ])->put("https://api.onesignal.com/api/v1/players/{$playerId}", $payload);
+
+            if ($response->failed()) {
+                Log::warning('⚠️ OneSignal user login failed', [
+                    'player_id' => $playerId,
+                    'user_id' => $userId,
+                    'external_user_id' => $externalUserId,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return false;
+            }
+
+            Log::info('✅ OneSignal user logged in', [
+                'player_id' => $playerId,
+                'user_id' => $userId,
+                'external_user_id' => $externalUserId,
+            ]);
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::error('❌ OneSignal user login exception', [
+                'player_id' => $playerId,
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Logout user from OneSignal by clearing external_user_id
+     * Equivalent to OneSignal.logout() on client-side
+     * 
+     * @param string $playerId The OneSignal player ID (device token/fcmToken)
+     * @return bool
+     */
+    public function logoutUser(string $playerId): bool
+    {
+        if (empty($playerId)) {
+            Log::warning('⚠️ Empty player ID provided for OneSignal logout');
+            return false;
+        }
+
+        try {
+            // Clear external_user_id by setting it to null
+            $payload = [
+                'app_id' => $this->appId,
+                'external_user_id' => null,
+            ];
+
+            $response = Http::withHeaders([
+                'Authorization' => "Basic {$this->restApiKey}",
+                'Content-Type'  => 'application/json',
+            ])->put("https://api.onesignal.com/api/v1/players/{$playerId}", $payload);
+
+            if ($response->failed()) {
+                Log::warning('⚠️ OneSignal user logout failed', [
+                    'player_id' => $playerId,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return false;
+            }
+
+            Log::info('✅ OneSignal user logged out', [
+                'player_id' => $playerId,
+            ]);
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::error('❌ OneSignal user logout exception', [
+                'player_id' => $playerId,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
 }
