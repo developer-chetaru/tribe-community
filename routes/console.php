@@ -34,3 +34,14 @@ Schedule::command('notification:send --only=monthly-summary')
 Schedule::command('notification:send --only=weeklySummary')
         ->weeklyOn(0, '23:00')
         ->timezone('Asia/Kolkata');
+
+// Update has_working_today tag for all users daily at midnight and 11:10 AM
+Schedule::command('onesignal:update-working-day-status')
+        ->dailyAt('00:00')
+        ->timezone('Asia/Kolkata')
+        ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+Schedule::command('onesignal:update-working-day-status')
+        ->dailyAt('11:10')
+        ->timezone('Asia/Kolkata')
+        ->appendOutputTo(storage_path('logs/scheduler.log'));

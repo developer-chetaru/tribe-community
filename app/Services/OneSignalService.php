@@ -438,20 +438,8 @@ class OneSignalService
         // Determine user type
         $userType = $user->orgId ? 'org' : 'basecamp';
 
-        // Get working days (org users only)
-        $workingDays = '';
-        if ($user->organisation && $user->organisation->working_days) {
-            $days = is_string($user->organisation->working_days)
-                ? json_decode($user->organisation->working_days, true)
-                : $user->organisation->working_days;
-
-            // Convert day names to numbers (Mon=1, Tue=2, etc.)
-            $dayMap = ['Mon' => 1, 'Tue' => 2, 'Wed' => 3, 'Thu' => 4, 'Fri' => 5, 'Sat' => 6, 'Sun' => 7];
-            $dayNumbers = array_map(fn($d) => $dayMap[$d] ?? null, $days ?? []);
-            $workingDays = implode(',', array_filter($dayNumbers));
-        } else {
-            $workingDays = '1,2,3,4,5'; // Default Mon-Fri
-        }
+        // Check if today is a working day for this user (default: true)
+        $hasWorkingToday = $this->isWorkingDayToday($user);
 
         // Check if user submitted sentiment today
         $hasSubmittedToday = \App\Models\HappyIndex::where('user_id', $user->id)
@@ -460,7 +448,7 @@ class OneSignalService
 
         $tags = [
             'user_type' => $userType,
-            'working_days' => $workingDays,
+            'has_working_today' => $hasWorkingToday ? 'true' : 'false',
             'timezone' => $user->timezone ?? 'Asia/Kolkata',
             'has_submitted_today' => $hasSubmittedToday ? 'true' : 'false',
             'email_subscribed' => 'true',
@@ -471,6 +459,42 @@ class OneSignalService
         $this->createOrUpdateOneSignalUser($user, $tags);
 
         return true;
+    }
+
+    /**
+     * Check if today is a working day for the user
+     *
+     * @param \App\Models\User $user
+     * @return bool Default: true
+     */
+    public function isWorkingDayToday($user): bool
+    {
+        // Default: true
+        $defaultWorkingDay = true;
+
+        // Basecamp users: working every day
+        if (!$user->organisation) {
+            return true;
+        }
+
+        // Org users: check working_days
+        if (!$user->organisation->working_days) {
+            return $defaultWorkingDay;
+        }
+
+        $workingDays = is_string($user->organisation->working_days)
+            ? json_decode($user->organisation->working_days, true)
+            : $user->organisation->working_days;
+
+        if (empty($workingDays)) {
+            return $defaultWorkingDay;
+        }
+
+        // Get today's day name (Mon, Tue, Wed, etc.)
+        $todayName = now($user->timezone ?? 'Asia/Kolkata')->format('D');
+
+        // Check if today is in working days array
+        return in_array($todayName, $workingDays);
     }
 
     /**
@@ -646,6 +670,61 @@ class OneSignalService
         return $this->updateUserTags($userId, [
             'email_subscribed' => $subscribed ? 'true' : 'false',
         ]);
+    }
+
+    /**
+     * Update has_working_today tag for all users
+     * Runs daily via cron to check if today is a working day for each user
+     *
+     * @return array Stats: ['total' => int, 'success' => int, 'failed' => int]
+     */
+    public function updateAllUsersWorkingDayStatus(): array
+    {
+        $users = \App\Models\User::where('status', 1)
+            ->with('organisation')
+            ->get();
+
+        $stats = [
+            'total' => $users->count(),
+            'success' => 0,
+            'failed' => 0,
+        ];
+
+        Log::info('Starting daily has_working_today tag update', [
+            'total_users' => $stats['total'],
+        ]);
+
+        foreach ($users as $user) {
+            try {
+                $isWorkingDay = $this->isWorkingDayToday($user);
+                $result = $this->updateUserTags($user->id, [
+                    'has_working_today' => $isWorkingDay ? 'true' : 'false',
+                ]);
+
+                if ($result) {
+                    $stats['success']++;
+                    Log::info('has_working_today updated', [
+                        'user_id' => $user->id,
+                        'has_working_today' => $isWorkingDay,
+                    ]);
+                } else {
+                    $stats['failed']++;
+                    Log::warning('has_working_today update failed', [
+                        'user_id' => $user->id,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                $stats['failed']++;
+                Log::error('has_working_today update exception', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        Log::info('Daily has_working_today tag update completed', $stats);
+
+        return $stats;
     }
 
     // =========================================================================
