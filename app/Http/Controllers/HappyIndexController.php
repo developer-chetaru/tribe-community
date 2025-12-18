@@ -11,13 +11,49 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * @OA\Tag(
+ *     name="Happy Index",
+ *     description="Happy Index (mood tracking) endpoints"
+ * )
+ */
 class HappyIndexController extends Controller
 {
     /**
-     * Store a new Happy Index (mood status) entry for a user.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\JsonResponse
+     * @OA\Post(
+     *     path="/api/add-happy-index",
+     *     tags={"Happy Index"},
+     *     summary="Submit daily mood/sentiment",
+     *     description="Store a new Happy Index (mood status) entry for a user",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"userId", "moodStatus"},
+     *             @OA\Property(property="userId", type="integer", example=1),
+     *             @OA\Property(property="moodStatus", type="integer", description="1=Bad, 2=Okay, 3=Good", example=3),
+     *             @OA\Property(property="description", type="string", example="Feeling great today!")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Sentiment submitted successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Sentiment submitted successfully!"),
+     *             @OA\Property(property="data", type="object",
+     *                 @OA\Property(property="todayEIScore", type="string", example="1250.50")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Already submitted today",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="You have already submitted your response")
+     *         )
+     *     )
+     * )
      */
     public function addHappyIndex(Request $request)
     {

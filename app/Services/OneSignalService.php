@@ -681,6 +681,7 @@ class OneSignalService
     /**
      * Update has_working_today tag for all users
      * Runs daily via cron to check if today is a working day for each user
+     * Creates users in OneSignal if they don't exist
      *
      * @return array Stats: ['total' => int, 'success' => int, 'failed' => int]
      */
@@ -702,14 +703,14 @@ class OneSignalService
 
         foreach ($users as $user) {
             try {
-                $isWorkingDay = $this->isWorkingDayToday($user);
-                $result = $this->updateUserTags($user->id, [
-                    'has_working_today' => $isWorkingDay ? 'true' : 'false',
-                ]);
+                // Use setUserTagsOnLogin which creates user if doesn't exist and updates all tags
+                // This ensures the user exists in OneSignal with all current tag values
+                $result = $this->setUserTagsOnLogin($user);
 
                 if ($result) {
                     $stats['success']++;
-                    Log::info('has_working_today updated', [
+                    $isWorkingDay = $this->isWorkingDayToday($user);
+                    Log::info('has_working_today updated (user created/updated in OneSignal)', [
                         'user_id' => $user->id,
                         'has_working_today' => $isWorkingDay,
                     ]);
