@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Organisation;
 use App\Services\DashboardService;
+use App\Services\OneSignalService;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
@@ -29,6 +32,23 @@ class DashboardController extends Controller
             	'hptm'       => $org->hptm ?? 0,
         	];
     	});
+
+    	// ✅ Update OneSignal tags when user accesses dashboard
+    	$user = Auth::user();
+    	if ($user) {
+    	    try {
+    	        $oneSignal = new OneSignalService();
+    	        $oneSignal->setUserTagsOnLogin($user);
+    	        Log::info('OneSignal tags updated on dashboard access', [
+    	            'user_id' => $user->id,
+    	        ]);
+    	    } catch (\Throwable $e) {
+    	        Log::warning('OneSignal tag update failed on dashboard access', [
+    	            'user_id' => $user->id,
+    	            'error' => $e->getMessage(),
+    	        ]);
+    	    }
+    	}
 
     	return view('dashboard', [
         	'cards'             => $cards,

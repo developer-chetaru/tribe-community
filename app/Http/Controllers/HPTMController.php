@@ -277,6 +277,20 @@ class HPTMController extends Controller
         $user->deviceType = $deviceType;
         $user->save();
 
+        // ✅ Update OneSignal tags when user accesses dashboard (mobile API)
+        try {
+            $oneSignal = new \App\Services\OneSignalService();
+            $oneSignal->setUserTagsOnLogin($user);
+            \Log::info('OneSignal tags updated on mobile dashboard access', [
+                'user_id' => $user->id,
+            ]);
+        } catch (\Throwable $e) {
+            \Log::warning('OneSignal tag update failed on mobile dashboard access', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         $resultArray['userGivenfeedback'] = $this->userGivenfeedbackOnHIValueORM($userId, $HI_include_saturday, $HI_include_sunday);
 
         $todayStr = date('Y-m-d');
