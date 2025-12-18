@@ -446,6 +446,9 @@ class OneSignalService
             ->whereDate('created_at', now()->toDateString())
             ->exists();
 
+        // Combine first_name and last_name for full name
+        $fullName = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
+
         $tags = [
             'user_type' => $userType,
             'has_working_today' => $hasWorkingToday ? 'true' : 'false',
@@ -453,6 +456,9 @@ class OneSignalService
             'has_submitted_today' => $hasSubmittedToday ? 'true' : 'false',
             'email_subscribed' => 'true',
             'status' => (string) $user->status,
+            'name' => $fullName ?: 'Unknown',
+            'first_name' => $user->first_name ?? '',
+            'last_name' => $user->last_name ?? '',
         ];
 
         // First, ensure user exists in OneSignal with external_id
