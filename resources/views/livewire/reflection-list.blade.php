@@ -1,11 +1,11 @@
 <div>
     <div class="flex-1 overflow-auto bg-[#f6f8fa]">
-        <div class="mx-auto p-4">
+        <div class="mx-auto p-3 sm:p-4 lg:p-6">
             {{-- Filters / Search --}}
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 space-y-3 md:space-y-0">
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 space-y-3 lg:space-y-0 gap-3">
 
                 {{-- Search by Topic --}}
-                <div class="relative w-full max-w-[320px]">
+                <div class="relative w-full lg:max-w-[320px]">
                     <span class="absolute top-3.5 left-3 flex items-center text-gray-400">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
                             <path fill-rule="evenodd"
@@ -23,11 +23,11 @@
 
                 {{-- Organisation & Office Filters --}}
                 @role('super_admin')
-                <div class="w-full sm:w-[auto] flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4 mt-2 md:mt-0">
+                <div class="w-full lg:w-auto flex flex-col sm:flex-row items-start sm:items-center gap-3 lg:gap-4">
                     {{-- Organisation Dropdown --}}
-                    <div class="w-full sm:w-[auto]">
+                    <div class="w-full sm:w-auto flex-1 sm:flex-none">
                         <select wire:model.live="orgId"
-                            class="bg-white text-sm border border-slate-200 rounded-md pl-3 pr-10 py-3 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-[auto]">
+                            class="bg-white text-sm border border-slate-200 rounded-md pl-3 pr-10 py-2.5 sm:py-3 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-auto min-w-[180px]">
                             <option value="">All Organisations</option>
                             @forelse($organisationsList as $org)
                                 <option value="{{ $org->id }}">{{ $org->name }}</option>
@@ -38,9 +38,9 @@
                     </div>
 
                     {{-- Office Dropdown --}}
-                    <div class="w-full sm:w-[auto]">
+                    <div class="w-full sm:w-auto flex-1 sm:flex-none">
                         <select wire:model="officeId"
-                            class="bg-white text-sm border border-slate-200 rounded-md pl-3 pr-10 py-3 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-[auto]">
+                            class="bg-white text-sm border border-slate-200 rounded-md pl-3 pr-10 py-2.5 sm:py-3 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-auto min-w-[180px]">
                             <option value="">All Offices</option>
                             @forelse($officesList as $office)
                                 <option value="{{ $office->id }}">{{ $office->name }}</option>
@@ -54,9 +54,9 @@
 
                 {{-- New Reflection button for organisation_user, basecamp, and organisation_admin (team lead) --}}
                 @hasanyrole('organisation_user|basecamp|organisation_admin')
-                <div class="mt-2 sm:mt-0">
+                <div class="w-full lg:w-auto">
                     <a href="{{ route('reflection.create') }}"
-                        class="inline-block px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors duration-200">
+                        class="inline-block w-full lg:w-auto text-center px-4 py-2.5 sm:py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors duration-200 text-sm sm:text-base font-medium">
                         New Reflection
                     </a>
                 </div>
@@ -65,164 +65,286 @@
             </div>
 
             {{-- Reflection Grid --}}
-            <div class="grid gap-4  mt-6 grid-cols-1 sm:grid-cols-3">
+            <div class="grid gap-3 sm:gap-4 mt-4 sm:mt-6 grid-cols-1 lg:grid-cols-3">
 
                 {{-- Left Column: List of Reflection Boxes --}}
-                <div class="bg-white p-4 border-gray-300 rounded-md border">
+                <div class="bg-white p-3 sm:p-4 border-gray-300 rounded-md border shadow-sm overflow-y-auto block">
                     @forelse($reflectionList as $r)
                         <div 
-                            class="reflection-box bg-[#F8F9FA] border border-[#E5E5E5] p-3 rounded-md mb-4 cursor-pointer hover:bg-[#F0F0F0]"
+                            class="reflection-box bg-white border-2 {{ $selectedReflection['id'] ?? null == $r['id'] ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300' }} p-4 rounded-lg mb-3 cursor-pointer transition-all hover:shadow-md"
                             wire:click="openChat({{ $r['id'] }})"
                         >
-                            <h3 class="text-[#020202] text-[18px] font-medium mb-2">{{ $r['topic'] }}</h3>
-                            <div class="reflection-info">
-                                <ul class="grid grid-cols-2">
-                                    <li class="text-[14px] font-light text-[#808080] mb-1">User: 
-                                        <span>{{ $r['userName'] ?? auth()->user()->name }}</span>
-                                    </li>
-                                    @role('super_admin')
-                                    <li class="text-[14px] font-light text-[#808080] mb-1">Organization: 
-                                        <span>{{ $r['organisation'] }}</span>
-                                    </li>
-                                    <li class="text-[14px] font-light text-[#808080] mb-1">Department: 
-                                        <span>{{ $r['department'] }}</span>
-                                    </li>
-                                    <li class="text-[14px] font-light text-[#808080] mb-1">Office: 
-                                        <span>{{ $r['office'] }}</span>
-                                    </li>
-                                    @endrole
-                                    <li class="text-[14px] font-light text-[#808080] mb-1">Date: 
-                                        <span>{{ date('d-m-Y', strtotime($r['created_at'])) }}</span>
-                                    </li>
-                                    <li class="text-[14px] font-light mb-1">
-                                        Status: 
-                                        <span class="status font-medium
-                                            {{ $r['status'] == 'new' ? 'text-red-600' : ($r['status'] == 'inprogress' ? 'text-yellow-500' : 'text-green-600') }}">
-                                            {{ $r['status'] == 'inprogress' ? 'In Progress' : ucfirst($r['status']) }}
-                                        </span>
-                                    </li>
-                                </ul>
-                            </div>
-
-                            {{-- Delete Button for Admin --}}
-                            @role('super_admin')
-                            <div class="flex justify-end mt-2">
-                                <button wire:click.stop="confirmDelete('{{ base64_encode($r['id']) }}')" class="flex justify-center items-center p-1">
-                                    <img src="{{ asset('images/delete.svg') }}" alt="Delete">
+                            <div class="flex items-start justify-between mb-2">
+                                <h3 class="text-gray-800 text-[16px] font-semibold flex-1 line-clamp-2">{{ $r['topic'] }}</h3>
+                                @role('super_admin')
+                                <button 
+                                    type="button"
+                                    wire:click.stop="confirmDelete('{{ base64_encode($r['id']) }}')" 
+                                    class="ml-2 p-1 text-gray-400 hover:text-red-600 transition-colors rounded hover:bg-red-50"
+                                    title="Delete reflection"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
                                 </button>
+                                @endrole
                             </div>
-                            @endrole
+                            
+                            <div class="space-y-2">
+                                <div class="flex items-center gap-2 text-xs text-gray-600">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                    </svg>
+                                    <span class="font-medium text-gray-700">{{ $r['userName'] ?? auth()->user()->name }}</span>
+                                </div>
+                                
+                                <div class="flex items-center gap-2 text-xs text-gray-600">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <span>{{ date('d-m-Y', strtotime($r['created_at'])) }}</span>
+                                </div>
+                                
+                                @role('super_admin')
+                                <div class="flex items-center gap-2 text-xs text-gray-600">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                    </svg>
+                                    <span>{{ $r['organisation'] ?? 'N/A' }}</span>
+                                </div>
+                                @endrole
+                                
+                                <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+                                    <span class="px-2.5 py-1 rounded-full text-xs font-medium
+                                        {{ $r['status'] == 'new' ? 'bg-red-100 text-red-700' : ($r['status'] == 'inprogress' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700') }}">
+                                        {{ $r['status'] == 'inprogress' ? 'In Progress' : ucfirst($r['status']) }}
+                                    </span>
+                                    @if(!empty($r['message']))
+                                        <span class="text-xs text-gray-400 truncate max-w-[150px]">{{ Str::limit($r['message'], 30) }}</span>
+                                    @endif
+                                </div>
+                            </div>
                         </div>
                     @empty
-                        <div class="text-center text-[#808080] text-sm py-4">No reflections found.</div>
+                        <div class="text-center py-12">
+                            <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <p class="text-gray-500 text-sm font-medium">No reflections found</p>
+                            <p class="text-gray-400 text-xs mt-1">Try adjusting your filters or create a new reflection</p>
+                        </div>
                     @endforelse
                 </div>
 
 
                 {{-- Right Column: Chat / Reflection Details --}}
-                <div class="reflection-right bg-white border-gray-300 col-span-2 rounded-md border border-[#E5E5E5]">
+                <div class="reflection-right bg-white border-gray-300 lg:col-span-2 rounded-md border border-[#E5E5E5] flex flex-col h-full min-h-[400px] sm:min-h-[500px] lg:min-h-0 block">
                     @if($showChatModal)
+
                         {{-- Chat Header --}}
-                        <div class="reflection-box bg-white p-4 rounded-md mb-4 flex justify-between items-start">
-                            <div class="flex-1 pr-4">
-                                <h3 class="text-[#EB1C24] text-[24px] font-medium mb-2">
-                                    {{ $selectedReflection['topic'] ?? 'Team Conflict' }}
-                                </h3>
-                                <p class="text-[14px] font-light text-[#808080]">
-                                    <strong class="text-[#020202] font-semibold">Message:</strong>
-                                    {{ $selectedReflection['message'] ?? 'discussion' }}
-                                </p>
-                            </div>
-                            <div class="flex flex-col items-end gap-2">
-                                <div class="flex items-center">
-                                    <label class="text-[16px] font-normal text-[#020202] mr-2">Status:</label>
+                        <div class="bg-gradient-to-r from-red-50 to-white border-b border-gray-200 p-4 sm:p-5 rounded-t-md">
+                            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-3">
+                                <div class="flex-1 min-w-0">
+                                    <h3 class="text-[#EB1C24] text-lg sm:text-[22px] font-semibold mb-2 truncate">
+                                        {{ $selectedReflection['topic'] ?? 'Team Conflict' }}
+                                    </h3>
+                                    <div class="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
+                                        <span class="flex items-center gap-1">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                            </svg>
+                                            <span class="font-medium text-gray-800">{{ $selectedReflection['userName'] ?? 'User' }}</span>
+                                        </span>
+                                        <span class="flex items-center gap-1">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                            </svg>
+                                            <span>{{ date('d-m-Y', strtotime($selectedReflection['created_at'] ?? now())) }}</span>
+                                        </span>
+                                        <span class="px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap
+                                            {{ $selectedReflection['status'] == 'new' ? 'bg-red-100 text-red-700' : ($selectedReflection['status'] == 'inprogress' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700') }}">
+                                            {{ $selectedReflection['status'] == 'inprogress' ? 'In Progress' : ucfirst($selectedReflection['status'] ?? 'New') }}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 flex-shrink-0">
+                                    <label class="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">Status:</label>
                                     <select 
                                         id="reflectionStatusSelect"
-                                        class="border rounded-sm border-[#808080] text-[14px] p-2 text-[#EB1C24] mr-2 w-[120px]" 
+                                        class="border rounded-md border-gray-300 text-xs sm:text-sm px-2 sm:px-3 py-1.5 text-[#EB1C24] font-medium focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white w-full sm:w-auto" 
                                         onchange="handleStatusChange(this)"
                                     >
-                                        <!-- <option value="new" {{ $selectedReflection['status'] == 'new' ? 'selected' : '' }}>New</option> -->
                                         <option value="inprogress" {{ $selectedReflection['status'] == 'inprogress' ? 'selected' : '' }}>In Progress</option>
                                         <option value="resolved" {{ $selectedReflection['status'] == 'resolved' ? 'selected' : '' }}>Resolved</option>
                                     </select>
                                 </div>
                             </div>
+                            <div class="mt-3 pt-3 border-t border-gray-200">
+                                <p class="text-xs sm:text-sm text-gray-600 mb-1 font-medium">Message:</p>
+                                <p class="text-sm sm:text-[15px] text-gray-800 leading-relaxed break-words">
+                                    {{ $selectedReflection['message'] ?? 'No message available' }}
+                                </p>
+                            </div>
                         </div>
 
                         {{-- Chat Messages --}}
-                        <div wire:poll.2s="pollChatMessages" class="bg-[#fdecec] p-5 space-y-4 min-h-[400px] relative overflow-y-auto" id="chat-box">
-                            @foreach($chatMessages as $msg)
+                        <div wire:poll.2s="pollChatMessages" class="bg-gray-50 p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 flex-1 overflow-y-auto min-h-[300px] sm:min-h-[400px]" id="chat-box">
+                            @forelse($chatMessages as $msg)
                                 <div class="flex {{ $msg['from'] === auth()->id() ? 'justify-end' : 'justify-start' }} w-full">
-                                    <div class="bg-white rounded-xl p-2 shadow-sm max-w-[400px] w-full flex items-start gap-2">
+                                    <div class="flex items-start gap-2 sm:gap-3 max-w-[85%] sm:max-w-[75%] {{ $msg['from'] === auth()->id() ? 'flex-row-reverse' : 'flex-row' }}">
                                         {{-- User Avatar --}}
-                                        @if(!empty($msg['user_profile_photo']))
-                                            <img src="{{ $msg['user_profile_photo'] }}" class="w-6 h-6 rounded-full" alt="User Photo">
-                                        @else
-                                            <div class="w-6 h-6 flex items-center justify-center bg-blue-100 text-blue-600 font-medium rounded-full text-xs">
-                                                {{ strtoupper(substr($msg['user_name'] ?? 'U', 0, 1)) }}
-                                            </div>
-                                        @endif
-
-                                        {{-- Message Content --}}
-                                        <div class="flex-1">
-                                            @if(!empty($msg['message']))
-                                                <div class="text-[#020202] text-[16px] font-[400]">{{ $msg['message'] }}</div>
-                                            @endif
-
-                                            {{-- Image/File Preview --}}
-                                            @if(!empty($msg['image']))
-                                                <div class="mt-2">
-                                                    @if(preg_match('/\.(jpg|jpeg|png|gif|webp)$/i', $msg['image']))
-                                                        <img src="{{ $msg['image'] }}" class="w-40 h-40 rounded-lg object-cover border">
-                                                    @else
-                                                        <a href="{{ $msg['image'] }}" target="_blank" class="text-blue-500 underline text-sm">Download Attachment</a>
-                                                    @endif
+                                        <div class="flex-shrink-0">
+                                            @if(!empty($msg['user_profile_photo']))
+                                                <img src="{{ $msg['user_profile_photo'] }}" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-white shadow-sm" alt="User Photo">
+                                            @else
+                                                <div class="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center {{ $msg['from'] === auth()->id() ? 'bg-red-500' : 'bg-blue-500' }} text-white font-semibold rounded-full text-xs shadow-sm">
+                                                    {{ strtoupper(substr($msg['user_name'] ?? 'U', 0, 1)) }}
                                                 </div>
                                             @endif
+                                        </div>
 
-                                            <div class="text-xs text-gray-500 mt-1 text-right">{{ $msg['time'] }}</div>
+                                        {{-- Message Content --}}
+                                        <div class="flex flex-col {{ $msg['from'] === auth()->id() ? 'items-end' : 'items-start' }} min-w-0 flex-1">
+                                            <div class="bg-white rounded-lg shadow-sm px-3 py-2 sm:px-4 sm:py-3 {{ $msg['from'] === auth()->id() ? 'bg-red-50 border border-red-100' : 'border border-gray-200' }} max-w-full">
+                                                @if(!empty($msg['message']))
+                                                    <p class="text-gray-800 text-sm sm:text-[15px] leading-relaxed whitespace-pre-wrap break-words">{{ $msg['message'] }}</p>
+                                                @endif
+
+                                                {{-- Image/File Preview --}}
+                                                @if(!empty($msg['image']))
+                                                    <div class="mt-2 sm:mt-3">
+                                                        @if(preg_match('/\.(jpg|jpeg|png|gif|webp)$/i', $msg['image']))
+                                                            <img src="{{ $msg['image'] }}" class="max-w-full sm:max-w-[250px] max-h-[200px] sm:max-h-[250px] rounded-lg object-cover border border-gray-200 shadow-sm cursor-pointer hover:opacity-90 transition" onclick="window.open('{{ $msg['image'] }}', '_blank')">
+                                                        @else
+                                                            <a href="{{ $msg['image'] }}" target="_blank" class="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-xs sm:text-sm font-medium break-all">
+                                                                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                                                                </svg>
+                                                                <span class="truncate">Download Attachment</span>
+                                                            </a>
+                                                        @endif
+                                                    </div>
+                                                @endif
+                                            </div>
+                                            <div class="flex items-center gap-1.5 sm:gap-2 mt-1 px-1">
+                                                <span class="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">{{ $msg['time'] }}</span>
+                                                @if($msg['from'] === auth()->id())
+                                                    <span class="text-[10px] sm:text-xs text-gray-400">•</span>
+                                                    <span class="text-[10px] sm:text-xs font-medium text-gray-600 truncate">{{ $msg['user_name'] ?? 'You' }}</span>
+                                                @else
+                                                    <span class="text-[10px] sm:text-xs text-gray-400">•</span>
+                                                    <span class="text-[10px] sm:text-xs font-medium text-gray-600 truncate">{{ $msg['user_name'] ?? 'User' }}</span>
+                                                @endif
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            @endforeach
+                            @empty
+                                <div class="flex items-center justify-center h-full py-12">
+                                    <div class="text-center">
+                                        <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                        </svg>
+                                        <p class="text-gray-500 text-sm">No messages yet. Start the conversation!</p>
+                                    </div>
+                                </div>
+                            @endforelse
                         </div>
 
                         {{-- Input Row --}}
-                        <div class="flex items-center border-t border-gray-200 p-3 bg-white">
-                            <div class="relative w-[90%] flex items-center">
-                                <input type="text" wire:model.defer="newChatMessage" placeholder="Write your reply..." class="flex-1 w-full border border-gray-300 rounded-sm px-4 py-2 bg-[#E5E5E5]">
+                        <div class="border-t border-gray-200 bg-white p-3 sm:p-4 rounded-b-md" x-data>
+                            <form wire:submit.prevent="sendChatMessage" class="flex items-end gap-2 sm:gap-3">
+                                <div class="flex-1 relative min-w-0">
+                                    <textarea 
+                                        wire:model.defer="newChatMessage" 
+                                        placeholder="Write your reply..." 
+                                        rows="2"
+                                        class="w-full border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-3 pr-10 sm:pr-12 bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none text-sm"
+                                        x-on:keydown.enter.prevent="$wire.call('sendChatMessage')"
+                                        x-on:keydown.enter.shift.exact=""
+                                    ></textarea>
+                                    
+                                    <input type="file" id="chatFileInput" wire:model="newChatImage" class="hidden" accept="image/*,.pdf,.doc,.docx">
 
-                                <input type="file" id="chatFileInput" wire:model="newChatImage" class="hidden">
+                                    <button 
+                                        type="button"
+                                        onclick="document.getElementById('chatFileInput').click()" 
+                                        class="absolute right-2 sm:right-3 bottom-2 sm:bottom-3 p-1.5 text-gray-400 hover:text-gray-600 transition-colors rounded hover:bg-gray-100"
+                                        title="Attach file"
+                                    >
+                                        <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                                        </svg>
+                                    </button>
+                                </div>
 
-                                <span class="absolute right-4 top-2 cursor-pointer" onclick="document.getElementById('chatFileInput').click()">
-                                    <img src="{{ asset('images/attachment.svg') }}" alt="Attach">
-                                </span>
+                                <button 
+                                    type="submit"
+                                    wire:click="sendChatMessage" 
+                                    class="bg-[#EB1C24] hover:bg-red-700 text-white px-3 sm:px-5 py-2.5 sm:py-3 rounded-lg flex items-center justify-center gap-1 sm:gap-2 transition-colors shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                                    title="Send message"
+                                >
+                                    <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                                    </svg>
+                                    <span class="hidden sm:inline font-medium">Send</span>
+                                </button>
+                            </form>
+                            
+                            @if($newChatImage)
+                                <div class="mt-2 text-[10px] sm:text-xs text-gray-600 flex items-center gap-2 truncate">
+                                    <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                                    </svg>
+                                    <span class="truncate">File: {{ $newChatImage->getClientOriginalName() }}</span>
+                                </div>
+                            @endif
+                        </div>
+                    @else
+                        {{-- Empty State --}}
+                        <div class="flex items-center justify-center h-full min-h-[400px] sm:min-h-[500px] p-6 sm:p-8">
+                            <div class="text-center max-w-md">
+                                <svg class="w-16 h-16 sm:w-20 sm:h-20 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                </svg>
+                                <h3 class="text-base sm:text-lg font-semibold text-gray-700 mb-2">Select a Reflection</h3>
+                                <p class="text-xs sm:text-sm text-gray-500">Choose a reflection from the list to view details and start a conversation.</p>
                             </div>
-
-                            <button wire:click="sendChatMessage" class="ml-3 bg-red-500 hover:bg-red-600 text-white p-2 px-3 rounded-sm flex items-center justify-center">
-                                <img src="{{ asset('images/sent.svg') }}" alt="Send">
-                            </button>
                         </div>
                     @endif
                 </div>
             </div>
 
             {{-- Pagination --}}
-            <div class="mt-6">
-                {{ $reflectionListTbl->links() }}
+            <div class="mt-4 sm:mt-6 overflow-x-auto">
+                <div class="min-w-fit">
+                    {{ $reflectionListTbl->links() }}
+                </div>
             </div>
         </div>
     </div>
 
     {{-- Delete Confirmation Modal --}}
     @if($showDeleteModal)
-        <div class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-            <div class="bg-white rounded-md p-6 w-96">
-                <h2 class="text-lg font-semibold mb-4">Confirm Delete</h2>
-                <p class="mb-4">Are you sure you want to delete this reflection?</p>
-                <div class="flex justify-end gap-3">
-                    <button wire:click="$set('showDeleteModal', false)" class="px-4 py-2 bg-gray-300 rounded">Cancel</button>
-                    <button wire:click="deleteReflectionConfirmed" class="px-4 py-2 bg-red-500 text-white rounded">Delete</button>
+        <div class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4">
+            <div class="bg-white rounded-md p-4 sm:p-6 w-full max-w-md">
+                <h2 class="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Confirm Delete</h2>
+                <p class="text-sm sm:text-base mb-4 sm:mb-6">Are you sure you want to delete this reflection?</p>
+                <div class="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3">
+                    <button 
+                        type="button"
+                        wire:click="$set('showDeleteModal', false)" 
+                        class="w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-gray-300 hover:bg-gray-400 rounded transition-colors text-sm sm:text-base font-medium"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        type="button"
+                        wire:click="deleteReflectionConfirmed" 
+                        class="w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-red-500 hover:bg-red-600 text-white rounded transition-colors text-sm sm:text-base font-medium"
+                    >
+                        Delete
+                    </button>
                 </div>
             </div>
         </div>
