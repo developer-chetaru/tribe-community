@@ -66,6 +66,7 @@ function imagePreview() {
 }
 </script>
 
+      <form wire:submit.prevent="saveEmployee">
       <!-- Form Fields -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
         
@@ -187,15 +188,16 @@ function imagePreview() {
       <!-- Buttons -->
       <div class="flex items-center mt-8">
 
-        <button wire:click="saveEmployee"
+        <button type="submit"
                 class="bg-[#EB1C24] text-white text-[16px] px-5 py-3 rounded-[8px]  font-[400] hover:bg-[#EB1C24]">
             Update Staff
         </button>
-        <button type="reset" wire:click="resetForm" 
+        <button type="button" wire:click="resetForm" 
                 class="ml-3 text-[#808080] text-[16px] font-[400]">
             Reset All
         </button>
       </div>
+      </form>
 
     </div>
   </div>

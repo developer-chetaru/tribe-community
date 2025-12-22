@@ -110,7 +110,7 @@
                         <i :class="showPw?'fa-solid fa-eye-slash':'fa-solid fa-eye'"></i>
                     </button>
                 </div>
-                <x-input-error for="current_password" class="mt-2"/>
+                <x-input-error for="current_password" bag="updatePassword" class="mt-2"/>
             </div>
 
             {{-- NEW PASSWORD --}}
@@ -146,7 +146,7 @@
                     }"
                     x-text="pwMessage"></p>
 
-                <x-input-error for="password" class="mt-2"/>
+                <x-input-error for="password" bag="updatePassword" class="mt-2"/>
             </div>
 
             {{-- CONFIRM PASSWORD --}}
@@ -180,7 +180,7 @@
                     }"
                     x-text="cfMessage"></p>
 
-                <x-input-error for="password_confirmation" class="mt-2"/>
+                <x-input-error for="password_confirmation" bag="updatePassword" class="mt-2"/>
             </div>
 
         </div>

@@ -27,6 +27,7 @@
 
  
 
+      <form wire:submit.prevent="saveEmployee">
       <!-- Form Fields -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
         
@@ -134,15 +135,16 @@
 @endif
       <!-- Buttons -->
       <div class="flex items-center mt-8">
-        <button wire:click="saveEmployee"
+        <button type="submit"
                 class="bg-[#EB1C24] hover:bg-red-700 transition text-white px-6 py-2 rounded-md shadow font-medium">
             Add Staff
         </button>
-        <button type="reset" wire:click="resetForm" 
+        <button type="button" wire:click="resetForm" 
                 class="ml-4 text-gray-600 hover:text-gray-800 transition">
             Reset All
         </button>
       </div>
+      </form>
 
     </div>
   </div>

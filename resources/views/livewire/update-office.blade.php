@@ -20,6 +20,7 @@
       <div class="flex justify-between items-center mb-4 w-full">
         <h2 class="text-[#EB1C24] font-medium text-[24px]">Office Details</h2>
       </div>
+<form wire:submit.prevent="saveOffice">
 <div class="grid grid-cols-2 gap-4 w-full">
     <!-- Office Name -->
     <div>
@@ -114,7 +115,7 @@
 
 <!-- Buttons -->
 <div class="flex items-center mt-6 w-full">
-    <button wire:click="saveOffice"
+    <button type="submit"
             class="bg-[#EB1C24] text-white text-[16px] px-5 py-3 rounded-[8px]  font-[400] hover:bg-[#EB1C24]">
         Update Office
     </button>
@@ -123,6 +124,7 @@
         Reset All
     </button>
 </div>
+</form>
 </div>
 
 
