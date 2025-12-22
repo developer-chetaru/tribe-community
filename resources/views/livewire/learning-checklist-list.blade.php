@@ -242,7 +242,7 @@
                         class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
                     Cancel
                 </button>
-                <button @click="$wire.delete(deleteId); showConfirm = false" 
+                <button type="button" @click="$wire.delete(deleteId); showConfirm = false" 
                         class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
                     Delete
                 </button>

@@ -143,7 +143,6 @@
                 </tr>
             </thead>
           <tbody>
-<tbody>
 @foreach($branches as $index => $branch)
 <tr
     x-data="branchRow({ 
@@ -283,11 +282,9 @@ function initGoogleMaps() {
                 }
             });
 
-            // Force update Livewire props
-            $wire.set('officeCity', city);
-            $wire.set('officeState', state);
-            $wire.set('officeCountry', country);
-            $wire.set('officeZip', zip);
+            // Force update Livewire props using @this in Alpine context
+            // The dispatchEvent above should handle wire:model bindings
+            // If needed, use Livewire.find() with component ID
         });
     }
 

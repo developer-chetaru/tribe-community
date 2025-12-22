@@ -7,7 +7,7 @@
         Sign in to <span class="text-red-500">Tribe365</span>
     </h2>
 
-    <form wire:submit="login" class="space-y-4">
+    <form wire:submit.prevent="login" class="space-y-4">
         <div>
             <label class="flex items-center border border-gray-300 rounded mb-1 px-3 py-2 bg-[#fafafa]">
                 <svg class="text-gray-400 mr-2" width="16" height="16" fill="currentColor">

@@ -66,7 +66,7 @@
                                           @if ($organisation->users->count() === 0 
                 && ($organisation->offices->count() === 0 
                     || ($organisation->offices->count() === 11)))
-                <button @click="$wire.call('deleteOrganisation', {{ $organisation->id }}); showOrgDeleteConfirm = false" 
+                <button type="button" @click="$wire.call('deleteOrganisation', {{ $organisation->id }}); showOrgDeleteConfirm = false" 
                         class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
                     Delete
                 </button>

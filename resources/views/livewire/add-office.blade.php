@@ -176,14 +176,7 @@ function initGoogleMaps() {
         }
     });
 
-    // Update Livewire props
-    if(window.$wire){
-        $wire.set('officeAddress', place.formatted_address || '');
-        $wire.set('officeCity', city);
-        $wire.set('officeState', state);
-        $wire.set('officeCountry', country);
-        $wire.set('officeZip', zip);
-    }
+    // Livewire props updated via dispatchEvent above (wire:model handles it)
 });
 }
 
