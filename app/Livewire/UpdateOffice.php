@@ -39,6 +39,11 @@ class UpdateOffice extends Component
 
     public function mount($id)
     {
+        // Check if user has super_admin role
+        if (!auth()->user()->hasRole('super_admin')) {
+            abort(403, 'Unauthorized access. Admin privileges required.');
+        }
+
         // $id यहाँ Office का id होगा
         $office = Office::findOrFail($id);
 

@@ -97,48 +97,60 @@ Route::middleware([
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
   	Route::get('/weekly-summary', WeeklySummary::class)->name('weekly.summary');
     Route::get('/monthly-summary', MonthlySummary::class)->name('monthly.summary');
-  	Route::get('/organisations', OrganisationIndex::class)->name('organisations.index');
-    Route::get('/organisations/create', OrganisationPage::class)->name('organisations.create');
-	Route::get('/organisations/update/{id}', UpdateOrganisation::class)->name('update-organisation');
-    Route::get('/organisations/office/{id}', Office::class)->name('office-list');
-  	Route::get('/office/{officeId}/staff', OfficeStaff::class)->name('office.staff');
-  	Route::get('/organisations/add-office/{id}', AddOffice::class)->name('office-add');
-  	Route::get('/organisations/update-office/{id}', UpdateOffice::class)->name('office-update');
-  	Route::get('/organisations/add-staff/{id}', AddStaff::class)->name('staff-add');
-	Route::get('/organisations/update-staff/{id}', UpdateStaff::class)->name('staff-update');
-	Route::get('/organisations/staff/{id}', Staff::class)->name('staff-list');
-	Route::get('/organisations/view/{id}', ViewOrganisation::class)->name('organisations.view');
-  	Route::get('/basecampuser', BaseCampUser::class)->name('basecampuser');
-  	Route::get('/basecampuser/edit/{id}', UpdateBasecampUser::class)->name('basecampuser.edit');
-  	Route::get('/hptm', Userhptm::class)->name('hptm.list');
-    Route::get('/department', Department::class)->name('department');
-    Route::get('/department/add', AddDepartment::class)->name('add.department');
-    Route::get('/department/edit/{id}', UpdateDepartment::class)->name('update.department');
-  	Route::get('/directing-value', DirectingValue::class)->name('directing-value.list');
-    Route::get('/directing-values/add', DirectingValueAdd::class)->name('add.directing-value');
-	Route::get('/directing-values/edit/{id}', DirectingValueEdit::class)->name('update.directing-value');
-    Route::get('/principles', Principles::class)->name('principles');
-    Route::get('/principle/edit/{id}', EditPrinciple::class)->name('principle.edit');
-	Route::get('/principles/add', AddPrinciple::class)->name('principles.add');
-    Route::get('/learning-types', LearningTypeList::class)->name('learningtype.list');
-    Route::get('/learning-types/edit/{id}', EditLearningType::class)->name('learningtype.edit');
-	Route::get('/learning-types/add', AddLearningType::class)->name('learningtype.add');
-    Route::get('/learning-checklist', LearningChecklistList::class)->name('learningchecklist.list');
-    Route::get('/learning-checklist/add', AddLearningChecklist::class)->name('learningchecklist.add');  
-    Route::get('/learning-checklist/edit/{id}', EditLearningChecklist::class)->name('learningchecklist.edit');
-    Route::get('/team-feedback', TeamFeedbackQuestionsList::class)->name('team-feedback.list');
-    Route::get('/team-feedback/add', AddTeamFeedbackQuestion::class)->name('team-feedback.add');
-    Route::get('/team-feedback/edit/{id}', EditTeamFeedbackQuestion::class)->name('team-feedback.edit');
-  	Route::get('/industries', Industry::class)->name('industries.list');
-  	Route::get('/industries/add', IndustryAdd::class)->name('industries.add');
-    Route::get('/industries/edit/{id}', IndustryEdit::class)->name('industries.edit');
-	Route::get('/myteam', Myteam::class)->name('myteam.list');
-
-
+    // Routes accessible to all authenticated users (organisation_user, organisation_admin, basecamp)
+    Route::get('/hptm', Userhptm::class)->name('hptm.list');
+    Route::get('/user/notifications', Notifications::class)->name('user.notifications');
     Route::get('/reflection-list', ReflectionList::class)->name('admin.reflections.index');
     Route::get('/reflections/create', ReflectionCreate::class)->name('reflection.create');
 
-	Route::get('admin/send-notification', SendNotifications::class)->name('admin.send-notification');
-    Route::get('admin/send-notification-list', SendNotificationList::class)->name('admin.send-notification-list');
-	Route::get('/user/notifications', Notifications::class)->name('user.notifications');
+    // My Teammates - Only for organisation_user, organisation_admin, basecamp (with orgId)
+    // Note: Component-level check ensures user has orgId
+    Route::get('/myteam', Myteam::class)->name('myteam.list');
+
+    // Super Admin only routes - protected with super_admin role
+    Route::middleware(['role:super_admin'])->group(function () {
+        // Organisation Management
+        Route::get('/organisations', OrganisationIndex::class)->name('organisations.index');
+        Route::get('/organisations/create', OrganisationPage::class)->name('organisations.create');
+        Route::get('/organisations/update/{id}', UpdateOrganisation::class)->name('update-organisation');
+        Route::get('/organisations/office/{id}', Office::class)->name('office-list');
+        Route::get('/office/{officeId}/staff', OfficeStaff::class)->name('office.staff');
+        Route::get('/organisations/add-office/{id}', AddOffice::class)->name('office-add');
+        Route::get('/organisations/update-office/{id}', UpdateOffice::class)->name('office-update');
+        Route::get('/organisations/add-staff/{id}', AddStaff::class)->name('staff-add');
+        Route::get('/organisations/update-staff/{id}', UpdateStaff::class)->name('staff-update');
+        Route::get('/organisations/staff/{id}', Staff::class)->name('staff-list');
+        Route::get('/organisations/view/{id}', ViewOrganisation::class)->name('organisations.view');
+        
+        // Basecamp User Management
+        Route::get('/basecampuser', BaseCampUser::class)->name('basecampuser');
+        Route::get('/basecampuser/edit/{id}', UpdateBasecampUser::class)->name('basecampuser.edit');
+        
+        // Admin Notification Features
+        Route::get('admin/send-notification', SendNotifications::class)->name('admin.send-notification');
+        Route::get('admin/send-notification-list', SendNotificationList::class)->name('admin.send-notification-list');
+        
+        // Universal Settings - Master Data Management (Super Admin only)
+        Route::get('/department', Department::class)->name('department');
+        Route::get('/department/add', AddDepartment::class)->name('add.department');
+        Route::get('/department/edit/{id}', UpdateDepartment::class)->name('update.department');
+        Route::get('/directing-value', DirectingValue::class)->name('directing-value.list');
+        Route::get('/directing-values/add', DirectingValueAdd::class)->name('add.directing-value');
+        Route::get('/directing-values/edit/{id}', DirectingValueEdit::class)->name('update.directing-value');
+        Route::get('/principles', Principles::class)->name('principles');
+        Route::get('/principle/edit/{id}', EditPrinciple::class)->name('principle.edit');
+        Route::get('/principles/add', AddPrinciple::class)->name('principles.add');
+        Route::get('/learning-types', LearningTypeList::class)->name('learningtype.list');
+        Route::get('/learning-types/edit/{id}', EditLearningType::class)->name('learningtype.edit');
+        Route::get('/learning-types/add', AddLearningType::class)->name('learningtype.add');
+        Route::get('/learning-checklist', LearningChecklistList::class)->name('learningchecklist.list');
+        Route::get('/learning-checklist/add', AddLearningChecklist::class)->name('learningchecklist.add');  
+        Route::get('/learning-checklist/edit/{id}', EditLearningChecklist::class)->name('learningchecklist.edit');
+        Route::get('/team-feedback', TeamFeedbackQuestionsList::class)->name('team-feedback.list');
+        Route::get('/team-feedback/add', AddTeamFeedbackQuestion::class)->name('team-feedback.add');
+        Route::get('/team-feedback/edit/{id}', EditTeamFeedbackQuestion::class)->name('team-feedback.edit');
+        Route::get('/industries', Industry::class)->name('industries.list');
+        Route::get('/industries/add', IndustryAdd::class)->name('industries.add');
+        Route::get('/industries/edit/{id}', IndustryEdit::class)->name('industries.edit');
+    });
 });

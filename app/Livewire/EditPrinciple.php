@@ -14,6 +14,11 @@ class EditPrinciple extends Component
 
     public function mount($id)
     {
+        // Check if user has super_admin role
+        if (!auth()->user()->hasRole('super_admin')) {
+            abort(403, 'Unauthorized access. Admin privileges required.');
+        }
+
         $principle = HptmPrinciple::findOrFail($id);
         $this->principleId = $principle->id;
         $this->title = $principle->title;

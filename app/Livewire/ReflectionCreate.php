@@ -18,6 +18,19 @@ class ReflectionCreate extends Component
     public $alertType = '';
     public $alertMessage = '';
 
+    public function mount()
+    {
+        $user = auth()->user();
+        
+        // Reflections is accessible to super_admin (via Universal Setting > HPTM) 
+        // and organisation_user|organisation_admin|basecamp (via standalone menu)
+        $allowedRoles = ['super_admin', 'organisation_user', 'organisation_admin', 'basecamp'];
+        
+        if (!$user->hasAnyRole($allowedRoles)) {
+            abort(403, 'Unauthorized access. This page is only available for authorised users.');
+        }
+    }
+
     public function submit()
     {
         $this->validate([

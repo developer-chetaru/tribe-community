@@ -97,9 +97,14 @@ public $selectedStaff;
     	session()->flash('success', $user->first_name . ' is now Staff.');
 	}
   
-    public function mount($id)
-    {
-        $this->organisationId = $id;
+	public function mount($id)
+	{
+        // Check if user has super_admin role
+        if (!auth()->user()->hasRole('super_admin')) {
+            abort(403, 'Unauthorized access. Admin privileges required.');
+        }
+
+    	$this->organisationId = $id;
         $this->organisation = Organisation::findOrFail($id);
         $this->organisationName = $this->organisation->name;
     }

@@ -40,6 +40,23 @@ public $selectedStaff;
 
 	public function mount($id = null)
 	{
+        $user = auth()->user();
+        
+        // Block super_admin - this page is not for them
+        if ($user->hasRole('super_admin')) {
+            abort(403, 'Unauthorized access. This page is not available for administrators.');
+        }
+
+        // Check if user has required role (organisation_user, organisation_admin, or basecamp)
+        if (!$user->hasAnyRole(['organisation_user', 'organisation_admin', 'basecamp'])) {
+            abort(403, 'Unauthorized access. This page is only available for organisation users.');
+        }
+
+        // Check if user has orgId (required for My Teammates)
+        if (!$user->orgId) {
+            abort(403, 'Unauthorized access. You must be part of an organisation to view teammates.');
+        }
+
     	$this->organisationId = $id;
 
     	if($id) {

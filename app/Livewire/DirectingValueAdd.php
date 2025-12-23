@@ -33,6 +33,11 @@ class DirectingValueAdd extends Component
 
     public function render()
     {
+        // Check if user has super_admin role
+        if (!auth()->user()->hasRole('super_admin')) {
+            abort(403, 'Unauthorized access. Admin privileges required.');
+        }
+
         return view('livewire.directing-value-add')->layout('layouts.app');
     }
 }

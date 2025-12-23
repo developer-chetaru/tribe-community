@@ -38,6 +38,11 @@ class UpdateStaff extends Component
 
 public function mount($id)
 {
+    // Check if user has super_admin role
+    if (!auth()->user()->hasRole('super_admin')) {
+        abort(403, 'Unauthorized access. Admin privileges required.');
+    }
+
     $user = User::with('department')->findOrFail($id);
 
     $this->staffId       = $user->id;

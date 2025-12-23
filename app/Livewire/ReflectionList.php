@@ -59,13 +59,26 @@ class ReflectionList extends Component
     {
         $user = Auth::user();
 
-        $availableRoles = Role::whereIn('name', ['super_admin', 'organisation_user', 'basecamp', 'organisation_admin'])
-            ->where('guard_name', 'web')
-            ->pluck('name')
-            ->toArray();
-
-        if (!$user->hasAnyRole($availableRoles)) {
-            return redirect()->back();
+        // Reflections is accessible to super_admin (via Universal Setting > HPTM) 
+        // and organisation_user|organisation_admin|basecamp (via standalone menu)
+        $allowedRoles = ['super_admin', 'organisation_user', 'organisation_admin', 'basecamp'];
+        
+        // Check if user has any of the allowed roles (handle case where role might not exist)
+        $hasAccess = false;
+        foreach ($allowedRoles as $role) {
+            try {
+                if ($user->hasRole($role)) {
+                    $hasAccess = true;
+                    break;
+                }
+            } catch (\Spatie\Permission\Exceptions\RoleDoesNotExist $e) {
+                // Role doesn't exist in database, skip it
+                continue;
+            }
+        }
+        
+        if (!$hasAccess) {
+            abort(403, 'Unauthorized access. This page is only available for authorised users.');
         }
 
         $this->orgId = $orgId ? base64_decode($orgId) : '';
@@ -81,10 +94,15 @@ class ReflectionList extends Component
             ? Office::where('organisation_id', $this->orgId)->get()
             : Office::all();
 
-        // Load super admin IDs
-        $this->adminIds = in_array('super_admin', $availableRoles)
-            ? User::role('super_admin', 'web')->where('status', 'Active')->pluck('id')->toArray()
-            : [];
+        // Load super admin IDs (only if super_admin role exists)
+        try {
+            $this->adminIds = $user->hasRole('super_admin')
+                ? User::role('super_admin', 'web')->where('status', 'Active')->pluck('id')->toArray()
+                : [];
+        } catch (\Spatie\Permission\Exceptions\RoleDoesNotExist $e) {
+            // Role doesn't exist in database, set empty array
+            $this->adminIds = [];
+        }
     }
 
     public function updatingSearchTopic()

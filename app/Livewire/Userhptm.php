@@ -23,8 +23,19 @@ class Userhptm extends Component
 
 public function mount()
 {
-    $principleArray = [];
     $user = auth()->user();
+    
+    // Block super_admin - HPTM is not for them
+    if ($user->hasRole('super_admin')) {
+        abort(403, 'Unauthorized access. This page is not available for administrators.');
+    }
+
+    // Check if user has required role (organisation_user, organisation_admin, or basecamp)
+    if (!$user->hasAnyRole(['organisation_user', 'organisation_admin', 'basecamp'])) {
+        abort(403, 'Unauthorized access. This page is only available for organisation users.');
+    }
+
+    $principleArray = [];
     $userId = $user->id;
 
     // --- Get last feedback date ---

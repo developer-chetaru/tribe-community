@@ -37,6 +37,11 @@ class AddStaff extends Component
 
     public function mount($id)
     {
+        // Check if user has super_admin role
+        if (!auth()->user()->hasRole('super_admin')) {
+            abort(403, 'Unauthorized access. Admin privileges required.');
+        }
+
         $this->organisationId = $id;
 		
         // fetch offices & departments
