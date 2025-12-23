@@ -103,6 +103,14 @@ class ReflectionList extends Component
             // Role doesn't exist in database, set empty array
             $this->adminIds = [];
         }
+
+        // If user is allowed to create reflections and has none, redirect to create form
+        if ($user->hasAnyRole(['organisation_user', 'organisation_admin', 'basecamp'])) {
+            $hasReflections = Reflection::where('userId', $user->id)->exists();
+            if (!$hasReflections) {
+                return redirect()->route('reflection.create');
+            }
+        }
     }
 
     public function updatingSearchTopic()
