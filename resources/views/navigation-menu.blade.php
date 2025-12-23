@@ -24,6 +24,17 @@
             <span class="ml-1 sm:ml-2 bg-red-600 text-white p-1 w-[13px] h-[13px] sm:w-[18px] sm:h-[18px] rounded-full text-[10px]  sm:text-xs" style="display: flex; align-items: center; justify-content: center; line-height: normal;">
                 {{ \App\Models\IotNotification::where('to_bubble_user_id', auth()->id())
                     ->where('archive', false)
+                    ->where(function($q) {
+                        // Exclude sentiment reminder notifications
+                        $q->where(function($subQuery) {
+                            $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                                     ->orWhereNull('notificationType');
+                        })
+                        ->where(function($subQuery) {
+                            $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                                     ->orWhereNull('title');
+                        });
+                    })
                     ->count() }}
             </span>
         </a>

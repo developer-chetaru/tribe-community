@@ -154,6 +154,17 @@
             @php
                 $notificationCount = \App\Models\IotNotification::where('to_bubble_user_id', auth()->id())
                     ->where('archive', false)
+                    ->where(function($q) {
+                        // Exclude sentiment reminder notifications
+                        $q->where(function($subQuery) {
+                            $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                                     ->orWhereNull('notificationType');
+                        })
+                        ->where(function($subQuery) {
+                            $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                                     ->orWhereNull('title');
+                        });
+                    })
                     ->count();
             @endphp
             @if($notificationCount > 0)
