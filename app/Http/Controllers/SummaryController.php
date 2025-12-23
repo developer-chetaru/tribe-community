@@ -10,12 +10,86 @@ use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use App\Http\Controllers\Concerns\UpdatesUserTimezone;
 
+/**
+ * @OA\Tag(
+ *     name="Summary",
+ *     description="User summary endpoints for Happy Index and leave data"
+ * )
+ */
 class SummaryController extends Controller
 {
     use UpdatesUserTimezone;
   
   /**
    * Get user's Happy Index and leave summary.
+   *
+   * @OA\Get(
+   *     path="/api/summary/{filterType}",
+   *     tags={"Summary"},
+   *     summary="Get user summary by filter type",
+   *     description="Retrieve user's Happy Index and leave summary based on filter type (this_week, last_7_days, previous_week, this_month, previous_month, custom, all)",
+   *     security={{"bearerAuth":{}}},
+   *     @OA\Parameter(
+   *         name="filterType",
+   *         in="path",
+   *         required=true,
+   *         description="Filter type for summary",
+   *         @OA\Schema(
+   *             type="string",
+   *             enum={"this_week", "last_7_days", "previous_week", "this_month", "previous_month", "custom", "all"},
+   *             example="this_week"
+   *         )
+   *     ),
+   *     @OA\Parameter(
+   *         name="start_date",
+   *         in="query",
+   *         required=false,
+   *         description="Start date for custom filter (format: Y-m-d)",
+   *         @OA\Schema(type="string", format="date", example="2024-01-01")
+   *     ),
+   *     @OA\Parameter(
+   *         name="end_date",
+   *         in="query",
+   *         required=false,
+   *         description="End date for custom filter (format: Y-m-d)",
+   *         @OA\Schema(type="string", format="date", example="2024-01-31")
+   *     ),
+   *     @OA\Parameter(
+   *         name="timezone",
+   *         in="query",
+   *         required=false,
+   *         description="User timezone (optional)",
+   *         @OA\Schema(type="string", example="Asia/Kolkata")
+   *     ),
+   *     @OA\Response(
+   *         response=200,
+   *         description="Summary retrieved successfully",
+   *         @OA\JsonContent(
+   *             @OA\Property(property="status", type="boolean", example=true),
+   *             @OA\Property(
+   *                 property="data",
+   *                 type="array",
+   *                 @OA\Items(
+   *                     type="object",
+   *                     @OA\Property(property="date", type="string", example="Jan 15, 2024"),
+   *                     @OA\Property(property="score", type="integer", nullable=true, example=85),
+   *                     @OA\Property(property="mood_value", type="integer", nullable=true, example=3, description="1=average, 2=sad, 3=happy"),
+   *                     @OA\Property(property="description", type="string", example="Feeling great today!"),
+   *                     @OA\Property(property="image", type="string", example="happy-app.png"),
+   *                     @OA\Property(property="status", type="string", example="Present", description="Present, Out of office, or Missed")
+   *                 )
+   *             )
+   *         )
+   *     ),
+   *     @OA\Response(
+   *         response=401,
+   *         description="Unauthorized",
+   *         @OA\JsonContent(
+   *             @OA\Property(property="status", type="boolean", example=false),
+   *             @OA\Property(property="message", type="string", example="Unauthenticated")
+   *         )
+   *     )
+   * )
    *
    * @param string $filterType
    * @param \Illuminate\Http\Request $request
@@ -91,6 +165,11 @@ class SummaryController extends Controller
     $summary = [];
     $leavesArray = [];
 
+    // Helper to build full image URL with current domain
+    $imageUrl = function (string $fileName): string {
+        return url('images/'.$fileName);
+    };
+
     // Generate date range
     $period = collect(Carbon::parse($start)->daysUntil(Carbon::parse($end)->addDay()))
         ->sortByDesc(fn($d) => $d->timestamp);
@@ -117,7 +196,7 @@ class SummaryController extends Controller
                 'score'       => null,
                 'mood_value'  => null,
                 'description' => "You were on leave on $dateStr",
-                'image'       => 'leave-app.png',
+                'image'       => $imageUrl('leave-app.png'),
                 'status'      => 'Out of office',
             ];
             $leavesArray[] = ['date' => $dateStr];
@@ -129,10 +208,10 @@ class SummaryController extends Controller
 
         if ($entry) {
             $image = match($entry->mood_value) {
-                3 => 'happy-app.png',
-                2 => 'sad-app.png',
-                1 => 'average-app.png',
-                default => 'sad-index.png',
+                3 => $imageUrl('happy-app.png'),
+                2 => $imageUrl('sad-app.png'),
+                1 => $imageUrl('average-app.png'),
+                default => $imageUrl('sad-app.png'),
             };
             $summary[] = [
                 'date'        => $dateStr,
@@ -153,7 +232,7 @@ class SummaryController extends Controller
                     'score'       => null,
                     'mood_value'  => null,
                     'description' => "Oh Dear, you missed to share your sentiment on $dateStr",
-                    'image'       => 'sentiment-missed-summary.png',
+                    'image'       => $imageUrl('sentiment-missed-summary.png'),
                     'status'      => 'Missed',
                 ];
             }
