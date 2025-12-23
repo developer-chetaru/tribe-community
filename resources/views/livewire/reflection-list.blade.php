@@ -71,7 +71,7 @@
                 <div class="bg-white p-3 sm:p-4 border-gray-300 rounded-md border shadow-sm overflow-y-auto block">
                     @forelse($reflectionList as $r)
                         <div 
-                            class="reflection-box bg-white border-2 {{ $selectedReflection['id'] ?? null == $r['id'] ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300' }} p-4 rounded-lg mb-3 cursor-pointer transition-all hover:shadow-md"
+                            class="reflection-box bg-white border-2 {{ (isset($selectedReflection['id']) && $selectedReflection['id'] == $r['id']) ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300' }} p-4 rounded-lg mb-3 cursor-pointer transition-all hover:shadow-md"
                             wire:click="openChat({{ $r['id'] }})"
                         >
                             <div class="flex items-start justify-between mb-2">
