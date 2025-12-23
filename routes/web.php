@@ -84,6 +84,11 @@ Route::get('/', function () {
 
 Route::post('/register', [RegisteredUserController::class, 'store'])->name('custom.register');
 
+// CSRF Token Refresh Route
+Route::get('/refresh-csrf-token', function () {
+    return response()->json(['token' => csrf_token()]);
+})->middleware('web');
+
 Route::middleware([
     'auth:sanctum',
     config('jetstream.auth_session'),

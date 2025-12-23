@@ -52,6 +52,59 @@
     @stack('modals')
     @livewireScripts
      <script src="{{ asset('js/app.js') }}"></script>
+     
+     <!-- CSRF Token Refresh Script -->
+     <script>
+         // Refresh CSRF token every 30 minutes to prevent expiration
+         setInterval(function() {
+             fetch('/refresh-csrf-token', {
+                 method: 'GET',
+                 headers: {
+                     'X-Requested-With': 'XMLHttpRequest',
+                     'Accept': 'application/json',
+                 },
+                 credentials: 'same-origin'
+             })
+             .then(response => response.json())
+             .then(data => {
+                 if (data.token) {
+                     // Update meta tag
+                     const metaTag = document.querySelector('meta[name="csrf-token"]');
+                     if (metaTag) {
+                         metaTag.setAttribute('content', data.token);
+                     }
+                     
+                     // Update Livewire token if available
+                     if (window.Livewire && window.Livewire.find) {
+                         window.Livewire.all().forEach(component => {
+                             if (component.__instance && component.__instance.csrf) {
+                                 component.__instance.csrf = data.token;
+                             }
+                         });
+                     }
+                 }
+             })
+             .catch(err => {
+                 console.log('CSRF token refresh failed:', err);
+             });
+         }, 30 * 60 * 1000); // 30 minutes
+         
+         // Handle Livewire 419 errors (Page Expired)
+         document.addEventListener('livewire:error', (event) => {
+             if (event.detail.status === 419) {
+                 // Refresh the page to get a new CSRF token
+                 window.location.reload();
+             }
+         });
+         
+         // Listen for Livewire network errors
+         window.addEventListener('livewire:error', (event) => {
+             if (event.detail.status === 419) {
+                 alert('Your session has expired. The page will reload.');
+                 window.location.reload();
+             }
+         });
+     </script>
     <script src="https://cdn.jsdelivr.net/npm/@material-tailwind/html@3.0.0-beta.7/dist/material-tailwind.umd.min.js"></script>
       <!-- intl-tel-input JS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.21/js/intlTelInput.min.js"></script>
