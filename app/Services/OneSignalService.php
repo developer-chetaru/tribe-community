@@ -107,6 +107,21 @@ class OneSignalService
             $title = 'Notification';
         }
 
+        // Validate OneSignal configuration
+        if (empty($this->appId) || empty($this->restApiKey)) {
+            Log::error('❌ OneSignal not configured', [
+                'has_app_id' => !empty($this->appId),
+                'has_api_key' => !empty($this->restApiKey),
+            ]);
+            return ['errors' => ['OneSignal not properly configured']];
+        }
+
+        // Validate player IDs
+        if (empty($playerIds) || !is_array($playerIds)) {
+            Log::warning('⚠️ No player IDs provided for OneSignal notification');
+            return ['errors' => ['No player IDs provided']];
+        }
+
         $payload = [
             'app_id' => $this->appId,
             'include_player_ids' => $playerIds,
@@ -114,12 +129,35 @@ class OneSignalService
             'contents' => ['en' => $message],
         ];
 
-        $response = Http::withHeaders([
-            'Authorization' => "Basic {$this->restApiKey}",
-            'Content-Type'  => 'application/json',
-        ])->post('https://onesignal.com/api/v1/notifications', $payload);
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => "Basic {$this->restApiKey}",
+                'Content-Type'  => 'application/json',
+            ])->timeout(30)->post('https://onesignal.com/api/v1/notifications', $payload);
 
-        return $response->json();
+            $responseData = $response->json();
+
+            if ($response->failed()) {
+                Log::error('❌ OneSignal API request failed', [
+                    'status' => $response->status(),
+                    'response' => $responseData,
+                    'player_count' => count($playerIds),
+                ]);
+            } else {
+                Log::info('✅ OneSignal notification sent', [
+                    'onesignal_id' => $responseData['id'] ?? null,
+                    'player_count' => count($playerIds),
+                ]);
+            }
+
+            return $responseData;
+        } catch (\Throwable $e) {
+            Log::error('❌ OneSignal send exception', [
+                'error' => $e->getMessage(),
+                'player_count' => count($playerIds),
+            ]);
+            return ['errors' => [$e->getMessage()]];
+        }
     }
 
     /**

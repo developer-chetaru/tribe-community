@@ -4,6 +4,7 @@ namespace App\Livewire\Admin;
 
 use Livewire\Component;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use App\Models\{Organisation, Office, Department, User, SendNotification, IotNotification};
 use DateTime;
 use DateTimeZone;
@@ -464,12 +465,16 @@ public function deselectAllUsers($ids)
             $now = now();
             $insertData = [];
 
+            // Use the currently authenticated admin as sender, or null if not available.
+            // This avoids FK violations on from_bubble_user_id.
+            $fromUserId = auth()->id();
+
             foreach ($users as $user) {
                 $insertData[] = [
                     'title'               => $this->title,
                     'description'         => $this->description,
                     'to_bubble_user_id'   => $user->id,
-                    'from_bubble_user_id' => 1,
+                    'from_bubble_user_id' => $fromUserId, // may be null, which is allowed by FK
                     'notificationType'    => 'custom notification',
                     'notificationLinks'   => $this->links,
                     'sendNotificationId'  => $sendNotificationId,
@@ -488,30 +493,100 @@ public function deselectAllUsers($ids)
             ]);
 
             /**
-             * ✅ Step 6: Fire OneSignal notifications only for those users
+             * ✅ Step 6: Fire OneSignal push notifications (batch send)
              */
             $oneSignal = app(\App\Services\OneSignalService::class);
+            
+            // Collect all valid FCM tokens (same validation as EveryDayUpdate command)
+            $fcmTokens = collect($users)
+                ->pluck('fcmToken')
+                ->filter(function ($token) {
+                    // Validate token format (OneSignal player ID format: alphanumeric with hyphens, min 8 chars)
+                    return !empty($token) 
+                        && is_string($token) 
+                        && strlen($token) > 0
+                        && preg_match('/^[a-z0-9-]{8,}$/i', $token);
+                })
+                ->unique()
+                ->values()
+                ->toArray();
 
-            foreach ($users as $user) {
-                if (!empty($user->fcmToken)) {
-                    try {
-                        $oneSignal->sendNotification(
+            if (!empty($fcmTokens)) {
+                try {
+                    // OneSignal allows up to 2000 player IDs per request, so batch if needed
+                    $batchSize = 2000;
+                    $batches = array_chunk($fcmTokens, $batchSize);
+                    $totalSent = 0;
+                    $totalErrors = 0;
+                    $invalidTokens = [];
+
+                    foreach ($batches as $batchIndex => $batch) {
+                        $response = $oneSignal->sendNotification(
                             $this->title,
                             $this->description,
-                            [$user->fcmToken],
+                            $batch
                         );
-                    } catch (\Throwable $e) {
-                        \Log::error('❌ OneSignal send failed for user', [
-                            'user_id' => $user->id,
-                            'error' => $e->getMessage(),
+
+                        // Check response for success or errors
+                        if (isset($response['id'])) {
+                            $totalSent += count($batch);
+                            \Log::info('✅ OneSignal batch sent successfully', [
+                                'batch_number' => $batchIndex + 1,
+                                'batch_size' => count($batch),
+                                'onesignal_id' => $response['id'],
+                                'total_sent' => $totalSent,
+                            ]);
+                        } else {
+                            // Log error details
+                            $errorMessage = $response['errors'][0] ?? 'Unknown error';
+                            $totalErrors += count($batch);
+                            
+                            \Log::error('❌ OneSignal batch send failed', [
+                                'batch_number' => $batchIndex + 1,
+                                'batch_size' => count($batch),
+                                'error' => $errorMessage,
+                                'full_response' => $response,
+                            ]);
+
+                            // Collect invalid player IDs if returned
+                            if (isset($response['errors']['invalid_player_ids'])) {
+                                $invalidTokens = array_merge($invalidTokens, $response['errors']['invalid_player_ids']);
+                            }
+                        }
+                    }
+
+                    // Remove invalid tokens from database (same as EveryDayUpdate)
+                    if (!empty($invalidTokens)) {
+                        DB::table('users')
+                            ->whereIn('fcmToken', $invalidTokens)
+                            ->update(['fcmToken' => null]);
+                        
+                        \Log::warning('⚠️ Removed invalid FCM tokens from database', [
+                            'invalid_count' => count($invalidTokens),
+                            'tokens' => $invalidTokens,
                         ]);
                     }
-                }
-            }
 
-            \Log::info('📲 OneSignal notifications fired successfully', [
-                'count' => count($users),
-            ]);
+                    \Log::info('📲 OneSignal push notifications summary', [
+                        'total_valid_tokens' => count($fcmTokens),
+                        'total_sent' => $totalSent,
+                        'total_errors' => $totalErrors,
+                        'batches' => count($batches),
+                        'invalid_tokens_removed' => count($invalidTokens),
+                    ]);
+                } catch (\Throwable $e) {
+                    \Log::error('❌ OneSignal batch send exception', [
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                        'token_count' => count($fcmTokens),
+                    ]);
+                }
+            } else {
+                \Log::warning('⚠️ No valid FCM tokens found for OneSignal push', [
+                    'total_users' => count($users),
+                    'users_with_tokens' => collect($users)->filter(fn($u) => !empty($u->fcmToken))->count(),
+                ]);
+            }
 
         } catch (\Throwable $e) {
             \Log::error('❌ processAndSendForOrg failed', [
