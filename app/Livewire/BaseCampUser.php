@@ -15,6 +15,11 @@ class BaseCampUser extends Component
 
     public $perPage = 12;
     public $activeTab = 'active'; 
+    public $showDeleteModal = false;
+    public $deleteUserId = null;
+    public $deleteUserName = null;
+    public $showViewModal = false;
+    public $viewingUser = null;
 
     protected $paginationTheme = 'tailwind';
 
@@ -58,6 +63,71 @@ class BaseCampUser extends Component
         } catch (\Throwable $e) {
             session()->flash('message', 'Failed to send email: '.$e->getMessage());
             session()->flash('type', 'error');
+        }
+    }
+
+    public function viewUser($userId)
+    {
+        try {
+            $this->viewingUser = User::findOrFail($userId);
+            $this->showViewModal = true;
+        } catch (\Exception $e) {
+            session()->flash('message', 'User not found: ' . $e->getMessage());
+            session()->flash('type', 'error');
+        }
+    }
+
+    public function closeViewModal()
+    {
+        $this->showViewModal = false;
+        $this->viewingUser = null;
+    }
+
+    public function editUser($userId)
+    {
+        return redirect()->route('basecampuser.edit', ['id' => $userId]);
+    }
+
+    public function confirmDelete($userId)
+    {
+        $user = User::findOrFail($userId);
+        $this->deleteUserId = $userId;
+        $this->deleteUserName = $user->first_name . ' ' . $user->last_name;
+        $this->showDeleteModal = true;
+    }
+
+    public function cancelDelete()
+    {
+        $this->showDeleteModal = false;
+        $this->deleteUserId = null;
+        $this->deleteUserName = null;
+    }
+
+    public function deleteUser()
+    {
+        if ($this->deleteUserId) {
+            try {
+                $user = User::findOrFail($this->deleteUserId);
+                $userName = $user->first_name . ' ' . $user->last_name;
+                
+                // Delete user profile photo if exists
+                if ($user->profile_photo_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($user->profile_photo_path)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($user->profile_photo_path);
+                }
+                
+                $user->delete();
+                
+                $this->showDeleteModal = false;
+                $this->deleteUserId = null;
+                $this->deleteUserName = null;
+                
+                session()->flash('message', 'User ' . $userName . ' deleted successfully!');
+                session()->flash('type', 'success');
+                
+            } catch (\Throwable $e) {
+                session()->flash('message', 'Failed to delete user: ' . $e->getMessage());
+                session()->flash('type', 'error');
+            }
         }
     }
 

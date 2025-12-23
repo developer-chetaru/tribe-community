@@ -9,6 +9,7 @@ use App\Livewire\Organisations\OrganisationIndex;
 use App\Livewire\Organisations\OrganisationCreate;
 use App\Livewire\Organisations\OrganisationPage;	
 use App\Livewire\BaseCampUser;
+use App\Livewire\UpdateBasecampUser;
 use App\Livewire\AddDepartment;
 use App\Livewire\UpdateDepartment;
 use App\Livewire\Principles;
@@ -108,6 +109,7 @@ Route::middleware([
 	Route::get('/organisations/staff/{id}', Staff::class)->name('staff-list');
 	Route::get('/organisations/view/{id}', ViewOrganisation::class)->name('organisations.view');
   	Route::get('/basecampuser', BaseCampUser::class)->name('basecampuser');
+  	Route::get('/basecampuser/edit/{id}', UpdateBasecampUser::class)->name('basecampuser.edit');
   	Route::get('/hptm', Userhptm::class)->name('hptm.list');
     Route::get('/department', Department::class)->name('department');
     Route::get('/department/add', AddDepartment::class)->name('add.department');
