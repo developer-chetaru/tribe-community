@@ -23,9 +23,10 @@ Schedule::command('notification:send --only=report')
         ->withoutOverlapping()
         ->appendOutputTo(storage_path('logs/scheduler.log'));
 
-Schedule::command('notification:send --only=sentiment')
-        ->dailyAt('18:00')
-        ->timezone('Asia/Kolkata');
+// COMMENTED OUT: 6pm email cron for sentiment reminder
+// Schedule::command('notification:send --only=sentiment')
+//         ->dailyAt('18:00')
+//         ->timezone('Asia/Kolkata');
 
 Schedule::command('notification:send --only=monthly-summary')
         ->monthlyOn(28, '22:00')
