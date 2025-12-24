@@ -85,6 +85,7 @@
                                             $roleMapping = [
                                                 'organisation_user' => 'Staff',
                                                 'organisation_admin' => 'Team Lead',
+                                                'director' => 'Director',
                                             ];
                                         @endphp
 
@@ -170,6 +171,17 @@
                                             <button wire:click="openTeamLeadModal({{ $staff->id }})"
                                                 class="flex justify-center items-center py-1 px-2 bg-[#ffeaec] border rounded-md border-[#FF9AA0]">
                                                 <img src="{{ asset('images/user-star.svg') }}" alt="star">
+                                            </button>
+                                        </x-tooltip>
+                                    @endif
+
+                                    @if($staff->office && ($userRole === 'organisation_user' || $userRole === 'organisation_admin'))        
+                                        <x-tooltip tooltipText="Make User As Director">
+                                            <button wire:click="openDirectorModal({{ $staff->id }})"
+                                                class="flex justify-center items-center py-1 px-2 bg-[#ffeaec] border rounded-md border-[#FF9AA0]">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+                                                </svg>
                                             </button>
                                         </x-tooltip>
                                     @endif
@@ -304,6 +316,28 @@
             </div>
         </div>
 
+        @if($showDirectorModal && $selectedStaff)
+        <div class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+            <div class="bg-white rounded-lg shadow-lg p-6 w-[400px]">
+                <h2 class="text-lg font-bold mb-4">Confirm Director</h2>
+
+                <p>
+                    Are you sure you want to assign 
+                    <span class="font-semibold text-red-600">{{ $selectedStaff->first_name }} {{ $selectedStaff->last_name }}</span> 
+                    as the Director?
+                </p>
+
+                <div class="mt-6 flex justify-end space-x-2">
+                    <button wire:click="closeDirectorModal" 
+                        class="px-4 py-2 border rounded-md">Cancel</button>
+                    
+                    <button wire:click="makeDirector" 
+                        class="px-4 py-2 bg-red-500 text-white rounded-md">Confirm</button>
+                </div>
+            </div>
+        </div>
+        @endif
+
         @if($showTeamLeadModal)
             <div class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
                 <div class="bg-white rounded-lg shadow-lg p-6 w-[400px]">
@@ -346,6 +380,25 @@
                     </div>
                 </div>
             </div>
+      	@endif
+
+      	@if(session()->has('directorMessage'))
+            <div id="directorPopup"
+                class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+                <div class="bg-white rounded-lg p-6 shadow-lg max-w-sm w-full text-center relative">
+                    <h2 class="text-lg font-bold mb-2 text-green-600">Success!</h2>
+                    <p class="text-gray-600">{!! session('directorMessage') !!}</p>
+
+                    <div class="mt-4">
+                        <button type="button"
+                                onclick="document.getElementById('directorPopup')?.remove()"
+                                class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+      	@endif
 
             @push('scripts')
                 <script>

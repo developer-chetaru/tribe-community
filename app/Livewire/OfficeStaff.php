@@ -26,6 +26,7 @@ class OfficeStaff extends Component
     public $leaveEndDate;
 
     public $showTeamLeadModal = false;
+    public $showDirectorModal = false;
     public $selectedUserId = null;
 
     public function mount($officeId)
@@ -168,6 +169,46 @@ class OfficeStaff extends Component
         session()->flash('teamLeadMessage', $user->first_name . ' is now the new Team Lead for ' . $user->office->name . '.');
 
         $this->closeTeamLeadModal();
+    }
+
+    public function openDirectorModal($userId)
+    {
+        $this->selectedUserId = $userId;
+        $this->selectedStaffId = $userId;
+        $this->selectedStaff = User::with(['office'])->find($userId);
+        $this->showDirectorModal = true;
+    }
+
+    public function closeDirectorModal()
+    {
+        $this->showDirectorModal = false;
+        $this->selectedUserId = null;
+    }
+
+    public function makeDirector()
+    {
+        $user = User::with(['office', 'department'])->findOrFail($this->selectedUserId);
+
+        if (is_null($user->officeId)) {
+            session()->flash('error', 'Office is not assigned, so a Director cannot be created.');
+            return;
+        }
+
+        // Remove director role from existing director(s) in the same organisation
+        $existingDirectors = User::role('director')
+            ->where('orgId', $user->orgId)
+            ->where('id', '!=', $user->id)
+            ->get();
+
+        foreach ($existingDirectors as $director) {
+            $director->syncRoles(['organisation_user']);
+        }
+
+        $user->syncRoles(['director']); 
+
+        session()->flash('directorMessage', $user->first_name . ' is now the Director.');
+
+        $this->closeDirectorModal();
     }
 
     public function render()
