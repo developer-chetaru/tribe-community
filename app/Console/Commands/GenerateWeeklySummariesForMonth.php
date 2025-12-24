@@ -47,11 +47,14 @@ class GenerateWeeklySummariesForMonth extends Command
         $weekNum = 1;
 
         $weeks = [];
+        $today = Carbon::now('Asia/Kolkata');
+        
         while ($weekStart->lte($lastDay)) {
             $weekEnd = $weekStart->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
             
-            // Skip future weeks
-            if ($weekStart->gt(now())) {
+            // Only include weeks that have ended (week end date must be in the past)
+            // A week is considered ended if its end date (Sunday) has passed
+            if ($weekEnd->gt($today)) {
                 $weekStart->addWeek();
                 continue;
             }
@@ -72,6 +75,13 @@ class GenerateWeeklySummariesForMonth extends Command
 
         foreach ($users as $user) {
             foreach ($weeks as $week) {
+                // Double-check: Only generate for completed weeks (week must have ended)
+                $today = Carbon::now('Asia/Kolkata');
+                if ($week['end']->gt($today)) {
+                    $this->line("Skipping user {$user->id}, week {$week['number']} - week not ended yet (ends {$week['end']->format('M d, Y')})");
+                    continue;
+                }
+
                 // Check if summary already exists
                 $exists = WeeklySummaryModel::where([
                     'user_id' => $user->id,
