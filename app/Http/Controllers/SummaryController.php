@@ -97,8 +97,10 @@ class SummaryController extends Controller
    */
   public function getSummary($filterType, Request $request)
 {
+    // COMMENTED OUT: Automatic timezone update from request
+    // Timezone should be set from user profile instead
     // Update user timezone from request if provided
-    $this->updateUserTimezoneIfNeeded($request);
+    // $this->updateUserTimezoneIfNeeded($request);
     
     $userId = Auth::id();
     $startDate = $request->get('start_date');

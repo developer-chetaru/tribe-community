@@ -112,8 +112,10 @@
    <!-- Include Flatpickr JS -->
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     
+    <!-- COMMENTED OUT: Automatic timezone detection from geolocation -->
+    <!-- Timezone should be set from user profile instead -->
     <!-- Get timezone from current location using browser geolocation -->
-    <script>
+    <!-- <script>
         (function() {
             'use strict';
             
@@ -225,7 +227,7 @@
                 });
             }
         })();
-    </script>
+    </script> -->
     
     @stack('scripts')
 </body>

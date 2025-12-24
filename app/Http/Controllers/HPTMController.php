@@ -32,8 +32,10 @@ class HPTMController extends Controller
     public function userProfile(Request $request)
     {
         try {
+            // COMMENTED OUT: Automatic timezone update from request
+            // Timezone should be set from user profile instead
             // Update user timezone from request if provided
-            $this->updateUserTimezoneIfNeeded($request);
+            // $this->updateUserTimezoneIfNeeded($request);
             
             $user = auth()->user();
 
@@ -251,8 +253,10 @@ class HPTMController extends Controller
      */
  	public function getFreeVersionHomeDetails(Request $request)
     {
+        // COMMENTED OUT: Automatic timezone update from request
+        // Timezone should be set from user profile instead
         // Update user timezone from request if provided
-        $this->updateUserTimezoneIfNeeded($request);
+        // $this->updateUserTimezoneIfNeeded($request);
         
         $user = Auth::user();
         if (!$user) {
@@ -940,12 +944,14 @@ class HPTMController extends Controller
                 }
             }
 
+            // COMMENTED OUT: Automatic timezone update
+            // Timezone should be set from user profile instead
             // Update user's timezone if authenticated
-            $user = auth()->user();
-            if ($user && $user->timezone !== $timezone) {
-                $user->timezone = $timezone;
-                $user->save();
-            }
+            // $user = auth()->user();
+            // if ($user && $user->timezone !== $timezone) {
+            //     $user->timezone = $timezone;
+            //     $user->save();
+            // }
 
             return response()->json([
                 'status' => true,
