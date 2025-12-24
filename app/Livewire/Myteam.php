@@ -9,6 +9,7 @@ use App\Models\Office;
 use App\Models\Department;
 use App\Models\Organisation;
 use App\Exports\StaffExport;
+use App\Services\SubscriptionService;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Models\UserLeave;
 use Carbon\Carbon;
@@ -47,8 +48,18 @@ public $selectedStaff;
             abort(403, 'Unauthorized access. This page is not available for administrators.');
         }
 
+        // Check subscription status for organization users
+        if ($user->orgId && !$user->hasRole('super_admin')) {
+            $subscriptionService = new SubscriptionService();
+            $subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId);
+            
+            if (!$subscriptionStatus['active']) {
+                abort(403, 'Your organization\'s subscription has expired. Please contact your director to renew the subscription.');
+            }
+        }
+
         // Check if user has required role (organisation_user, organisation_admin, or basecamp)
-        if (!$user->hasAnyRole(['organisation_user', 'organisation_admin', 'basecamp'])) {
+        if (!$user->hasAnyRole(['organisation_user', 'organisation_admin', 'basecamp', 'director'])) {
             abort(403, 'Unauthorized access. This page is only available for organisation users.');
         }
 

@@ -47,4 +47,14 @@ class Organisation extends Model
 	{
     	return $this->hasMany(User::class, 'orgId');
 	}
+
+	public function subscription()
+	{
+    	return $this->hasOne(Subscription::class)->latestOfMany();
+	}
+
+	public function subscriptions()
+	{
+    	return $this->hasMany(Subscription::class);
+	}
 }

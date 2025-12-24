@@ -51,9 +51,13 @@ use App\Livewire\ReflectionList;
 use App\Livewire\ReflectionCreate;
 use App\Livewire\Admin\SendNotifications;
 use App\Livewire\Admin\SendNotificationList;
+use App\Livewire\Admin\ManageSubscriptions;
+use App\Livewire\Subscription\Billing;
+use App\Http\Controllers\PaymentGatewayController;
 use App\Livewire\User\Notifications;
 use App\Http\Controllers\Auth\ForgotResetPasswordController;
 use App\Http\Controllers\HPTMController;
+use App\Http\Controllers\InvoiceController;
 
 
 use App\Http\Controllers\ForgotController;
@@ -111,6 +115,17 @@ Route::middleware([
     // My Teammates - Only for organisation_user, organisation_admin, basecamp (with orgId)
     // Note: Component-level check ensures user has orgId
     Route::get('/myteam', Myteam::class)->name('myteam.list');
+    
+    // Director Billing (only for directors)
+    Route::middleware(['role:director'])->group(function () {
+        Route::get('/billing', Billing::class)->name('billing');
+        Route::get('/invoices/{id}/download', [InvoiceController::class, 'download'])->name('invoices.download');
+        Route::get('/invoices/{id}/view', [InvoiceController::class, 'view'])->name('invoices.view');
+        
+        // Payment Gateway Routes
+        Route::post('/payment/process', [PaymentGatewayController::class, 'processPayment'])->name('payment.process');
+        Route::get('/payment/config', [PaymentGatewayController::class, 'getPaymentConfig'])->name('payment.config');
+    });
 
     // Super Admin only routes - protected with super_admin role
     Route::middleware(['role:super_admin'])->group(function () {
@@ -134,6 +149,13 @@ Route::middleware([
         // Admin Notification Features
         Route::get('admin/send-notification', SendNotifications::class)->name('admin.send-notification');
         Route::get('admin/send-notification-list', SendNotificationList::class)->name('admin.send-notification-list');
+        
+        // Subscription Management
+        Route::get('/admin/subscriptions', ManageSubscriptions::class)->name('admin.subscriptions');
+        
+        // Invoice Routes (Admin - super_admin can access all invoices)
+        Route::get('/admin/invoices/{id}/download', [InvoiceController::class, 'download'])->name('admin.invoices.download');
+        Route::get('/admin/invoices/{id}/view', [InvoiceController::class, 'view'])->name('admin.invoices.view');
         
         // Universal Settings - Master Data Management (Super Admin only)
         Route::get('/department', Department::class)->name('department');

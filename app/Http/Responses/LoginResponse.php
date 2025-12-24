@@ -51,6 +51,8 @@ class LoginResponse implements LoginResponseContract
                 return redirect()->route('dashboard');
             }elseif ($user->hasRole('organisation_admin')) {
                 return redirect()->route('dashboard');
+            }elseif ($user->hasRole('director')) {
+                return redirect()->route('dashboard');
             }
              else {
                 return redirect()->intended('/dashboard');

@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use Livewire\Component;
 use App\Services\DashboardService;
+use App\Services\SubscriptionService;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\UserLeave;
@@ -33,6 +34,8 @@ class DashboardSummary extends Component
     public $userGivenFeedback;
     public $onLeaveToday;
     public $showHappyIndex;
+    public $showSubscriptionExpiredModal = false;
+    public $subscriptionStatus = [];
 
     protected $service;
 
@@ -106,7 +109,25 @@ class DashboardSummary extends Component
             }
         }
 
+        // Check subscription status for organization users
+        if ($user->orgId && !$user->hasRole('super_admin')) {
+            $subscriptionService = new SubscriptionService();
+            $this->subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId);
+            
+            // Show expired modal if subscription is not active
+            if (!$this->subscriptionStatus['active']) {
+                $this->showSubscriptionExpiredModal = true;
+                // Don't load data if subscription is expired
+                return;
+            }
+        }
+
         $this->loadData();
+    }
+
+    public function closeSubscriptionExpiredModal()
+    {
+        $this->showSubscriptionExpiredModal = false;
     }
 
     /**

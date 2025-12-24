@@ -52,8 +52,8 @@
                 </div>
                 @endrole
 
-                {{-- New Reflection button for organisation_user, basecamp, and organisation_admin (team lead) --}}
-                @hasanyrole('organisation_user|basecamp|organisation_admin')
+                {{-- New Reflection button for organisation_user, basecamp, organisation_admin (team lead), and director --}}
+                @hasanyrole('organisation_user|basecamp|organisation_admin|director')
                 <div class="w-full lg:w-auto">
                     <a href="{{ route('reflection.create') }}"
                         class="inline-block w-full lg:w-auto text-center px-4 py-2.5 sm:py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors duration-200 text-sm sm:text-base font-medium">

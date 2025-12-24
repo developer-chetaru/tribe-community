@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\MonthlySummaryController;
 use App\Http\Controllers\Api\ReflectionApiController;
 
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PaymentController;
 
 use App\Http\Controllers\ForgotController;
 
@@ -33,6 +34,10 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/get-learning-checklist', [HPTMController::class, 'getLearningCheckList']);
     Route::post('/change-read-status-of-user-checklist', [HPTMController::class, 'changeReadStatusOfUserChecklist']);
 	Route::get('/summary/{filterType}', [SummaryController::class, 'getSummary']);
+
+    // Payment APIs
+    Route::post('/submit-payment', [PaymentController::class, 'submitPayment']);
+    Route::get('/payments', [PaymentController::class, 'getPayments']);
 
 });
 

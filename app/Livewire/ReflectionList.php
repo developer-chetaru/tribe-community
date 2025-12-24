@@ -6,6 +6,7 @@ use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\WithFileUploads;
 use App\Models\{Reflection, ReflectionMessage, Organisation, Office, User};
+use App\Services\SubscriptionService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use DateTime;
@@ -105,7 +106,7 @@ class ReflectionList extends Component
         }
 
         // If user is allowed to create reflections and has none, redirect to create form
-        if ($user->hasAnyRole(['organisation_user', 'organisation_admin', 'basecamp'])) {
+        if ($user->hasAnyRole(['organisation_user', 'organisation_admin', 'basecamp', 'director'])) {
             $hasReflections = Reflection::where('userId', $user->id)->exists();
             if (!$hasReflections) {
                 return redirect()->route('reflection.create');
@@ -149,7 +150,7 @@ class ReflectionList extends Component
         }
 
         // Security check: basecamp, organisation_user, and organisation_admin (team lead) can only access their own reflections
-        if (($user->hasRole('basecamp') || $user->hasRole('organisation_user') || $user->hasRole('organisation_admin')) && $reflection->userId !== $user->id) {
+        if (($user->hasRole('basecamp') || $user->hasRole('organisation_user') || $user->hasRole('organisation_admin') || $user->hasRole('director')) && $reflection->userId !== $user->id) {
             $this->alertType = 'error';
             $this->alertMessage = 'You do not have permission to access this reflection.';
             return;
@@ -447,7 +448,7 @@ public function statusCancelResolved()
         // Load organisation list
             $this->organisationsList = Organisation::where('status', '1') ->select('id', 'name') ->get();
 
-        if ($user->hasRole('organisation_user') || $user->hasRole('basecamp') || $user->hasRole('organisation_admin')) {
+        if ($user->hasRole('organisation_user') || $user->hasRole('basecamp') || $user->hasRole('organisation_admin') || $user->hasRole('director')) {
             $query->where('userId', $user->id);
         }
 

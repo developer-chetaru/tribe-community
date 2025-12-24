@@ -6,6 +6,7 @@ use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Services\OneSignalService;
+use App\Services\SubscriptionService;
 
 class TrackUserLogin
 {
@@ -62,6 +63,39 @@ class TrackUserLogin
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
             ]);
+        }
+
+        // ✅ Check subscription and auto-generate invoice for directors
+        if ($user->hasRole('director') && $user->orgId) {
+            try {
+                $subscriptionService = new SubscriptionService();
+                $subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId);
+                
+                // If subscription is not active, auto-generate invoice
+                if (!$subscriptionStatus['active']) {
+                    $invoice = $subscriptionService->checkAndGenerateInvoice($user->orgId);
+                    if ($invoice) {
+                        Log::info("Auto-generated invoice {$invoice->invoice_number} for director {$user->id} on login - Amount: {$invoice->total_amount}, Users: {$invoice->user_count}");
+                        
+                        // Store subscription status in session for display
+                        session()->flash('subscription_status', [
+                            'active' => false,
+                            'message' => 'Your subscription has expired. A new invoice has been generated. Please pay to reactivate.',
+                            'days_remaining' => 0,
+                            'invoice_id' => $invoice->id,
+                        ]);
+                    }
+                } else {
+                    // Store active subscription status
+                    session()->flash('subscription_status', $subscriptionStatus);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Subscription check failed on director login', [
+                    'user_id' => $user->id,
+                    'org_id' => $user->orgId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
     }
 }

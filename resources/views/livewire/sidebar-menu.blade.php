@@ -75,7 +75,7 @@
 
 
       
-@hasanyrole('organisation_user|organisation_admin|basecamp')
+@hasanyrole('organisation_user|organisation_admin|basecamp|director')
     <a href="{{ route('hptm.list') }}"
        class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
       :class="[
@@ -96,7 +96,25 @@
     </a>
  @endhasanyrole
 
-@hasanyrole('organisation_user|organisation_admin|basecamp')
+@hasanyrole('director')
+    <a href="{{ route('billing') }}"
+       class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
+      :class="[
+               $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
+               window.location.pathname === '/billing' 
+                   ? 'bg-red-100 text-red-600 font-semibold' 
+                   : 'text-gray-700 hover:bg-gray-100'
+           ]"
+      >
+        <svg class="h-5 w-5" :class="window.location.pathname === '/billing' ? 'text-red-600' : 'text-gray-700'" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+        </svg>
+
+        <span x-show="$store.sidebar.open" x-transition class="text-sm">Billing</span>
+    </a>
+@endhasanyrole
+
+@hasanyrole('organisation_user|organisation_admin|basecamp|director')
 @if(auth()->user()->orgId)
     <a href="{{ route('myteam.list') }}"
    class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
@@ -119,7 +137,7 @@
 @endif
 @endhasanyrole
 
-@hasanyrole('organisation_user|basecamp|organisation_admin')
+@hasanyrole('organisation_user|basecamp|organisation_admin|director')
     <a href="{{ route('admin.reflections.index') }}"
    class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
   :class="[
@@ -266,6 +284,20 @@
           
     <!-- notification -->
      @hasanyrole('super_admin')
+    <a href="{{ route('admin.subscriptions') }}"
+   class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
+   :class="[
+       $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
+       window.location.pathname === '/admin/subscriptions' ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700'
+   ]">
+    
+    <svg class="h-5 w-5" :class="window.location.pathname === '/admin/subscriptions' ? 'text-red-600' : 'text-gray-700'" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+    </svg>
+
+    <span x-show="$store.sidebar.open" x-transition class="text-sm">Subscriptions</span>
+</a>
+      
     <a href="{{ route('admin.send-notification') }}"
    class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
    :class="[

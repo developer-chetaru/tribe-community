@@ -51,7 +51,9 @@
 	
     @stack('modals')
     @livewireScripts
+     @if(file_exists(public_path('js/app.js')))
      <script src="{{ asset('js/app.js') }}"></script>
+     @endif
      
      <!-- CSRF Token Refresh Script -->
      <script>

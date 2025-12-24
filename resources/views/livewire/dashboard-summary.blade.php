@@ -1,4 +1,41 @@
+@if($showSubscriptionExpiredModal)
+    <!-- Subscription Expired Modal - Show first, block everything -->
+    <div x-data="{ show: @entangle('showSubscriptionExpiredModal') }" x-show="show" x-cloak style="display: block;" class="fixed inset-0 bg-black bg-opacity-50 z-[10000] flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl m-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-red-600">⚠️ Subscription Expired</h2>
+                <button wire:click="closeSubscriptionExpiredModal" type="button" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+            </div>
+            
+            <div class="space-y-4">
+                <p class="text-gray-700">
+                    Your organization's subscription has expired or is not active. Access to all features has been restricted.
+                </p>
+                
+                @if(isset($subscriptionStatus['has_pending_invoice']) && $subscriptionStatus['has_pending_invoice'])
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <p class="text-yellow-800 text-sm">
+                            Your organization has a pending invoice. Please contact your director to make a payment.
+                        </p>
+                    </div>
+                @endif
 
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p class="text-red-800 text-sm font-medium">
+                        ⚠️ You cannot access any features until the subscription is renewed.
+                    </p>
+                </div>
+
+                <div class="flex justify-end space-x-2">
+                    <button wire:click="closeSubscriptionExpiredModal" type="button" class="px-4 py-2 border rounded-md">Close</button>
+                    @if(auth()->user()->hasRole('director'))
+                        <a href="{{ route('billing') }}" class="px-4 py-2 bg-[#EB1C24] text-white rounded-md">Go to Billing</a>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+@else
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4" x-data="{ openModal: false, modalData: { day: null, score: null, desc: null } }">
     <div class="flex flex-wrap border border-gray-100 rounded-md w-full">
         <div class="flex px-3 py-4">
@@ -330,5 +367,6 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 @livewire('summary')
+@endif
 
 

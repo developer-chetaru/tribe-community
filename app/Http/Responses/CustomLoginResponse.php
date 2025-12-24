@@ -25,7 +25,7 @@ class CustomLoginResponse implements LoginResponseContract
             return redirect()->route('organisations.index');
         }
 
-        if ($user->hasRole('basecamp') || $user->hasRole('organisation_user')) {
+        if ($user->hasRole('basecamp') || $user->hasRole('organisation_user') || $user->hasRole('organisation_admin') || $user->hasRole('director')) {
             return redirect()->route('dashboard');
         }
 

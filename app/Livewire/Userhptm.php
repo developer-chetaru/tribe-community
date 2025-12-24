@@ -9,6 +9,7 @@ use App\Models\HptmTeamFeedbackAnswer;
 use App\Models\HptmLearningChecklist;
 use App\Models\HptmLearningType;
 use App\Models\User;
+use App\Services\SubscriptionService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -31,8 +32,18 @@ public function mount()
     }
 
     // Check if user has required role (organisation_user, organisation_admin, or basecamp)
-    if (!$user->hasAnyRole(['organisation_user', 'organisation_admin', 'basecamp'])) {
+    if (!$user->hasAnyRole(['organisation_user', 'organisation_admin', 'basecamp', 'director'])) {
         abort(403, 'Unauthorized access. This page is only available for organisation users.');
+    }
+
+    // Check subscription status for organization users
+    if ($user->orgId && !$user->hasRole('super_admin')) {
+        $subscriptionService = new SubscriptionService();
+        $subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId);
+        
+        if (!$subscriptionStatus['active']) {
+            abort(403, 'Your organization\'s subscription has expired. Please contact your director to renew the subscription.');
+        }
     }
 
     $principleArray = [];
