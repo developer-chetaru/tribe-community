@@ -19,12 +19,82 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use App\Http\Controllers\Concerns\UpdatesUserTimezone;
 
+/**
+ * @OA\Tag(
+ *     name="User Profile",
+ *     description="User profile management endpoints"
+ * )
+ */
 class HPTMController extends Controller
 {
     use UpdatesUserTimezone;
    /**
     * Get the authenticated user's profile with role, office,
     * department, organisation, COT/SOT data, etc.
+    *
+    * @OA\Get(
+    *     path="/api/user-profile",
+    *     tags={"User Profile"},
+    *     summary="Get user profile",
+    *     description="Retrieve the authenticated user's complete profile information including personal details, organization, role, COT/SOT data, and timezone",
+    *     security={{"bearerAuth":{}}},
+    *     @OA\Response(
+    *         response=200,
+    *         description="User profile retrieved successfully",
+    *         @OA\JsonContent(
+    *             @OA\Property(property="status", type="boolean", example=true),
+    *             @OA\Property(property="message", type="string", example="User Profile"),
+    *             @OA\Property(
+    *                 property="data",
+    *                 type="object",
+    *                 @OA\Property(property="id", type="integer", example=1),
+    *                 @OA\Property(property="first_name", type="string", example="John"),
+    *                 @OA\Property(property="last_name", type="string", example="Doe"),
+    *                 @OA\Property(property="email", type="string", format="email", example="john.doe@example.com"),
+    *                 @OA\Property(property="officeId", type="integer", nullable=true, example=1),
+    *                 @OA\Property(property="departmentId", type="integer", nullable=true, example=1),
+    *                 @OA\Property(property="orgId", type="integer", nullable=true, example=1),
+    *                 @OA\Property(property="officeName", type="string", nullable=true, example="Main Office"),
+    *                 @OA\Property(property="departmentName", type="string", nullable=true, example="Engineering"),
+    *                 @OA\Property(property="profileImage", type="string", nullable=true, example="http://example.com/storage/profile-photos/image.jpg"),
+    *                 @OA\Property(property="organisation_logo", type="string", nullable=true),
+    *                 @OA\Property(property="personaliseData", type="string", nullable=true),
+    *                 @OA\Property(property="status", type="string", example="Active"),
+    *                 @OA\Property(property="userContact", type="string", nullable=true, example="+1234567890"),
+    *                 @OA\Property(property="country_code", type="string", nullable=true, example="+1"),
+    *                 @OA\Property(property="timezone", type="string", nullable=true, example="America/New_York", description="User's timezone from profile"),
+    *                 @OA\Property(property="organisationName", type="string", nullable=true, example="Acme Corp"),
+    *                 @OA\Property(property="role", type="string", example="organisation_user"),
+    *                 @OA\Property(property="created_at", type="string", format="date-time", example="2024-01-01T00:00:00.000000Z"),
+    *                 @OA\Property(property="cotTeamRoleMap", type="string", example="Leader, Collaborator, Innovator"),
+    *                 @OA\Property(property="cotTeamRoleMapArr", type="array", @OA\Items(type="string")),
+    *                 @OA\Property(property="sotMotivationDetail", type="string", example="Growth, Recognition, Autonomy"),
+    *                 @OA\Property(property="sotMotivationDetailArr", type="array", @OA\Items(type="string")),
+    *                 @OA\Property(property="sotDetail", type="string", example=""),
+    *                 @OA\Property(property="perTypeStatus", type="boolean", example=false),
+    *                 @OA\Property(property="personalityTypeDetails", type="string", example="You have not submitted your answers yet."),
+    *                 @OA\Property(property="personalityTypeDetailsArr", type="array", @OA\Items(type="string"))
+    *             )
+    *         )
+    *     ),
+    *     @OA\Response(
+    *         response=401,
+    *         description="Unauthorized",
+    *         @OA\JsonContent(
+    *             @OA\Property(property="status", type="boolean", example=false),
+    *             @OA\Property(property="message", type="string", example="User not authenticated")
+    *         )
+    *     ),
+    *     @OA\Response(
+    *         response=500,
+    *         description="Server error",
+    *         @OA\JsonContent(
+    *             @OA\Property(property="status", type="boolean", example=false),
+    *             @OA\Property(property="message", type="string", example="Failed to fetch user profile"),
+    *             @OA\Property(property="error", type="string", example="Error message")
+    *         )
+    *     )
+    * )
     *
     * @param Request $request
     * @return \Illuminate\Http\JsonResponse
@@ -63,6 +133,7 @@ class HPTMController extends Controller
                 'status'            => $user->status,
                 'userContact'       => $user->phone,
               	'country_code'      => $user->country_code,
+                'timezone'          => $user->timezone,
                 "organisationName"  => optional($user->organisation)->name,
                 "role"              => $roleName,
               	"created_at"        => $user->created_at,
@@ -824,11 +895,88 @@ class HPTMController extends Controller
     }
   
   	/**
- 	* Update the authenticated user's profile.
- 	*
- 	* @param \Illuminate\Http\Request $request
- 	* @return \Illuminate\Http\JsonResponse
- 	*/
+	* Update the authenticated user's profile.
+	*
+	* @OA\Post(
+	*     path="/api/update-user-profile",
+	*     tags={"User Profile"},
+	*     summary="Update user profile",
+	*     description="Update the authenticated user's profile information including name, phone, country code, timezone, and profile image",
+	*     security={{"bearerAuth":{}}},
+	*     @OA\RequestBody(
+	*         required=false,
+	*         @OA\MediaType(
+	*             mediaType="multipart/form-data",
+	*             @OA\Schema(
+	*                 @OA\Property(property="first_name", type="string", maxLength=255, example="John"),
+	*                 @OA\Property(property="last_name", type="string", maxLength=255, example="Doe"),
+	*                 @OA\Property(property="phone", type="string", maxLength=20, example="+1234567890"),
+	*                 @OA\Property(property="country_code", type="string", example="+1"),
+	*                 @OA\Property(property="timezone", type="string", maxLength=50, example="America/New_York", description="Valid timezone identifier (e.g., America/New_York, Europe/London, Asia/Kolkata)"),
+	*                 @OA\Property(property="profileImage", type="string", format="binary", description="Profile image file (jpg, jpeg, png, max 2MB)")
+	*             )
+	*         ),
+	*         @OA\MediaType(
+	*             mediaType="application/json",
+	*             @OA\Schema(
+	*                 @OA\Property(property="first_name", type="string", maxLength=255, example="John"),
+	*                 @OA\Property(property="last_name", type="string", maxLength=255, example="Doe"),
+	*                 @OA\Property(property="phone", type="string", maxLength=20, example="+1234567890"),
+	*                 @OA\Property(property="country_code", type="string", example="+1"),
+	*                 @OA\Property(property="timezone", type="string", maxLength=50, example="America/New_York", description="Valid timezone identifier")
+	*             )
+	*         )
+	*     ),
+	*     @OA\Response(
+	*         response=200,
+	*         description="Profile updated successfully",
+	*         @OA\JsonContent(
+	*             @OA\Property(property="status", type="boolean", example=true),
+	*             @OA\Property(property="message", type="string", example="Profile updated successfully"),
+	*             @OA\Property(
+	*                 property="data",
+	*                 type="object",
+	*                 @OA\Property(property="id", type="integer", example=1),
+	*                 @OA\Property(property="first_name", type="string", example="John"),
+	*                 @OA\Property(property="last_name", type="string", example="Doe"),
+	*                 @OA\Property(property="email", type="string", format="email", example="john.doe@example.com"),
+	*                 @OA\Property(property="phone", type="string", nullable=true, example="+1234567890"),
+	*                 @OA\Property(property="country_code", type="string", nullable=true, example="+1"),
+	*                 @OA\Property(property="timezone", type="string", nullable=true, example="America/New_York", description="User's timezone from profile"),
+	*                 @OA\Property(property="profileImage", type="string", nullable=true, example="http://example.com/storage/profile-photos/image.jpg")
+	*             )
+	*         )
+	*     ),
+	*     @OA\Response(
+	*         response=401,
+	*         description="Unauthorized",
+	*         @OA\JsonContent(
+	*             @OA\Property(property="status", type="boolean", example=false),
+	*             @OA\Property(property="message", type="string", example="User not authenticated")
+	*         )
+	*     ),
+	*     @OA\Response(
+	*         response=422,
+	*         description="Validation error",
+	*         @OA\JsonContent(
+	*             @OA\Property(property="message", type="string", example="The given data was invalid."),
+	*             @OA\Property(property="errors", type="object")
+	*         )
+	*     ),
+	*     @OA\Response(
+	*         response=500,
+	*         description="Server error",
+	*         @OA\JsonContent(
+	*             @OA\Property(property="status", type="boolean", example=false),
+	*             @OA\Property(property="message", type="string", example="Failed to update profile"),
+	*             @OA\Property(property="error", type="string", example="Error message")
+	*         )
+	*     )
+	* )
+	*
+	* @param \Illuminate\Http\Request $request
+	* @return \Illuminate\Http\JsonResponse
+	*/
 	public function updateUserProfile(Request $request)
     {
         try {
@@ -894,7 +1042,8 @@ class HPTMController extends Controller
                     'last_name'     => $user->last_name,
                     'email'         => $user->email,
                     'phone'         => $user->phone,
-                    'country_code'  => $user->country_code, // Added here
+                    'country_code'  => $user->country_code,
+                    'timezone'      => $user->timezone,
                     'profileImage'  => $user->profile_photo_path 
                                         ? url('storage/' . $user->profile_photo_path) 
                                         : null,
@@ -964,6 +1113,63 @@ class HPTMController extends Controller
                 'status' => false,
                 'message' => 'Failed to get timezone from location',
                 'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get list of all available timezones.
+     *
+     * @OA\Get(
+     *     path="/api/timezone-list",
+     *     tags={"User Profile"},
+     *     summary="Get timezone list",
+     *     description="Retrieve a list of all available timezone identifiers that can be used for user profile timezone setting",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Timezone list retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Timezone list retrieved successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="array",
+     *                 @OA\Items(
+     *                     type="string",
+     *                     example="America/New_York"
+     *                 ),
+     *                 example={"America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Asia/Kolkata", "Asia/Tokyo", "Australia/Sydney"}
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthenticated")
+     *         )
+     *     )
+     * )
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTimezoneList()
+    {
+        try {
+            $timezones = timezone_identifiers_list();
+            
+            return response()->json([
+                'status'  => true,
+                'message' => 'Timezone list retrieved successfully',
+                'data'    => $timezones,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Failed to retrieve timezone list',
+                'error'   => $e->getMessage(),
             ], 500);
         }
     }
