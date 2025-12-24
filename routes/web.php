@@ -52,6 +52,7 @@ use App\Livewire\ReflectionCreate;
 use App\Livewire\Admin\SendNotifications;
 use App\Livewire\Admin\SendNotificationList;
 use App\Livewire\Admin\ManageSubscriptions;
+use App\Livewire\Admin\ManagePrompts;
 use App\Livewire\Subscription\Billing;
 use App\Http\Controllers\PaymentGatewayController;
 use App\Livewire\User\Notifications;
@@ -152,6 +153,9 @@ Route::middleware([
         
         // Subscription Management
         Route::get('/admin/subscriptions', ManageSubscriptions::class)->name('admin.subscriptions');
+        
+        // Prompt Management
+        Route::get('/admin/prompts', ManagePrompts::class)->name('admin.prompts');
         
         // Invoice Routes (Admin - super_admin can access all invoices)
         Route::get('/admin/invoices/{id}/download', [InvoiceController::class, 'download'])->name('admin.invoices.download');

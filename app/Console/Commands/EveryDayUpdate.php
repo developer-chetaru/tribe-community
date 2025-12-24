@@ -1000,9 +1000,13 @@ protected function sendMonthlyEmail()
 public function generateWeeklySummary()
 {
     $today = now('Asia/Kolkata');
-    Log::info("Manual WeeklySummary test run at {$today}");
-    if (!$today->isSunday() || $today->hour !== 23) {
-         return;
+    Log::info("WeeklySummary generation started at {$today}");
+    
+    // Remove strict time check - let cron handle scheduling
+    // Only check if it's Sunday (cron runs on Sunday)
+    if (!$today->isSunday()) {
+        Log::info("WeeklySummary: Not Sunday, skipping. Current day: {$today->format('l')}");
+        return;
     }
 
     $startOfWeekIST = $today->copy()->startOfWeek();
@@ -1050,20 +1054,21 @@ public function generateWeeklySummary()
         $month = $startOfWeekIST->month;
         $weekNumber = $startOfWeekIST->weekOfMonth;
 
-        $prompt = <<<PROMPT
-        Generate a professional weekly emotional summary for the user based strictly on the following daily sentiment data from {$weekLabel}:
+        // Get prompt from database or use default
+        $promptTemplate = \App\Models\AppSetting::getValue('weekly_summary_prompt', 'Generate a professional weekly emotional summary for the user based strictly on the following daily sentiment data from {weekLabel}:
 
-        {$entries}
+{entries}
 
-        Important writing requirements:
-        - Do NOT start with greetings.
-        - Do NOT address the user directly.
-        - Write a polished, insightful summary of emotional trends.
-        - Provide 3–5 sentences analyzing patterns across the week.
-        - Tone should be professional, warm, supportive, and not casual.
-        - Focus only on the user's emotional journey.
-        - Do NOT include organisational-level references.
-        PROMPT;
+Important writing requirements:
+- Do NOT start with greetings.
+- Do NOT address the user directly.
+- Write a polished, insightful summary of emotional trends.
+- Provide 3–5 sentences analyzing patterns across the week.
+- Tone should be professional, warm, supportive, and not casual.
+- Focus only on the user\'s emotional journey.
+- Do NOT include organisational-level references.');
+
+        $prompt = str_replace(['{weekLabel}', '{entries}'], [$weekLabel, $entries], $promptTemplate);
 
         // FIRST ATTEMPT
         $summaryText = $this->generateAIText($prompt, $user->id);
@@ -1405,8 +1410,12 @@ private function generateAIText(string $prompt, $userId = null): string
     public function generateMonthlySummary()
     {
         $today = now('Asia/Kolkata');
-		Log::info("Manual MonthlySummary test run at {$today}");
-        if (!$today->isLastOfMonth() || $today->hour !== 23) {
+		Log::info("MonthlySummary generation started at {$today}");
+        
+        // Remove strict time check - let cron handle scheduling
+        // Only check if it's last day of month (cron runs on 28th at 22:00)
+        if (!$today->isLastOfMonth() && $today->day !== 28) {
+            Log::info("MonthlySummary: Not last day of month or 28th, skipping. Current date: {$today->format('Y-m-d')}");
             return;
         }
 
@@ -1451,31 +1460,27 @@ private function generateAIText(string $prompt, $userId = null): string
 
             $monthName = $startOfMonthIST->format('F Y');
 
-            // ✅ Improved AI prompt
-            $prompt = <<<PROMPT
-            Create a polished and professional monthly emotional summary for the user based on their daily mood entries.
+            // Get prompt from database or use default
+            $promptTemplate = \App\Models\AppSetting::getValue('monthly_summary_prompt', 'Create a polished and professional monthly emotional summary for the user based on their daily mood entries.
 
-            Month: {$monthName}
+Month: {monthName}
 
-            Daily Entries:
-            {$entries}
+Daily Entries:
+{entries}
 
-            Writing Guidelines:
-            - Do NOT start with any greeting (no "Hi", "Hello", "Hey", etc.).
-            - Do NOT speak directly to the user.
-            - Start immediately with a clear insight about the month.
-            - Use a neutral, warm, and professional tone.
-            - Summarize the overall emotional trend for the month.
-            - Highlight periods of consistency, improvements, or challenges.
-            - Provide gentle encouragement without sounding overly casual.
-            - Avoid repeating words or notes exactly from the user’s entries.
-            - Keep the summary concise: 4–6 sentences maximum.
-            - End with an uplifting, forward-looking statement.
+Writing Guidelines:
+- Do NOT start with any greeting (no "Hi", "Hello", "Hey", etc.).
+- Do NOT speak directly to the user.
+- Start immediately with a clear insight about the month.
+- Use a neutral, warm, and professional tone.
+- Summarize the overall emotional trend for the month.
+- Highlight periods of consistency, improvements, or challenges.
+- Provide gentle encouragement without sounding overly casual.
+- Avoid repeating words or notes exactly from the user\'s entries.
+- Keep the summary concise: 4–6 sentences maximum.
+- End with an uplifting, forward-looking statement.');
 
-            Example style (do NOT copy):
-            "A noticeable pattern of steady emotions appeared throughout the month, with moments of challenge balanced by several positive days. The mood data reflects resilience and an ability to find stability even during shifting circumstances. These patterns suggest personal growth and improved emotional awareness. Carry this progress into the coming month with confidence."
-
-            PROMPT;
+            $prompt = str_replace(['{monthName}', '{entries}'], [$monthName, $entries], $promptTemplate);
 
             try {
                 $response = \OpenAI\Laravel\Facades\OpenAI::responses()->create([

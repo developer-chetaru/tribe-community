@@ -339,7 +339,7 @@
 
     <!-- Icon -->
   <img 
-    src="{{ request()->is('department*') || request()->is('industries*') || request()->is('directing*') || request()->is('reflection*') || request()->is('principles*') || request()->is('learning-checklist*') || request()->is('learning-types*') || request()->is('team-feedback*') ? asset('images/setting-active.svg') : asset('images/setting.svg') }}" 
+    src="{{ request()->is('department*') || request()->is('industries*') || request()->is('directing*') || request()->is('reflection*') || request()->is('principles*') || request()->is('learning-checklist*') || request()->is('learning-types*') || request()->is('team-feedback*') || request()->is('admin/prompts*') ? asset('images/setting-active.svg') : asset('images/setting.svg') }}" 
     class="h-5 w-5" 
 />
 
@@ -610,6 +610,11 @@
             class="block text-sm p-2 rounded 
             {{ request()->is('team-feedback*') ? 'bg-red-100 text-red-600' : 'text-gray-700 hover:bg-gray-100' }}">
             Individual Questionnaire
+        </a>
+        <a href="{{ route('admin.prompts') }}"
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/prompts*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            AI Prompts
         </a>
     </div>
 </div>
