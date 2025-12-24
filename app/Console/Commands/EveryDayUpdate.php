@@ -1009,8 +1009,10 @@ public function generateWeeklySummary()
         return;
     }
 
-    $startOfWeekIST = $today->copy()->startOfWeek();
-    $endOfWeekIST = $today->copy()->endOfWeek();
+    // Generate summary for LAST week (the week that just ended)
+    // On Sunday, we generate for the week that ended on Saturday (previous week)
+    $startOfWeekIST = $today->copy()->subWeek()->startOfWeek();
+    $endOfWeekIST = $today->copy()->subWeek()->endOfWeek();
     $startOfWeekUTC = $startOfWeekIST->clone()->setTimezone('UTC');
     $endOfWeekUTC = $endOfWeekIST->clone()->setTimezone('UTC');
 

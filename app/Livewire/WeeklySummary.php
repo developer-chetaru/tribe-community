@@ -54,11 +54,14 @@ class WeeklySummary extends Component
 
         $weeksInMonth = [];
 
+        $today = Carbon::now('Asia/Kolkata');
+        
         while ($weekStart->lte($lastDay)) {
             $weekEnd = $weekStart->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
 
-            // Skip future weeks
-            if ($weekStart->gt(now())) break;
+            // Skip future weeks and current week (only show summaries for completed weeks)
+            // A week is considered completed only if its end date (Sunday) has passed
+            if ($weekStart->gt($today) || $weekEnd->gt($today)) break;
 
             $weeksInMonth[$weekNum] = [
                 'week' => $weekNum,
