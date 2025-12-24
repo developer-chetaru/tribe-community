@@ -161,7 +161,10 @@ public $selectedStaff;
 
     public function updated($field)
     {
-        $this->resetPage(); 
+        // Only reset page for search, not for filters (filters apply on button click)
+        if ($field === 'search') {
+            $this->resetPage();
+        }
     }
 
     public function resetFilters()
@@ -190,8 +193,18 @@ public $selectedStaff;
                   ->orWhere('last_name', 'like', "%{$this->search}%")
                   ->orWhere('email', 'like', "%{$this->search}%");
         }))
-        ->when(!empty($this->filterOffice), fn($q) => $q->whereIn('officeId', $this->filterOffice))
-        ->when(!empty($this->filterDepartment), fn($q) => $q->whereIn('departmentId', $this->filterDepartment))
+        ->when(!empty($this->filterOffice), fn($q) => $q->whereIn('officeId', array_map('intval', $this->filterOffice)))
+        ->when(!empty($this->filterDepartment), function($q) {
+            // filterDepartment now contains all_department_id values
+            // Find all Department records that have these all_department_id values
+            $selectedAllDepartmentIds = array_map('intval', $this->filterDepartment);
+            
+            $departmentIds = \App\Models\Department::whereIn('all_department_id', $selectedAllDepartmentIds)
+                ->pluck('id')
+                ->toArray();
+            
+            return $q->whereIn('departmentId', $departmentIds);
+        })
         ->orderBy('id', 'desc') 
         ->paginate(12);
 }
@@ -302,7 +315,7 @@ public function applyLeave()
     	return view('livewire.staff', [
         	'staffList'   => $this->staffList,
         	'offices'     => Office::where('organisation_id', $this->organisationId)->get(),
-        	'departments' => Department::whereIn('id', $departmentIds)->get(),
+        	'departments' => Department::whereIn('id', $departmentIds)->with('allDepartment')->get(),
 	   'onLeaveToday' => $onLeaveToday, 
     	])->layout('layouts.app');
 	}

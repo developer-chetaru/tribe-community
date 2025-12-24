@@ -393,17 +393,33 @@
                 @endif
 
             @if($activeTab==='department')
-    @foreach($departments->unique(fn($item) => $item->allDepartment->name) as $department)
-        <label class="block mb-3 text-[#808080] text-[16px] md:text-[16px] font-[400]">
-            <input type="checkbox" 
-                    class="form-checkbox accent-red-500 mr-2 h-5 w-5 text-red-600 focus:ring-red-500 focus:border-red-500 border-[#808080] border rounded-[4px]"
-                    wire:model="filterDepartment"
-                    value="{{ $department->id }}">
-                    {{ ucfirst($department->allDepartment->name) }}
-
+                @php
+                    // Group departments by all_department_id to show unique department names
+                    $uniqueDepartments = $departments->filter(function($item) {
+                        return $item->allDepartment !== null;
+                    })->groupBy(function($item) {
+                        return $item->allDepartment->id;
+                    })->map(function($group) {
+                        // Return the first department from each group
+                        return $group->first();
+                    });
+                @endphp
+                @foreach($uniqueDepartments as $department)
+                    @php
+                        // Get all department IDs with the same all_department_id
+                        $allDepartmentIds = \App\Models\Department::where('all_department_id', $department->allDepartment->id)
+                            ->pluck('id')
+                            ->toArray();
+                    @endphp
+                    <label class="block mb-3 text-[#808080] text-[16px] md:text-[16px] font-[400]">
+                        <input type="checkbox" 
+                                class="form-checkbox accent-red-500 mr-2 h-5 w-5 text-red-600 focus:ring-red-500 focus:border-red-500 border-[#808080] border rounded-[4px]"
+                                wire:model="filterDepartment"
+                                value="{{ $department->allDepartment->id }}">
+                        {{ ucfirst($department->allDepartment->name ?? 'N/A') }}
                     </label>
-                    @endforeach
-                @endif
+                @endforeach
+            @endif
             </div>
         </div>
 
