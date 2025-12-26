@@ -59,6 +59,11 @@ use App\Livewire\User\Notifications;
 use App\Http\Controllers\Auth\ForgotResetPasswordController;
 use App\Http\Controllers\HPTMController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\Billing\StripeSubscriptionController;
+use App\Http\Controllers\Billing\StripeWebhookController;
+use App\Http\Controllers\Billing\PayPalSubscriptionController;
+use App\Http\Controllers\Billing\PayPalWebhookController;
+use App\Http\Controllers\Billing\RefundController;
 
 
 use App\Http\Controllers\ForgotController;
@@ -126,6 +131,50 @@ Route::middleware([
         // Payment Gateway Routes
         Route::post('/payment/process', [PaymentGatewayController::class, 'processPayment'])->name('payment.process');
         Route::get('/payment/config', [PaymentGatewayController::class, 'getPaymentConfig'])->name('payment.config');
+    });
+
+    // Stripe Billing Routes
+    Route::prefix('billing/stripe')->name('billing.stripe.')->group(function () {
+        Route::post('/subscription/create', [StripeSubscriptionController::class, 'createSubscription'])
+            ->name('subscription.create');
+        Route::post('/subscription/add-user', [StripeSubscriptionController::class, 'addUser'])
+            ->name('subscription.add-user');
+        Route::post('/subscription/remove-user', [StripeSubscriptionController::class, 'removeUser'])
+            ->name('subscription.remove-user');
+        Route::post('/subscription/cancel', [StripeSubscriptionController::class, 'cancelSubscription'])
+            ->name('subscription.cancel');
+    });
+
+    // Stripe Webhook (No CSRF protection needed)
+    Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handleWebhook'])
+        ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
+
+    // PayPal Billing Routes
+    Route::prefix('billing/paypal')->name('billing.paypal.')->group(function () {
+        Route::post('/subscription/create', [PayPalSubscriptionController::class, 'createSubscription'])
+            ->name('subscription.create');
+        Route::get('/subscription/success', [PayPalSubscriptionController::class, 'handleSuccess'])
+            ->name('success');
+        Route::get('/subscription/cancel', [PayPalSubscriptionController::class, 'handleCancel'])
+            ->name('cancel');
+        Route::post('/subscription/add-user', [PayPalSubscriptionController::class, 'addUser'])
+            ->name('subscription.add-user');
+        Route::post('/subscription/remove-user', [PayPalSubscriptionController::class, 'removeUser'])
+            ->name('subscription.remove-user');
+        Route::post('/subscription/cancel', [PayPalSubscriptionController::class, 'cancelSubscription'])
+            ->name('subscription.cancel');
+    });
+
+    // PayPal Webhook (No CSRF protection needed)
+    Route::post('/webhooks/paypal', [PayPalWebhookController::class, 'handleWebhook'])
+        ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
+
+    // Refund Routes
+    Route::prefix('billing/refunds')->name('billing.refunds.')->group(function () {
+        Route::post('/process', [RefundController::class, 'processRefund'])
+            ->name('process');
+        Route::get('/history', [RefundController::class, 'getRefundHistory'])
+            ->name('history');
     });
 
     // Super Admin only routes - protected with super_admin role

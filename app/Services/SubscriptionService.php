@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\Subscription;
+use App\Models\SubscriptionRecord;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Organisation;
@@ -18,11 +18,11 @@ class SubscriptionService
     public function checkAndGenerateInvoice($organisationId): ?Invoice
     {
         // Get latest subscription (regardless of status)
-        $subscription = Subscription::where('organisation_id', $organisationId)
+        $subscription = SubscriptionRecord::where('organisation_id', $organisationId)
             ->orderBy('created_at', 'desc')
             ->first();
 
-        // If no subscription exists, create one with default $10 per user
+        // If no subscription exists, create one with default Spark tier
         if (!$subscription) {
             $subscription = $this->createDefaultSubscription($organisationId);
         }
@@ -30,7 +30,7 @@ class SubscriptionService
         $today = Carbon::today();
         
         // Check if subscription is expired or if next billing date has passed
-        $isExpired = !$subscription->end_date || Carbon::parse($subscription->end_date)->isPast();
+        $isExpired = !$subscription->current_period_end || Carbon::parse($subscription->current_period_end)->isPast();
         $isBillingDue = $subscription->next_billing_date && Carbon::parse($subscription->next_billing_date)->isPast();
 
         if ($isExpired || $isBillingDue) {
@@ -51,32 +51,28 @@ class SubscriptionService
     }
 
     /**
-     * Create default subscription with $10 per user
+     * Create default subscription with Spark tier
      */
-    public function createDefaultSubscription($organisationId): Subscription
+    public function createDefaultSubscription($organisationId): SubscriptionRecord
     {
         // Get actual user count
         $userCount = \App\Models\User::where('orgId', $organisationId)
             ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
             ->count();
 
-        $pricePerUser = 10.00;
-        $totalAmount = $userCount * $pricePerUser;
         $today = Carbon::today();
 
-        $subscription = Subscription::create([
+        $subscription = SubscriptionRecord::create([
             'organisation_id' => $organisationId,
+            'tier' => 'spark',
             'user_count' => $userCount,
-            'price_per_user' => $pricePerUser,
-            'total_amount' => $totalAmount,
             'status' => 'suspended', // Start as suspended until payment
-            'start_date' => $today,
-            'end_date' => $today->copy()->subDay(), // Set as expired to trigger invoice
+            'current_period_start' => $today->copy()->subDay(),
+            'current_period_end' => $today->copy()->subDay(), // Set as expired to trigger invoice
             'next_billing_date' => $today,
-            'billing_cycle' => 'monthly',
         ]);
 
-        Log::info("Default subscription created for organisation {$organisationId} - Users: {$userCount}, Price: {$pricePerUser}");
+        Log::info("Default subscription created for organisation {$organisationId} - Users: {$userCount}, Tier: spark");
 
         return $subscription;
     }
@@ -84,7 +80,7 @@ class SubscriptionService
     /**
      * Generate invoice for subscription with auto-calculation
      */
-    public function generateInvoice(Subscription $subscription): Invoice
+    public function generateInvoice(SubscriptionRecord $subscription): Invoice
     {
         $invoiceDate = Carbon::today();
         $dueDate = $invoiceDate->copy()->addDays(30); // 30 days to pay
@@ -94,10 +90,11 @@ class SubscriptionService
             ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
             ->count();
 
-        // Use $10 per user as default price
-        $pricePerUser = $subscription->price_per_user > 0 ? $subscription->price_per_user : 10.00;
+        // Get tier pricing
+        $prices = ['spark' => 10, 'momentum' => 20, 'vision' => 30];
+        $pricePerUser = $prices[$subscription->tier] ?? 10.00;
         $subtotal = $actualUserCount * $pricePerUser;
-        $taxAmount = 0.00;
+        $taxAmount = $subtotal * 0.20; // UK VAT 20%
         $totalAmount = $subtotal + $taxAmount;
 
         $invoice = Invoice::create([
@@ -114,11 +111,9 @@ class SubscriptionService
             'status' => 'pending',
         ]);
 
-        // Update subscription with actual user count and calculated amount
+        // Update subscription with actual user count
         $subscription->update([
             'user_count' => $actualUserCount,
-            'price_per_user' => $pricePerUser,
-            'total_amount' => $totalAmount,
         ]);
 
         Log::info("Invoice generated for subscription {$subscription->id}: {$invoice->invoice_number} - Users: {$actualUserCount}, Amount: {$totalAmount}");
@@ -131,7 +126,7 @@ class SubscriptionService
      */
     public function isSubscriptionActive($organisationId): bool
     {
-        $subscription = Subscription::where('organisation_id', $organisationId)
+        $subscription = SubscriptionRecord::where('organisation_id', $organisationId)
             ->where('status', 'active')
             ->first();
 
@@ -140,7 +135,7 @@ class SubscriptionService
         }
 
         // Check if subscription has ended
-        if ($subscription->end_date && Carbon::parse($subscription->end_date)->isPast()) {
+        if ($subscription->current_period_end && Carbon::parse($subscription->current_period_end)->isPast()) {
             return false;
         }
 
@@ -171,7 +166,7 @@ class SubscriptionService
     public function getSubscriptionStatus($organisationId): array
     {
         // Get latest subscription regardless of status (for directors to see paused subscriptions)
-        $subscription = Subscription::where('organisation_id', $organisationId)
+        $subscription = SubscriptionRecord::where('organisation_id', $organisationId)
             ->orderBy('created_at', 'desc')
             ->first();
 
@@ -186,7 +181,7 @@ class SubscriptionService
 
         // Check if subscription is paused/suspended
         if ($subscription->status === 'suspended') {
-            $endDate = $subscription->end_date ? Carbon::parse($subscription->end_date) : null;
+            $endDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end) : null;
             $daysRemaining = $endDate ? Carbon::today()->diffInDays($endDate, false) : 0;
             
             return [
@@ -203,9 +198,9 @@ class SubscriptionService
         }
 
         // For active subscriptions, check expiry and invoices
-        $endDate = Carbon::parse($subscription->end_date);
+        $endDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end) : null;
         $today = Carbon::today();
-        $daysRemaining = $today->diffInDays($endDate, false);
+        $daysRemaining = $endDate ? $today->diffInDays($endDate, false) : 0;
 
         // Check for pending/overdue invoices
         $pendingInvoice = Invoice::where('subscription_id', $subscription->id)
@@ -222,7 +217,7 @@ class SubscriptionService
             'subscription' => $subscription,
             'status' => $subscription->status,
             'days_remaining' => max(0, $daysRemaining),
-            'end_date' => $endDate->format('Y-m-d'),
+            'end_date' => $endDate ? $endDate->format('Y-m-d') : null,
             'has_pending_invoice' => $pendingInvoice !== null,
             'is_overdue' => $overdue,
             'pending_invoice' => $pendingInvoice,
@@ -255,25 +250,26 @@ class SubscriptionService
             // Update existing subscription to ACTIVE
             $subscription->update([
                 'status' => 'active',
-                'start_date' => $today,
-                'end_date' => $today->copy()->addMonth(), // 1 month subscription
+                'current_period_start' => $today,
+                'current_period_end' => $today->copy()->addMonth(), // 1 month subscription
                 'next_billing_date' => $today->copy()->addMonth(),
                 'user_count' => $invoice->user_count, // Update user count from invoice
-                'price_per_user' => $invoice->price_per_user,
-                'total_amount' => $invoice->total_amount, // Update total amount from invoice
             ]);
         } else {
+            // Get tier from organisation or default to spark
+            $org = Organisation::find($invoice->organisation_id);
+            $tier = $org->subscription_tier ?? 'spark';
+            
             // Create new subscription with ACTIVE status
-            $subscription = Subscription::create([
+            $subscription = SubscriptionRecord::create([
                 'organisation_id' => $invoice->organisation_id,
+                'tier' => $tier,
                 'user_count' => $invoice->user_count,
-                'price_per_user' => $invoice->price_per_user,
-                'total_amount' => $invoice->total_amount,
                 'status' => 'active', // Set as active immediately
-                'start_date' => $today,
-                'end_date' => $today->copy()->addMonth(),
+                'current_period_start' => $today,
+                'current_period_end' => $today->copy()->addMonth(),
                 'next_billing_date' => $today->copy()->addMonth(),
-                'billing_cycle' => 'monthly',
+                'activated_at' => $today,
             ]);
         }
 
@@ -285,7 +281,7 @@ class SubscriptionService
     /**
      * Renew subscription (extend existing subscription)
      */
-    public function renewSubscription(Subscription $subscription, $userCount = null, $pricePerUser = null): Subscription
+    public function renewSubscription(SubscriptionRecord $subscription, $userCount = null, $pricePerUser = null): SubscriptionRecord
     {
         $today = Carbon::today();
         
@@ -295,24 +291,17 @@ class SubscriptionService
                 ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
                 ->count();
         }
-        
-        // Use provided price per user or subscription's existing price, default to $10
-        if ($pricePerUser === null) {
-            $pricePerUser = $subscription->price_per_user > 0 ? $subscription->price_per_user : 10.00;
-        }
 
-        // Update subscription with new dates, user count, and price
+        // Update subscription with new dates and user count
         $subscription->update([
             'status' => 'active',
             'user_count' => $userCount,
-            'price_per_user' => $pricePerUser,
-            'total_amount' => $userCount * $pricePerUser,
-            'start_date' => $today,
-            'end_date' => $today->copy()->addMonth(), // 1 month subscription
+            'current_period_start' => $today,
+            'current_period_end' => $today->copy()->addMonth(), // 1 month subscription
             'next_billing_date' => $today->copy()->addMonth(),
         ]);
 
-        Log::info("Subscription {$subscription->id} renewed for organisation {$subscription->organisation_id} - Users: {$userCount}, Price: {$pricePerUser}");
+        Log::info("Subscription {$subscription->id} renewed for organisation {$subscription->organisation_id} - Users: {$userCount}, Tier: {$subscription->tier}");
 
         return $subscription;
     }

@@ -19,7 +19,7 @@
                                       x-data="{ days: {{ $daysRemaining }} }"
                                       x-text="days"
                                       x-init="setInterval(() => { 
-                                          const endDate = new Date('{{ $subscriptionStatus['end_date'] ?? $subscription->end_date }}');
+                                          const endDate = new Date('{{ $subscriptionStatus['end_date'] ?? ($subscription->current_period_end ? $subscription->current_period_end->format('Y-m-d') : '') }}');
                                           const now = new Date();
                                           const diff = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
                                           days = Math.max(0, diff);
@@ -35,17 +35,21 @@
                             <p class="text-lg font-semibold">{{ $subscription->user_count }}</p>
                         </div>
                         <div>
+                            <p class="text-sm text-gray-600">Tier</p>
+                            <p class="text-lg font-semibold capitalize">{{ $subscription->tier ?? 'N/A' }}</p>
+                        </div>
+                        <div>
                             <p class="text-sm text-gray-600">Price per User</p>
-                            <p class="text-lg font-semibold">${{ number_format($subscription->price_per_user, 2) }}</p>
+                            <p class="text-lg font-semibold">£{{ number_format(($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30)), 2) }}</p>
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Monthly Total</p>
-                            <p class="text-lg font-semibold">${{ number_format($subscription->total_amount, 2) }}</p>
+                            <p class="text-lg font-semibold">£{{ number_format(($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30)) * $subscription->user_count, 2) }}</p>
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Subscription End</p>
                             <p class="text-lg font-semibold {{ $daysRemaining <= 7 ? 'text-red-600' : '' }}">
-                                {{ $subscription->end_date ? $subscription->end_date->format('M d, Y') : 'N/A' }}
+                                {{ $subscription->current_period_end ? $subscription->current_period_end->format('M d, Y') : 'N/A' }}
                             </p>
                         </div>
                     </div>

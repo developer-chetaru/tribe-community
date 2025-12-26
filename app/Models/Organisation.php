@@ -22,6 +22,19 @@ class Organisation extends Model
         'personaliseData',
         'image',
       	'industry_id',
+        // Billing fields
+        'admin_email',
+        'admin_first_name',
+        'admin_last_name',
+        'billing_address_line1',
+        'billing_address_line2',
+        'billing_city',
+        'billing_postcode',
+        'billing_country',
+        'stripe_customer_id',
+        'paypal_customer_id',
+        'subscription_tier',
+        'user_type',
     ];
 
     protected $casts = [
@@ -48,13 +61,43 @@ class Organisation extends Model
     	return $this->hasMany(User::class, 'orgId');
 	}
 
-	public function subscription()
-	{
-    	return $this->hasOne(Subscription::class)->latestOfMany();
-	}
+    /**
+     * Get the subscription record (new billing system)
+     */
+    public function subscriptionRecord()
+    {
+        return $this->hasOne(SubscriptionRecord::class)->latestOfMany();
+    }
 
-	public function subscriptions()
-	{
-    	return $this->hasMany(Subscription::class);
-	}
+    /**
+     * Get all subscription records
+     */
+    public function subscriptionRecords()
+    {
+        return $this->hasMany(SubscriptionRecord::class);
+    }
+
+    /**
+     * Alias for subscriptionRecord (backward compatibility)
+     */
+    public function subscription()
+    {
+        return $this->subscriptionRecord();
+    }
+
+    /**
+     * Alias for subscriptionRecords (backward compatibility)
+     */
+    public function subscriptions()
+    {
+        return $this->subscriptionRecords();
+    }
+
+    /**
+     * Get payment records
+     */
+    public function paymentRecords()
+    {
+        return $this->hasMany(PaymentRecord::class);
+    }
 }

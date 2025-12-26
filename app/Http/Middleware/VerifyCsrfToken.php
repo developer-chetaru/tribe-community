@@ -14,6 +14,9 @@ class VerifyCsrfToken extends Middleware
     protected $except = [
         // Livewire handles CSRF tokens automatically
         '/livewire/*',
+        // Webhook endpoints (handled by payment gateways)
+        '/webhooks/stripe',
+        '/webhooks/paypal',
     ];
 
     /**

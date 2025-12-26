@@ -37,4 +37,24 @@ return [
         ],
     ],
 
+    'stripe' => [
+        'secret' => env('STRIPE_SECRET_KEY'),
+        'public' => env('STRIPE_PUBLIC_KEY'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'api_version' => '2024-12-18',
+        'currency' => 'gbp',
+        'tax_rate_id' => env('STRIPE_TAX_RATE_ID'),
+    ],
+
+    'paypal' => [
+        'mode' => env('PAYPAL_MODE', 'sandbox'),
+        'client_id' => env('PAYPAL_CLIENT_ID'),
+        'client_secret' => env('PAYPAL_CLIENT_SECRET'),
+        'webhook_id' => env('PAYPAL_WEBHOOK_ID'),
+        'currency' => 'GBP',
+        'api_base_url' => env('PAYPAL_MODE') === 'live'
+            ? 'https://api.paypal.com'
+            : 'https://api.sandbox.paypal.com',
+    ],
+
 ];

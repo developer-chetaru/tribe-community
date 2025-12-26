@@ -4,7 +4,7 @@ namespace App\Livewire\Admin;
 
 use Livewire\Component;
 use Livewire\WithPagination;
-use App\Models\Subscription;
+use App\Models\SubscriptionRecord;
 use App\Models\Organisation;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -25,14 +25,12 @@ class ManageSubscriptions extends Component
 
     // Form fields
     public $organisation_id;
+    public $tier = 'spark';
     public $user_count = 0;
-    public $price_per_user = 0.00;
-    public $total_amount = 0.00;
     public $status = 'active';
-    public $start_date;
-    public $end_date;
+    public $current_period_start;
+    public $current_period_end;
     public $next_billing_date;
-    public $billing_cycle = 'monthly';
     public $notes;
 
     public $search = '';
@@ -44,20 +42,6 @@ class ManageSubscriptions extends Component
         }
     }
 
-    public function updatedPricePerUser()
-    {
-        // Default to $10 if empty
-        if ($this->price_per_user <= 0) {
-            $this->price_per_user = 10.00;
-        }
-        $this->calculateTotal();
-    }
-
-    public function updatedUserCount()
-    {
-        $this->calculateTotal();
-    }
-
     public function updatedOrganisationId()
     {
         if ($this->organisation_id) {
@@ -66,18 +50,12 @@ class ManageSubscriptions extends Component
                 ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
                 ->count();
             
-            // Set default price per user to $10 if not set
-            if ($this->price_per_user <= 0) {
-                $this->price_per_user = 10.00;
+            // Get organisation's tier if set
+            $org = Organisation::find($this->organisation_id);
+            if ($org && $org->subscription_tier) {
+                $this->tier = $org->subscription_tier;
             }
-            
-            $this->calculateTotal();
         }
-    }
-
-    public function calculateTotal()
-    {
-        $this->total_amount = $this->user_count * $this->price_per_user;
     }
 
     public function openCreateModal()
@@ -85,7 +63,8 @@ class ManageSubscriptions extends Component
         $this->resetForm();
         $this->showCreateModal = true;
         $this->showEditModal = false;
-        $this->start_date = now()->toDateString();
+        $this->current_period_start = now()->toDateString();
+        $this->current_period_end = now()->addMonth()->toDateString();
         $this->next_billing_date = now()->addMonth()->toDateString();
     }
 
@@ -93,36 +72,37 @@ class ManageSubscriptions extends Component
     {
         $this->resetForm();
         $this->organisation_id = $organisationId;
-        $this->price_per_user = 10.00; // Default $10 per user
         
         // Auto-calculate user count
         $this->user_count = \App\Models\User::where('orgId', $organisationId)
             ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
             ->count();
         
-        $this->calculateTotal();
+        // Get organisation's tier if set
+        $org = Organisation::find($organisationId);
+        if ($org && $org->subscription_tier) {
+            $this->tier = $org->subscription_tier;
+        }
         
         $this->showCreateModal = true;
         $this->showEditModal = false;
-        $this->start_date = now()->toDateString();
+        $this->current_period_start = now()->toDateString();
+        $this->current_period_end = now()->addMonth()->toDateString();
         $this->next_billing_date = now()->addMonth()->toDateString();
     }
 
     public function openEditModal($subscriptionId)
     {
         \Log::info('openEditModal called with ID: ' . $subscriptionId);
-        $subscription = Subscription::findOrFail($subscriptionId);
+        $subscription = SubscriptionRecord::findOrFail($subscriptionId);
         $this->selectedSubscription = $subscription;
         $this->organisation_id = $subscription->organisation_id;
+        $this->tier = $subscription->tier;
         $this->user_count = $subscription->user_count;
-        $this->price_per_user = $subscription->price_per_user;
-        $this->total_amount = $subscription->total_amount;
         $this->status = $subscription->status;
-        $this->start_date = $subscription->start_date->toDateString();
-        $this->end_date = $subscription->end_date?->toDateString();
-        $this->next_billing_date = $subscription->next_billing_date->toDateString();
-        $this->billing_cycle = $subscription->billing_cycle;
-        $this->notes = $subscription->notes;
+        $this->current_period_start = $subscription->current_period_start?->toDateString();
+        $this->current_period_end = $subscription->current_period_end?->toDateString();
+        $this->next_billing_date = $subscription->next_billing_date?->toDateString();
         
         // Reset all modals first
         $this->showCreateModal = false;
@@ -148,24 +128,23 @@ class ManageSubscriptions extends Component
     public function resetForm()
     {
         $this->organisation_id = null;
+        $this->tier = 'spark';
         $this->user_count = 0;
-        $this->price_per_user = 0.00;
-        $this->total_amount = 0.00;
         $this->status = 'active';
-        $this->start_date = null;
-        $this->end_date = null;
+        $this->current_period_start = null;
+        $this->current_period_end = null;
         $this->next_billing_date = null;
-        $this->billing_cycle = 'monthly';
-        $this->notes = null;
     }
 
     public function createSubscription()
     {
         $this->validate([
             'organisation_id' => 'required|exists:organisations,id',
-            'start_date' => 'required|date',
-            'next_billing_date' => 'required|date|after:start_date',
-            'billing_cycle' => 'required|in:monthly,yearly',
+            'tier' => 'required|in:spark,momentum,vision,basecamp',
+            'user_count' => 'required|integer|min:1',
+            'current_period_start' => 'required|date',
+            'current_period_end' => 'required|date|after:current_period_start',
+            'next_billing_date' => 'required|date|after:current_period_start',
         ]);
 
         // Get actual user count from organisation
@@ -173,21 +152,20 @@ class ManageSubscriptions extends Component
             ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
             ->count();
 
-        // Default to $10 per user if not specified
-        $pricePerUser = $this->price_per_user > 0 ? $this->price_per_user : 10.00;
-        $totalAmount = $actualUserCount * $pricePerUser;
-
-        Subscription::create([
+        SubscriptionRecord::create([
             'organisation_id' => $this->organisation_id,
-            'user_count' => $actualUserCount,
-            'price_per_user' => $pricePerUser,
-            'total_amount' => $totalAmount,
+            'tier' => $this->tier,
+            'user_count' => $actualUserCount > 0 ? $actualUserCount : $this->user_count,
             'status' => $this->status,
-            'start_date' => $this->start_date,
-            'end_date' => $this->end_date,
+            'current_period_start' => $this->current_period_start,
+            'current_period_end' => $this->current_period_end,
             'next_billing_date' => $this->next_billing_date,
-            'billing_cycle' => $this->billing_cycle,
-            'notes' => $this->notes,
+            'activated_at' => now(),
+        ]);
+
+        // Update organisation tier
+        Organisation::where('id', $this->organisation_id)->update([
+            'subscription_tier' => $this->tier,
         ]);
 
         session()->flash('success', 'Subscription created successfully.');
@@ -198,26 +176,26 @@ class ManageSubscriptions extends Component
     {
         $this->validate([
             'organisation_id' => 'required|exists:organisations,id',
+            'tier' => 'required|in:spark,momentum,vision,basecamp',
             'user_count' => 'required|integer|min:1',
-            'price_per_user' => 'required|numeric|min:0',
-            'start_date' => 'required|date',
-            'next_billing_date' => 'required|date|after:start_date',
-            'billing_cycle' => 'required|in:monthly,yearly',
+            'current_period_start' => 'required|date',
+            'current_period_end' => 'required|date|after:current_period_start',
+            'next_billing_date' => 'required|date|after:current_period_start',
         ]);
-
-        $this->calculateTotal();
 
         $this->selectedSubscription->update([
             'organisation_id' => $this->organisation_id,
+            'tier' => $this->tier,
             'user_count' => $this->user_count,
-            'price_per_user' => $this->price_per_user,
-            'total_amount' => $this->total_amount,
             'status' => $this->status,
-            'start_date' => $this->start_date,
-            'end_date' => $this->end_date,
+            'current_period_start' => $this->current_period_start,
+            'current_period_end' => $this->current_period_end,
             'next_billing_date' => $this->next_billing_date,
-            'billing_cycle' => $this->billing_cycle,
-            'notes' => $this->notes,
+        ]);
+
+        // Update organisation tier
+        Organisation::where('id', $this->organisation_id)->update([
+            'subscription_tier' => $this->tier,
         ]);
 
         session()->flash('success', 'Subscription updated successfully.');
@@ -226,22 +204,28 @@ class ManageSubscriptions extends Component
 
     public function pauseSubscription($subscriptionId)
     {
-        $subscription = Subscription::findOrFail($subscriptionId);
-        $subscription->update(['status' => 'suspended']);
+        $subscription = SubscriptionRecord::findOrFail($subscriptionId);
+        $subscription->update([
+            'status' => 'suspended',
+            'suspended_at' => now(),
+        ]);
         session()->flash('success', 'Subscription paused successfully.');
     }
 
     public function resumeSubscription($subscriptionId)
     {
-        $subscription = Subscription::findOrFail($subscriptionId);
-        $subscription->update(['status' => 'active']);
+        $subscription = SubscriptionRecord::findOrFail($subscriptionId);
+        $subscription->update([
+            'status' => 'active',
+            'suspended_at' => null,
+        ]);
         session()->flash('success', 'Subscription resumed successfully.');
     }
 
     public function getSubscriptionsProperty()
     {
-        // Get all organizations with their subscriptions
-        $query = Organisation::with('subscription')
+        // Get all organizations with their subscription records
+        $query = Organisation::with('subscriptionRecord')
             ->when($this->search, function($q) {
                 $q->where('name', 'like', '%' . $this->search . '%');
             })

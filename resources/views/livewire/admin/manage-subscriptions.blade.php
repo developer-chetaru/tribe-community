@@ -23,11 +23,11 @@
                 <thead class="bg-gray-50">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Organisation</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tier</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User Count</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price/User</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Amount</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Monthly Total</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">End Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Period End</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Next Billing</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
@@ -44,30 +44,37 @@
                                 </div>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                @if($organisation->subscription)
-                                    {{ $organisation->subscription->user_count }}
+                                @if($organisation->subscriptionRecord)
+                                    <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
+                                        {{ ucfirst($organisation->subscriptionRecord->tier) }}
+                                    </span>
                                 @else
                                     <span class="text-gray-400">-</span>
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                @if($organisation->subscription)
-                                    ${{ number_format($organisation->subscription->price_per_user, 2) }}
+                                @if($organisation->subscriptionRecord)
+                                    {{ $organisation->subscriptionRecord->user_count }}
                                 @else
                                     <span class="text-gray-400">-</span>
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                @if($organisation->subscription)
-                                    ${{ number_format($organisation->subscription->total_amount, 2) }}
+                                @if($organisation->subscriptionRecord)
+                                    @php
+                                        $prices = ['spark' => 10, 'momentum' => 20, 'vision' => 30];
+                                        $pricePerUser = $prices[$organisation->subscriptionRecord->tier] ?? 0;
+                                        $total = $pricePerUser * $organisation->subscriptionRecord->user_count;
+                                    @endphp
+                                    £{{ number_format($total, 2) }}
                                 @else
                                     <span class="text-gray-400">-</span>
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                @if($organisation->subscription)
-                                    <span class="px-2 py-1 text-xs rounded-full {{ $organisation->subscription->status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                        {{ ucfirst($organisation->subscription->status) }}
+                                @if($organisation->subscriptionRecord)
+                                    <span class="px-2 py-1 text-xs rounded-full {{ $organisation->subscriptionRecord->status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                        {{ ucfirst($organisation->subscriptionRecord->status) }}
                                     </span>
                                 @else
                                     <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">
@@ -76,41 +83,41 @@
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                @if($organisation->subscription && $organisation->subscription->end_date)
-                                    <span class="{{ \Carbon\Carbon::parse($organisation->subscription->end_date)->isPast() ? 'text-red-600 font-semibold' : '' }}">
-                                        {{ $organisation->subscription->end_date->format('M d, Y') }}
+                                @if($organisation->subscriptionRecord && $organisation->subscriptionRecord->current_period_end)
+                                    <span class="{{ \Carbon\Carbon::parse($organisation->subscriptionRecord->current_period_end)->isPast() ? 'text-red-600 font-semibold' : '' }}">
+                                        {{ $organisation->subscriptionRecord->current_period_end->format('M d, Y') }}
                                     </span>
                                 @else
                                     <span class="text-gray-400">-</span>
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                @if($organisation->subscription && $organisation->subscription->next_billing_date)
-                                    {{ $organisation->subscription->next_billing_date->format('M d, Y') }}
+                                @if($organisation->subscriptionRecord && $organisation->subscriptionRecord->next_billing_date)
+                                    {{ $organisation->subscriptionRecord->next_billing_date->format('M d, Y') }}
                                 @else
                                     <span class="text-gray-400">-</span>
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="flex items-center gap-2 flex-wrap">
-                                    @if($organisation->subscription)
+                                    @if($organisation->subscriptionRecord)
                                         <button 
-                                            wire:click="openEditModal({{ $organisation->subscription->id }})" 
+                                            wire:click="openEditModal({{ $organisation->subscriptionRecord->id }})" 
                                             type="button" 
                                             class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded border border-blue-200 transition-all duration-200 cursor-pointer">
                                             Edit
                                         </button>
-                                        @if($organisation->subscription->status === 'active')
+                                        @if($organisation->subscriptionRecord->status === 'active')
                                             <button 
-                                                wire:click="pauseSubscription({{ $organisation->subscription->id }})" 
+                                                wire:click="pauseSubscription({{ $organisation->subscriptionRecord->id }})" 
                                                 wire:confirm="Are you sure you want to pause this subscription?"
                                                 type="button" 
                                                 class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-yellow-600 hover:text-yellow-800 hover:bg-yellow-50 rounded border border-yellow-200 transition-all duration-200 cursor-pointer">
                                                 Pause
                                             </button>
-                                        @elseif($organisation->subscription->status === 'suspended')
+                                        @elseif($organisation->subscriptionRecord->status === 'suspended')
                                             <button 
-                                                wire:click="resumeSubscription({{ $organisation->subscription->id }})" 
+                                                wire:click="resumeSubscription({{ $organisation->subscriptionRecord->id }})" 
                                                 wire:confirm="Are you sure you want to resume this subscription?"
                                                 type="button" 
                                                 class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded border border-green-200 transition-all duration-200 cursor-pointer">
@@ -123,7 +130,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="px-6 py-4 text-center text-gray-500">No organisations found</td>
+                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">No organisations found</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -157,61 +164,51 @@
                     @error('organisation_id') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                 </div>
 
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Tier</label>
+                    <select wire:model="tier" class="mt-1 block w-full border-gray-300 rounded-md">
+                        <option value="spark">Spark</option>
+                        <option value="momentum">Momentum</option>
+                        <option value="vision">Vision</option>
+                        <option value="basecamp">Basecamp (Free)</option>
+                    </select>
+                    @error('tier') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">User Count</label>
+                    <input type="number" wire:model.live="user_count" min="1" class="mt-1 block w-full border-gray-300 rounded-md">
+                    @error('user_count') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                </div>
+
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">User Count</label>
-                        <input type="number" wire:model.live="user_count" min="1" class="mt-1 block w-full border-gray-300 rounded-md">
-                        @error('user_count') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                        <label class="block text-sm font-medium text-gray-700">Period Start</label>
+                        <input type="date" wire:model="current_period_start" class="mt-1 block w-full border-gray-300 rounded-md">
+                        @error('current_period_start') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Price Per User ($)</label>
-                        <input type="number" wire:model.live="price_per_user" step="0.01" min="0" class="mt-1 block w-full border-gray-300 rounded-md">
-                        @error('price_per_user') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                        <label class="block text-sm font-medium text-gray-700">Period End</label>
+                        <input type="date" wire:model="current_period_end" class="mt-1 block w-full border-gray-300 rounded-md">
+                        @error('current_period_end') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Total Amount ($)</label>
-                    <input type="text" value="${{ number_format($total_amount, 2) }}" readonly class="mt-1 block w-full border-gray-300 rounded-md bg-gray-100">
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Start Date</label>
-                        <input type="date" wire:model="start_date" class="mt-1 block w-full border-gray-300 rounded-md">
-                        @error('start_date') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Next Billing Date</label>
-                        <input type="date" wire:model="next_billing_date" class="mt-1 block w-full border-gray-300 rounded-md">
-                        @error('next_billing_date') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Billing Cycle</label>
-                        <select wire:model="billing_cycle" class="mt-1 block w-full border-gray-300 rounded-md">
-                            <option value="monthly">Monthly</option>
-                            <option value="yearly">Yearly</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Status</label>
-                        <select wire:model="status" class="mt-1 block w-full border-gray-300 rounded-md">
-                            <option value="active">Active</option>
-                            <option value="suspended">Suspended</option>
-                            <option value="cancelled">Cancelled</option>
-                        </select>
-                    </div>
+                    <label class="block text-sm font-medium text-gray-700">Next Billing Date</label>
+                    <input type="date" wire:model="next_billing_date" class="mt-1 block w-full border-gray-300 rounded-md">
+                    @error('next_billing_date') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Notes</label>
-                    <textarea wire:model="notes" rows="3" class="mt-1 block w-full border-gray-300 rounded-md"></textarea>
+                    <label class="block text-sm font-medium text-gray-700">Status</label>
+                    <select wire:model="status" class="mt-1 block w-full border-gray-300 rounded-md">
+                        <option value="active">Active</option>
+                        <option value="past_due">Past Due</option>
+                        <option value="suspended">Suspended</option>
+                        <option value="canceled">Canceled</option>
+                    </select>
                 </div>
             </div>
 
@@ -244,61 +241,51 @@
                     @error('organisation_id') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                 </div>
 
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Tier</label>
+                    <select wire:model="tier" class="mt-1 block w-full border-gray-300 rounded-md">
+                        <option value="spark">Spark</option>
+                        <option value="momentum">Momentum</option>
+                        <option value="vision">Vision</option>
+                        <option value="basecamp">Basecamp (Free)</option>
+                    </select>
+                    @error('tier') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">User Count</label>
+                    <input type="number" wire:model.live="user_count" min="1" class="mt-1 block w-full border-gray-300 rounded-md">
+                    @error('user_count') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                </div>
+
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">User Count</label>
-                        <input type="number" wire:model.live="user_count" min="1" class="mt-1 block w-full border-gray-300 rounded-md">
-                        @error('user_count') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                        <label class="block text-sm font-medium text-gray-700">Period Start</label>
+                        <input type="date" wire:model="current_period_start" class="mt-1 block w-full border-gray-300 rounded-md">
+                        @error('current_period_start') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Price Per User ($)</label>
-                        <input type="number" wire:model.live="price_per_user" step="0.01" min="0" class="mt-1 block w-full border-gray-300 rounded-md">
-                        @error('price_per_user') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                        <label class="block text-sm font-medium text-gray-700">Period End</label>
+                        <input type="date" wire:model="current_period_end" class="mt-1 block w-full border-gray-300 rounded-md">
+                        @error('current_period_end') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Total Amount ($)</label>
-                    <input type="text" value="${{ number_format($total_amount, 2) }}" readonly class="mt-1 block w-full border-gray-300 rounded-md bg-gray-100">
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Start Date</label>
-                        <input type="date" wire:model="start_date" class="mt-1 block w-full border-gray-300 rounded-md">
-                        @error('start_date') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Next Billing Date</label>
-                        <input type="date" wire:model="next_billing_date" class="mt-1 block w-full border-gray-300 rounded-md">
-                        @error('next_billing_date') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Billing Cycle</label>
-                        <select wire:model="billing_cycle" class="mt-1 block w-full border-gray-300 rounded-md">
-                            <option value="monthly">Monthly</option>
-                            <option value="yearly">Yearly</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Status</label>
-                        <select wire:model="status" class="mt-1 block w-full border-gray-300 rounded-md">
-                            <option value="active">Active</option>
-                            <option value="suspended">Suspended</option>
-                            <option value="cancelled">Cancelled</option>
-                        </select>
-                    </div>
+                    <label class="block text-sm font-medium text-gray-700">Next Billing Date</label>
+                    <input type="date" wire:model="next_billing_date" class="mt-1 block w-full border-gray-300 rounded-md">
+                    @error('next_billing_date') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Notes</label>
-                    <textarea wire:model="notes" rows="3" class="mt-1 block w-full border-gray-300 rounded-md"></textarea>
+                    <label class="block text-sm font-medium text-gray-700">Status</label>
+                    <select wire:model="status" class="mt-1 block w-full border-gray-300 rounded-md">
+                        <option value="active">Active</option>
+                        <option value="past_due">Past Due</option>
+                        <option value="suspended">Suspended</option>
+                        <option value="canceled">Canceled</option>
+                    </select>
                 </div>
             </div>
 

@@ -5,7 +5,7 @@ namespace App\Livewire\Subscription;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Livewire\WithFileUploads;
-use App\Models\Subscription;
+use App\Models\SubscriptionRecord;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\SubscriptionService;
@@ -94,14 +94,22 @@ class Billing extends Component
         $this->renewalExpiryDate = now()->addMonth()->format('M d, Y');
         
         // Ensure subscription exists - create default if not
-        $subscription = Subscription::where('organisation_id', $user->orgId)
+        $subscription = \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
             ->orderBy('created_at', 'desc')
             ->first();
         
         if (!$subscription) {
             // Auto-create subscription if it doesn't exist
-            $subscriptionService = new SubscriptionService();
-            $subscription = $subscriptionService->createDefaultSubscription($user->orgId);
+            $subscription = \App\Models\SubscriptionRecord::create([
+                'organisation_id' => $user->orgId,
+                'tier' => 'spark',
+                'user_count' => $this->renewalUserCount,
+                'status' => 'active',
+                'next_billing_date' => now()->addMonth(),
+                'current_period_start' => now(),
+                'current_period_end' => now()->addMonth(),
+                'activated_at' => now(),
+            ]);
             \Log::info('Auto-created subscription for organisation: ' . $user->orgId);
         }
         
@@ -137,22 +145,20 @@ class Billing extends Component
         }
         
         // Get or create subscription
-        $subscription = Subscription::where('organisation_id', $user->orgId)
+        $subscription = \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
             ->orderBy('created_at', 'desc')
             ->first();
         
         // If no subscription exists, create one
         if (!$subscription) {
-            $subscription = Subscription::create([
+            $subscription = \App\Models\SubscriptionRecord::create([
                 'organisation_id' => $user->orgId,
+                'tier' => 'spark',
                 'user_count' => $this->renewalUserCount,
-                'price_per_user' => $this->renewalPricePerUser,
-                'total_amount' => $this->renewalPrice,
                 'status' => 'suspended',
-                'start_date' => now()->toDateString(),
-                'end_date' => now()->subDay()->toDateString(), // Set as expired
-                'next_billing_date' => now()->toDateString(),
-                'billing_cycle' => 'monthly',
+                'current_period_start' => now(),
+                'current_period_end' => now()->subDay(),
+                'next_billing_date' => now(),
             ]);
         }
 
@@ -271,7 +277,7 @@ class Billing extends Component
     public function getSubscriptionProperty()
     {
         $user = auth()->user();
-        return Subscription::where('organisation_id', $user->orgId)
+        return \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
             ->whereIn('status', ['active', 'suspended'])
             ->with('organisation')
             ->orderBy('created_at', 'desc')

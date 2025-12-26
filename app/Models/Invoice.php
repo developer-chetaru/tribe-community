@@ -40,7 +40,7 @@ class Invoice extends Model
      */
     public function subscription(): BelongsTo
     {
-        return $this->belongsTo(Subscription::class);
+        return $this->belongsTo(SubscriptionRecord::class, 'subscription_id');
     }
 
     /**

@@ -15,6 +15,8 @@ class Kernel extends ConsoleKernel
     protected $commands = [
         \App\Console\Commands\GenerateAllWeeklySummaries::class,
         \App\Console\Commands\GenerateAllMonthlySummaries::class,
+        \App\Console\Commands\ProcessMonthlyBilling::class,
+        \App\Console\Commands\ProcessPaymentRetries::class,
     ];
 
     protected function schedule(Schedule $schedule): void
@@ -61,6 +63,23 @@ class Kernel extends ConsoleKernel
             ->daily()
             ->timezone('Asia/Kolkata')
             ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+        // -------------------------
+        // Monthly Billing Cron
+        // -------------------------
+        $schedule->command('billing:process-monthly')
+            ->monthlyOn(1, '00:00') // 1st of each month at midnight
+            ->timezone('UTC')
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/billing.log'));
+
+        // -------------------------
+        // Payment Retry Cron
+        // -------------------------
+        $schedule->command('billing:retry-payments')
+            ->hourly()
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/billing-retry.log'));
 
         // Log scheduled tasks count
         Log::info('Laravel Scheduler: All scheduled tasks registered successfully');

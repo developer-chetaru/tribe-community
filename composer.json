@@ -18,6 +18,7 @@
         "openai-php/laravel": "^0.16.0",
         "spatie/laravel-permission": "^6.21",
         "stevebauman/location": "^7.6",
+        "stripe/stripe-php": "*",
         "tymon/jwt-auth": "^2.2"
     },
     "require-dev": {

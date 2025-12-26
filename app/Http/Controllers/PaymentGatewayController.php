@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\Subscription;
+use App\Models\SubscriptionRecord;
 use App\Services\SubscriptionService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
