@@ -8,8 +8,11 @@ use Livewire\WithFileUploads;
 use App\Models\SubscriptionRecord;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\Organisation;
 use App\Services\SubscriptionService;
+use App\Services\Billing\StripeService;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class Billing extends Component
@@ -21,14 +24,11 @@ class Billing extends Component
     public $showPaymentModal = false;
     public $showSubscriptionExpiredModal = false;
     public $selectedInvoice = null;
+    public $showPaymentPage = false;
+    public $showInvoiceModal = false;
+    public $selectedInvoiceForView = null;
     
     protected $listeners = ['refreshPayments' => '$refresh'];
-    public $payment_method = 'card';
-    public $transaction_id;
-    public $payment_notes;
-    public $payment_proof;
-    public $payment_amount;
-    public $showPaymentGatewayModal = false;
     
     public $subscriptionStatus = [];
     public $daysRemaining = 0;
@@ -37,6 +37,11 @@ class Billing extends Component
     public $renewalUserCount = 0;
     public $renewalExpiryDate;
     public $renewalPricePerUser = 0;
+    
+    // Stripe payment properties
+    public $stripeClientSecret = null;
+    public $stripePaymentIntentId = null;
+    public $isProcessingStripePayment = false;
 
     public function mount()
     {
@@ -54,6 +59,58 @@ class Billing extends Component
 
         // Check subscription status
         $this->checkSubscriptionStatus();
+        
+        // Refresh data if payment was successful
+        if (session()->has('refresh_billing')) {
+            session()->forget('refresh_billing');
+            session()->forget('payment_success');
+            // Force refresh of subscription and invoices
+            $this->checkSubscriptionStatus();
+            $this->resetPage(); // Reset pagination to show updated invoices
+            // Force Livewire to refresh
+            $this->dispatch('$refresh');
+        }
+    }
+    
+    public function refreshBilling()
+    {
+        $this->checkSubscriptionStatus();
+        $this->resetPage();
+    }
+    
+    public function openInvoiceModal($invoiceId)
+    {
+        $invoice = Invoice::with(['subscription', 'payments.paidBy', 'organisation'])
+            ->findOrFail($invoiceId);
+        
+        // Load Stripe payment method details for each payment
+        foreach ($invoice->payments as $payment) {
+            if ($payment->transaction_id && $payment->payment_method === 'stripe') {
+                try {
+                    \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+                    $paymentIntent = \Stripe\PaymentIntent::retrieve($payment->transaction_id);
+                    
+                    if ($paymentIntent->payment_method) {
+                        $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentIntent->payment_method);
+                        $payment->stripe_card_brand = $paymentMethod->card->brand ?? null;
+                        $payment->stripe_card_last4 = $paymentMethod->card->last4 ?? null;
+                        $payment->stripe_card_exp_month = $paymentMethod->card->exp_month ?? null;
+                        $payment->stripe_card_exp_year = $paymentMethod->card->exp_year ?? null;
+                    }
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::warning('Failed to retrieve Stripe payment method: ' . $e->getMessage());
+                }
+            }
+        }
+        
+        $this->selectedInvoiceForView = $invoice;
+        $this->showInvoiceModal = true;
+    }
+    
+    public function closeInvoiceModal()
+    {
+        $this->showInvoiceModal = false;
+        $this->selectedInvoiceForView = null;
     }
 
     public function checkSubscriptionStatus()
@@ -193,92 +250,338 @@ class Billing extends Component
     public function openPaymentModal($invoiceId)
     {
         \Log::info('openPaymentModal called with ID: ' . $invoiceId);
-        $this->selectedInvoice = Invoice::with('subscription')->findOrFail($invoiceId);
-        $this->payment_amount = $this->selectedInvoice->total_amount;
-        $this->showPaymentModal = true;
-        \Log::info('showPaymentModal set to: ' . ($this->showPaymentModal ? 'true' : 'false'));
+        
+        try {
+            $invoice = Invoice::with('subscription')->findOrFail($invoiceId);
+            
+            // Check if invoice is already paid
+            if ($invoice->status === 'paid') {
+                session()->flash('error', 'This invoice has already been paid.');
+                return;
+            }
+            
+            // Check if payment already exists
+            $existingPayment = \App\Models\Payment::where('invoice_id', $invoiceId)
+                ->where('status', 'completed')
+                ->first();
+            
+            if ($existingPayment) {
+                session()->flash('error', 'Payment already exists for this invoice.');
+                return;
+            }
+            
+            // Create Stripe Checkout Session and redirect
+            $checkoutUrl = $this->createStripeCheckoutSession($invoice);
+            
+            if ($checkoutUrl) {
+                // For external URLs, use JavaScript redirect via Livewire
+                $this->dispatch('redirect-to-stripe', url: $checkoutUrl);
+                return;
+            }
+            
+        } catch (\Exception $e) {
+            \Log::error('Failed to open payment: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            session()->flash('error', 'Failed to initialize payment. Please try again.');
+        }
+    }
+    
+    public function createStripeCheckoutSession($invoice)
+    {
+        try {
+            \Log::info('Creating Stripe Checkout Session for invoice: ' . $invoice->id);
+            
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $organisation = Organisation::findOrFail($invoice->organisation_id);
+            $stripeService = new StripeService();
+            
+            // Get user email - prefer logged in user's email
+            $customerEmail = $user->email ?? $organisation->admin_email ?? $organisation->users()->first()?->email;
+            
+            if (!$customerEmail) {
+                session()->flash('error', 'Unable to determine customer email. Please contact support.');
+                return;
+            }
+            
+            // Ensure customer exists
+            if (!$organisation->stripe_customer_id) {
+                $customerResult = $stripeService->createCustomer($organisation);
+                if (!$customerResult['success']) {
+                    \Log::error('Failed to create Stripe customer: ' . ($customerResult['error'] ?? 'Unknown error'));
+                    session()->flash('error', 'Failed to create customer: ' . ($customerResult['error'] ?? 'Please try again.'));
+                    return;
+                }
+            }
+            
+            // Update customer email if different
+            if ($organisation->stripe_customer_id) {
+                try {
+                    $stripeCustomer = \Stripe\Customer::retrieve($organisation->stripe_customer_id);
+                    if ($stripeCustomer->email !== $customerEmail) {
+                        \Stripe\Customer::update($organisation->stripe_customer_id, [
+                            'email' => $customerEmail,
+                        ]);
+                        \Log::info('Updated Stripe customer email', [
+                            'customer_id' => $organisation->stripe_customer_id,
+                            'new_email' => $customerEmail
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    \Log::warning('Failed to update customer email in Stripe', [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+            
+            if (!class_exists(\Stripe\Checkout\Session::class)) {
+                throw new \Exception('Stripe PHP package is not installed.');
+            }
+            
+            // Get user's name for billing details
+            $customerName = $user->name ?? $organisation->name ?? 'Customer';
+            
+            // Create Checkout Session
+            // Note: We can't use both 'customer' and 'customer_email' - use only 'customer' if customer exists
+            $checkoutParams = [
+                'payment_method_types' => ['card'],
+                'line_items' => [[
+                    'price_data' => [
+                        'currency' => 'gbp',
+                        'product_data' => [
+                            'name' => "Invoice #{$invoice->invoice_number}",
+                            'description' => "Payment for {$invoice->user_count} users - {$organisation->name}",
+                        ],
+                        'unit_amount' => $invoice->total_amount * 100, // Convert to pence
+                    ],
+                    'quantity' => 1,
+                ]],
+                'mode' => 'payment',
+                'success_url' => route('billing.payment.success') . '?session_id={CHECKOUT_SESSION_ID}&invoice_id=' . $invoice->id,
+                'cancel_url' => route('billing') . '?canceled=true',
+                'billing_address_collection' => 'auto', // Collect billing address
+                'metadata' => [
+                    'invoice_id' => $invoice->id,
+                    'organisation_id' => $organisation->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'user_id' => $user->id,
+                    'user_email' => $customerEmail,
+                ],
+            ];
+            
+            // Add customer if exists, otherwise use customer_email
+            if ($organisation->stripe_customer_id) {
+                $checkoutParams['customer'] = $organisation->stripe_customer_id;
+            } else {
+                $checkoutParams['customer_email'] = $customerEmail;
+            }
+            
+            $checkoutSession = \Stripe\Checkout\Session::create($checkoutParams);
+            
+            \Log::info('Stripe Checkout Session created', [
+                'session_id' => $checkoutSession->id,
+                'url' => $checkoutSession->url,
+                'customer_email' => $customerEmail,
+                'customer_name' => $customerName
+            ]);
+            
+            // Return checkout URL for redirect
+            return $checkoutSession->url;
+            
+        } catch (\Exception $e) {
+            \Log::error('Failed to create Stripe Checkout Session: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            session()->flash('error', 'Failed to initialize payment: ' . $e->getMessage());
+            return null;
+        }
+    }
+    
+    public function createStripePaymentIntent()
+    {
+        if (!$this->selectedInvoice) {
+            \Log::warning('createStripePaymentIntent called but no invoice selected');
+            return;
+        }
+        
+        try {
+            \Log::info('Creating Stripe payment intent for invoice: ' . $this->selectedInvoice->id);
+            
+            $organisation = Organisation::findOrFail($this->selectedInvoice->organisation_id);
+            $stripeService = new StripeService();
+            
+            // Ensure customer exists
+            if (!$organisation->stripe_customer_id) {
+                $customerResult = $stripeService->createCustomer($organisation);
+                if (!$customerResult['success']) {
+                    \Log::error('Failed to create Stripe customer: ' . ($customerResult['error'] ?? 'Unknown error'));
+                    // Try to continue anyway - customer might be created but ID not saved
+                    if (!isset($customerResult['customer'])) {
+                        session()->flash('error', 'Failed to create customer: ' . ($customerResult['error'] ?? 'Please try again.'));
+                        return;
+                    }
+                }
+            }
+            
+            // Create payment intent directly
+            if (!class_exists(\Stripe\PaymentIntent::class)) {
+                throw new \Exception('Stripe PHP package is not installed.');
+            }
+            
+            $paymentIntent = \Stripe\PaymentIntent::create([
+                'amount' => $this->selectedInvoice->total_amount * 100, // Convert to pence
+                'currency' => 'gbp',
+                'customer' => $organisation->stripe_customer_id,
+                'metadata' => [
+                    'invoice_id' => $this->selectedInvoice->id,
+                    'organisation_id' => $organisation->id,
+                    'invoice_number' => $this->selectedInvoice->invoice_number,
+                ],
+                'description' => "Payment for Invoice #{$this->selectedInvoice->invoice_number}",
+            ]);
+            
+            $this->stripeClientSecret = $paymentIntent->client_secret;
+            $this->stripePaymentIntentId = $paymentIntent->id;
+            
+            \Log::info('Stripe payment intent created successfully', [
+                'payment_intent_id' => $this->stripePaymentIntentId,
+                'has_client_secret' => !empty($this->stripeClientSecret),
+                'client_secret_preview' => substr($this->stripeClientSecret, 0, 20) . '...'
+            ]);
+            
+            // Dispatch event to initialize Stripe Elements
+            // Pass client secret as array for better compatibility
+            $this->dispatch('stripe-payment-intent-created', [
+                'clientSecret' => $this->stripeClientSecret
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Failed to create Stripe payment intent: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            session()->flash('error', 'Failed to initialize payment: ' . $e->getMessage());
+        }
+    }
+    
+    public function confirmStripePayment($paymentIntentId)
+    {
+        if (!$this->selectedInvoice || !$paymentIntentId) {
+            session()->flash('error', 'Invalid payment data.');
+            return;
+        }
+        
+        $this->isProcessingStripePayment = true;
+        
+        try {
+            // Retrieve payment intent from Stripe
+            if (!class_exists(\Stripe\PaymentIntent::class)) {
+                throw new \Exception('Stripe PHP package is not installed.');
+            }
+
+            $paymentIntent = \Stripe\PaymentIntent::retrieve($paymentIntentId);
+
+            if ($paymentIntent->status !== 'succeeded') {
+                session()->flash('error', 'Payment not completed. Status: ' . $paymentIntent->status);
+                $this->isProcessingStripePayment = false;
+                return;
+            }
+
+            // Check if payment already exists
+            $existingPayment = Payment::where('invoice_id', $this->selectedInvoice->id)
+                ->where('status', 'completed')
+                ->first();
+            
+            if ($existingPayment) {
+                session()->flash('error', 'Payment already exists for this invoice.');
+                $this->isProcessingStripePayment = false;
+                return;
+            }
+
+            // Use database transaction
+            \DB::beginTransaction();
+            
+            try {
+                // Create payment record
+                $payment = Payment::create([
+                    'invoice_id' => $this->selectedInvoice->id,
+                    'organisation_id' => $this->selectedInvoice->organisation_id,
+                    'paid_by_user_id' => auth()->id(),
+                    'payment_method' => 'card',
+                    'amount' => $paymentIntent->amount / 100, // Convert from pence
+                    'transaction_id' => $paymentIntent->id,
+                    'status' => 'completed',
+                    'payment_date' => now()->toDateString(),
+                    'payment_notes' => 'Payment processed via Stripe',
+                    'approved_by_admin_id' => null,
+                    'approved_at' => now(),
+                ]);
+
+                // Create payment record for Stripe tracking
+                \App\Models\PaymentRecord::create([
+                    'organisation_id' => $this->selectedInvoice->organisation_id,
+                    'stripe_payment_intent_id' => $paymentIntent->id,
+                    'stripe_customer_id' => $paymentIntent->customer,
+                    'amount' => $paymentIntent->amount / 100,
+                    'currency' => $paymentIntent->currency,
+                    'status' => $paymentIntent->status,
+                    'type' => 'payment',
+                    'paid_at' => now(),
+                ]);
+
+                // Update invoice status
+                $this->selectedInvoice->update([
+                    'status' => 'paid',
+                    'paid_date' => now(),
+                ]);
+
+                // Activate/renew subscription
+                $subscriptionService = new SubscriptionService();
+                if ($this->selectedInvoice->subscription) {
+                    $userCount = $this->selectedInvoice->user_count;
+                    $pricePerUser = $this->selectedInvoice->price_per_user;
+                    $subscriptionService->renewSubscription($this->selectedInvoice->subscription, $userCount, $pricePerUser);
+                } else {
+                    $subscriptionService->activateSubscription($payment->id);
+                }
+
+                \DB::commit();
+                
+                \Log::info("Stripe payment confirmed for invoice {$this->selectedInvoice->id}: {$paymentIntent->id}");
+
+                session()->flash('success', 'Payment processed successfully. Your subscription has been activated.');
+                $this->closePaymentPage();
+                $this->checkSubscriptionStatus();
+                $this->dispatch('payment-successful');
+                
+            } catch (\Exception $e) {
+                \DB::rollBack();
+                throw $e;
+            }
+            
+        } catch (\Exception $e) {
+            \Log::error('Failed to confirm Stripe payment: ' . $e->getMessage());
+            session()->flash('error', 'Payment confirmation failed: ' . $e->getMessage());
+        } finally {
+            $this->isProcessingStripePayment = false;
+        }
     }
 
     public function closePaymentModal()
     {
         $this->showPaymentModal = false;
         $this->selectedInvoice = null;
-        $this->payment_method = 'bank_transfer';
-        $this->transaction_id = null;
-        $this->payment_notes = null;
-        $this->payment_proof = null;
-        $this->payment_amount = null;
+        $this->stripeClientSecret = null;
+        $this->stripePaymentIntentId = null;
+        $this->isProcessingStripePayment = false;
+        $this->dispatch('stripe-payment-modal-closed');
     }
 
-    public function submitPayment()
-    {
-        $this->validate([
-            'payment_method' => 'required|string|in:card,bank_transfer,paypal',
-            'payment_amount' => 'required|numeric|min:0',
-        ]);
-
-        $user = auth()->user();
-        $invoice = $this->selectedInvoice;
-
-        if (!$invoice) {
-            session()->flash('error', 'No invoice selected.');
-            return;
-        }
-
-        // Process payment directly (no HTTP request)
-        try {
-            // Generate transaction ID
-            $transactionId = 'TXN-' . time() . '-' . rand(1000, 9999);
-            
-            // Create payment record with completed status
-            $payment = Payment::create([
-                'invoice_id' => $invoice->id,
-                'organisation_id' => $invoice->organisation_id,
-                'paid_by_user_id' => $user->id,
-                'payment_method' => $this->payment_method,
-                'amount' => $invoice->total_amount,
-                'transaction_id' => $transactionId,
-                'status' => 'completed',
-                'payment_date' => now()->toDateString(),
-                'payment_notes' => 'Payment processed successfully',
-                'approved_by_admin_id' => null,
-                'approved_at' => now(),
-            ]);
-
-            // Update invoice status
-            $invoice->update([
-                'status' => 'paid',
-                'paid_date' => now(),
-            ]);
-
-            // Activate/renew subscription immediately
-            $subscriptionService = new SubscriptionService();
-            if ($invoice->subscription) {
-                // Renew existing subscription with updated user count and price
-                $userCount = $invoice->user_count;
-                $pricePerUser = $invoice->price_per_user;
-                $subscriptionService->renewSubscription($invoice->subscription, $userCount, $pricePerUser);
-            } else {
-                // Create and activate new subscription
-                $subscriptionService->activateSubscription($payment->id);
-            }
-
-            \Log::info("Payment processed and subscription activated for invoice {$invoice->id}: {$transactionId}");
-
-            session()->flash('success', 'Payment processed successfully. Your subscription has been activated.');
-            $this->closePaymentModal();
-            $this->checkSubscriptionStatus(); // Refresh subscription status
-        } catch (\Exception $e) {
-            \Log::error('Payment processing error: ' . $e->getMessage());
-            session()->flash('error', 'Payment processing failed. Please try again or contact support.');
-        }
-    }
 
     public function getSubscriptionProperty()
     {
         $user = auth()->user();
+        // Get the most recent subscription regardless of status
         return \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
-            ->whereIn('status', ['active', 'suspended'])
             ->with('organisation')
             ->orderBy('created_at', 'desc')
             ->first();

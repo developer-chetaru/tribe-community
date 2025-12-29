@@ -32,9 +32,8 @@ class PayPalService
                 'timeout' => 30,
             ]);
             // Don't authenticate in constructor - do it lazily when needed
-        } else {
-            Log::warning('PayPal credentials not configured. PayPal features will be disabled.');
         }
+        // PayPal is disabled - no warning needed
     }
 
     /**

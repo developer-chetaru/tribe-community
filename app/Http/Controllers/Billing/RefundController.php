@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Billing;
 
 use App\Http\Controllers\Controller;
 use App\Services\Billing\StripeService;
-use App\Services\Billing\PayPalService;
 use App\Models\PaymentRecord;
 use App\Models\SubscriptionRecord;
 use Illuminate\Http\Request;
@@ -13,12 +12,10 @@ use Illuminate\Support\Facades\Log;
 class RefundController extends Controller
 {
     protected $stripeService;
-    protected $paypalService;
 
-    public function __construct(StripeService $stripeService, PayPalService $paypalService)
+    public function __construct(StripeService $stripeService)
     {
         $this->stripeService = $stripeService;
-        $this->paypalService = $paypalService;
     }
 
     /**
@@ -45,22 +42,17 @@ class RefundController extends Controller
             ], 400);
         }
 
-        // Process refund based on payment gateway
+        // Process refund (Stripe only)
         if ($payment->stripe_payment_intent_id) {
             $result = $this->stripeService->processRefund(
                 $payment->stripe_payment_intent_id,
                 $validated['amount'],
                 $validated['reason']
             );
-        } elseif ($payment->paypal_capture_id) {
-            $result = $this->paypalService->processRefund(
-                $payment->paypal_capture_id,
-                $validated['amount']
-            );
         } else {
             return response()->json([
                 'success' => false,
-                'error' => 'Payment method not supported for refund',
+                'error' => 'Only Stripe payments can be refunded',
             ], 400);
         }
 

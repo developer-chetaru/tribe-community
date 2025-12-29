@@ -67,6 +67,10 @@ class StripeWebhookController extends Controller
                 $this->handleChargeRefunded($event->data->object);
                 break;
 
+            case 'checkout.session.completed':
+                $this->handleCheckoutSessionCompleted($event->data->object);
+                break;
+
             default:
                 Log::info('Unhandled Stripe webhook event: ' . $event->type);
         }
@@ -253,6 +257,114 @@ class StripeWebhookController extends Controller
                 'status' => 'refunded',
                 'refunded_at' => now(),
                 'refund_amount' => $charge->amount_refunded / 100,
+            ]);
+        }
+    }
+
+    /**
+     * Handle checkout session completed
+     */
+    protected function handleCheckoutSessionCompleted($session)
+    {
+        Log::info('Checkout session completed', ['session_id' => $session->id]);
+        
+        // Get invoice ID from metadata
+        $invoiceId = $session->metadata->invoice_id ?? null;
+        
+        if (!$invoiceId) {
+            Log::warning('Checkout session completed but no invoice_id in metadata', [
+                'session_id' => $session->id
+            ]);
+            return;
+        }
+        
+        try {
+            $invoice = \App\Models\Invoice::with('subscription')->find($invoiceId);
+            
+            if (!$invoice) {
+                Log::warning('Invoice not found for checkout session', [
+                    'session_id' => $session->id,
+                    'invoice_id' => $invoiceId
+                ]);
+                return;
+            }
+            
+            // Check if payment already exists
+            $existingPayment = \App\Models\Payment::where('invoice_id', $invoiceId)
+                ->where('status', 'completed')
+                ->first();
+            
+            if ($existingPayment) {
+                Log::info('Payment already exists for invoice', [
+                    'invoice_id' => $invoiceId,
+                    'payment_id' => $existingPayment->id
+                ]);
+                return;
+            }
+            
+            \DB::beginTransaction();
+            
+            // Create payment record
+            $payment = \App\Models\Payment::create([
+                'invoice_id' => $invoice->id,
+                'organisation_id' => $invoice->organisation_id,
+                'amount' => $session->amount_total / 100,
+                'payment_method' => 'stripe',
+                'status' => 'completed',
+                'transaction_id' => $session->payment_intent,
+                'stripe_payment_intent_id' => $session->payment_intent,
+                'stripe_checkout_session_id' => $session->id,
+                'paid_at' => now(),
+                'notes' => "Payment completed via Stripe Checkout",
+            ]);
+            
+            // Create payment record entry
+            PaymentRecord::create([
+                'organisation_id' => $invoice->organisation_id,
+                'subscription_id' => $invoice->subscription_id,
+                'stripe_payment_intent_id' => $session->payment_intent,
+                'amount' => $session->amount_total / 100,
+                'currency' => 'gbp',
+                'status' => 'succeeded',
+                'type' => 'one_time_payment',
+                'paid_at' => now(),
+            ]);
+            
+            // Update invoice status
+            $invoice->status = 'paid';
+            $invoice->paid_date = now();
+            $invoice->save();
+            $invoice->refresh();
+            
+            Log::info("Invoice {$invoice->id} status updated to paid via webhook", [
+                'invoice_status' => $invoice->status,
+                'paid_date' => $invoice->paid_date
+            ]);
+            
+            // Activate or renew subscription
+            if ($invoice->subscription) {
+                $subscriptionService = new \App\Services\SubscriptionService();
+                $activationResult = $subscriptionService->activateSubscription($payment->id);
+                
+                if (!$activationResult) {
+                    Log::warning("Failed to activate subscription via webhook for payment {$payment->id}");
+                } else {
+                    Log::info("Subscription activated successfully via webhook for payment {$payment->id}");
+                }
+            } else {
+                Log::warning("Invoice {$invoice->id} has no associated subscription in webhook handler");
+            }
+            
+            \DB::commit();
+            
+            Log::info("Stripe Checkout payment processed via webhook for invoice {$invoice->id}: {$session->payment_intent}");
+            
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            Log::error('Failed to process checkout session completed: ' . $e->getMessage(), [
+                'session_id' => $session->id,
+                'invoice_id' => $invoiceId,
+                'trace' => $e->getTraceAsString()
             ]);
         }
     }

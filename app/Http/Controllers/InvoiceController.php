@@ -12,7 +12,7 @@ class InvoiceController extends Controller
      */
     public function download($invoiceId)
     {
-        $invoice = Invoice::with(['organisation', 'subscription', 'payments'])
+        $invoice = Invoice::with(['organisation', 'subscription', 'payments.paidBy'])
             ->findOrFail($invoiceId);
 
         $user = auth()->user();
@@ -27,6 +27,26 @@ class InvoiceController extends Controller
             }
         } else {
             abort(403, 'Only directors and administrators can download invoices.');
+        }
+
+        // Load Stripe payment method details for each payment
+        foreach ($invoice->payments as $payment) {
+            if ($payment->transaction_id && $payment->payment_method === 'stripe') {
+                try {
+                    \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+                    $paymentIntent = \Stripe\PaymentIntent::retrieve($payment->transaction_id);
+                    
+                    if ($paymentIntent->payment_method) {
+                        $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentIntent->payment_method);
+                        $payment->stripe_card_brand = $paymentMethod->card->brand ?? null;
+                        $payment->stripe_card_last4 = $paymentMethod->card->last4 ?? null;
+                        $payment->stripe_card_exp_month = $paymentMethod->card->exp_month ?? null;
+                        $payment->stripe_card_exp_year = $paymentMethod->card->exp_year ?? null;
+                    }
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::warning('Failed to retrieve Stripe payment method: ' . $e->getMessage());
+                }
+            }
         }
 
         // Return HTML view with download headers (can be printed as PDF by browser)
@@ -47,7 +67,7 @@ class InvoiceController extends Controller
      */
     public function view($invoiceId)
     {
-        $invoice = Invoice::with(['organisation', 'subscription', 'payments'])
+        $invoice = Invoice::with(['organisation', 'subscription', 'payments.paidBy'])
             ->findOrFail($invoiceId);
 
         $user = auth()->user();
@@ -62,6 +82,26 @@ class InvoiceController extends Controller
             }
         } else {
             abort(403, 'Only directors and administrators can view invoices.');
+        }
+
+        // Load Stripe payment method details for each payment
+        foreach ($invoice->payments as $payment) {
+            if ($payment->transaction_id && $payment->payment_method === 'stripe') {
+                try {
+                    \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+                    $paymentIntent = \Stripe\PaymentIntent::retrieve($payment->transaction_id);
+                    
+                    if ($paymentIntent->payment_method) {
+                        $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentIntent->payment_method);
+                        $payment->stripe_card_brand = $paymentMethod->card->brand ?? null;
+                        $payment->stripe_card_last4 = $paymentMethod->card->last4 ?? null;
+                        $payment->stripe_card_exp_month = $paymentMethod->card->exp_month ?? null;
+                        $payment->stripe_card_exp_year = $paymentMethod->card->exp_year ?? null;
+                    }
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::warning('Failed to retrieve Stripe payment method: ' . $e->getMessage());
+                }
+            }
         }
 
         // Return HTML view

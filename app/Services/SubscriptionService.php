@@ -240,21 +240,35 @@ class SubscriptionService
         $today = Carbon::today();
 
         // Mark invoice as paid
-        $invoice->update([
-            'status' => 'paid',
-            'paid_date' => $today,
+        $invoice->status = 'paid';
+        $invoice->paid_date = $today;
+        $invoice->save();
+        $invoice->refresh();
+        
+        Log::info("Invoice {$invoice->id} marked as paid in activateSubscription", [
+            'invoice_status' => $invoice->status,
+            'paid_date' => $invoice->paid_date
         ]);
 
         // Update or create subscription with ACTIVE status
         if ($subscription) {
-            // Update existing subscription to ACTIVE
+            // If subscription is expired, extend it from today
+            // If subscription is still active, extend from current end date
+            $startDate = $subscription->current_period_end && Carbon::parse($subscription->current_period_end)->isFuture() 
+                ? Carbon::parse($subscription->current_period_end) 
+                : $today;
+            
+            // Update existing subscription to ACTIVE and extend period
             $subscription->update([
                 'status' => 'active',
-                'current_period_start' => $today,
-                'current_period_end' => $today->copy()->addMonth(), // 1 month subscription
-                'next_billing_date' => $today->copy()->addMonth(),
+                'current_period_start' => $startDate,
+                'current_period_end' => $startDate->copy()->addMonth(), // Extend by 1 month
+                'next_billing_date' => $startDate->copy()->addMonth(),
                 'user_count' => $invoice->user_count, // Update user count from invoice
+                'last_payment_date' => $today,
             ]);
+            
+            Log::info("Subscription {$subscription->id} renewed - Period: {$startDate->format('Y-m-d')} to {$startDate->copy()->addMonth()->format('Y-m-d')}");
         } else {
             // Get tier from organisation or default to spark
             $org = Organisation::find($invoice->organisation_id);

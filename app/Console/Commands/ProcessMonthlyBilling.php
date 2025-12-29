@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\SubscriptionRecord;
 use App\Services\Billing\StripeService;
-use App\Services\Billing\PayPalService;
 use App\Models\PaymentRecord;
 use App\Models\Invoice;
 use Carbon\Carbon;
@@ -17,13 +16,11 @@ class ProcessMonthlyBilling extends Command
     protected $description = 'Process monthly recurring billing for all active subscriptions';
 
     protected $stripeService;
-    protected $paypalService;
 
-    public function __construct(StripeService $stripeService, PayPalService $paypalService)
+    public function __construct(StripeService $stripeService)
     {
         parent::__construct();
         $this->stripeService = $stripeService;
-        $this->paypalService = $paypalService;
     }
 
     public function handle()
@@ -78,11 +75,9 @@ class ProcessMonthlyBilling extends Command
             'status' => 'pending',
         ]);
 
-        // Process payment based on payment gateway
+        // Process payment based on payment gateway (Stripe only)
         if ($subscription->stripe_subscription_id) {
             $this->processStripePayment($subscription, $invoice);
-        } elseif ($subscription->paypal_subscription_id) {
-            $this->processPayPalPayment($subscription, $invoice);
         } else {
             // Manual payment required
             $this->sendManualPaymentRequest($subscription, $invoice);

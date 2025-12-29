@@ -7,7 +7,6 @@ use App\Models\SubscriptionRecord;
 use App\Models\PaymentRecord;
 use App\Models\Invoice;
 use App\Services\Billing\StripeService;
-use App\Services\Billing\PayPalService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -17,13 +16,11 @@ class ProcessPaymentRetries extends Command
     protected $description = 'Retry failed payments and handle account suspension';
 
     protected $stripeService;
-    protected $paypalService;
 
-    public function __construct(StripeService $stripeService, PayPalService $paypalService)
+    public function __construct(StripeService $stripeService)
     {
         parent::__construct();
         $this->stripeService = $stripeService;
-        $this->paypalService = $paypalService;
     }
 
     public function handle()
@@ -81,8 +78,8 @@ class ProcessPaymentRetries extends Command
     {
         $this->info("Retry attempt #{$attemptNumber} for subscription {$subscription->id}");
 
-        // Note: Actual payment retry is handled by payment gateways
-        // Stripe and PayPal automatically retry failed payments
+        // Note: Actual payment retry is handled by payment gateway
+        // Stripe automatically retries failed payments
         // This is mainly for tracking and notifications
 
         Log::info("Payment retry attempt #{$attemptNumber} for subscription {$subscription->id}");
@@ -172,11 +169,9 @@ class ProcessPaymentRetries extends Command
     {
         $this->error("Deleting account for subscription {$subscription->id}");
 
-        // Cancel subscription
+        // Cancel subscription (Stripe only)
         if ($subscription->stripe_subscription_id) {
             $this->stripeService->cancelSubscription($subscription->stripe_subscription_id, false);
-        } elseif ($subscription->paypal_subscription_id) {
-            $this->paypalService->cancelSubscription($subscription->paypal_subscription_id, 'Account deleted after suspension period');
         }
 
         // Update subscription status

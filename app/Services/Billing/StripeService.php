@@ -22,7 +22,7 @@ class StripeService
         // Initialize Stripe if package is available
         if (class_exists(\Stripe\Stripe::class) && $this->stripeSecretKey) {
             \Stripe\Stripe::setApiKey($this->stripeSecretKey);
-            \Stripe\Stripe::setApiVersion(config('services.stripe.api_version', '2024-12-18'));
+            // Don't set API version - let Stripe use the default/latest
             $this->stripe = new \Stripe\StripeClient($this->stripeSecretKey);
         }
     }
@@ -37,14 +37,20 @@ class StripeService
                 throw new \Exception('Stripe PHP package is not installed. Please run: composer require stripe/stripe-php');
             }
 
+            // Get customer email - prefer logged in user's email
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $customerEmail = $user->email ?? $organisation->admin_email ?? $organisation->users()->first()?->email;
+            $customerName = $user->name ?? $organisation->name;
+            
             $customer = \Stripe\Customer::create([
-                'email' => $organisation->admin_email ?? $organisation->users()->first()?->email,
-                'name' => $organisation->name,
+                'email' => $customerEmail,
+                'name' => $customerName,
                 'description' => "Organisation ID: {$organisation->id}",
                 'metadata' => [
                     'organisation_id' => $organisation->id,
                     'tier' => $organisation->subscription_tier ?? 'basecamp',
                     'user_count' => $organisation->users()->count(),
+                    'user_id' => $user->id ?? null,
                 ],
                 'address' => [
                     'line1' => $organisation->billing_address_line1,

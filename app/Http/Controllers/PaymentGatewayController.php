@@ -20,7 +20,7 @@ class PaymentGatewayController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'invoice_id' => 'required|exists:invoices,id',
-            'payment_method' => 'required|string|in:card,bank_transfer,paypal',
+            'payment_method' => 'required|string|in:card',
         ]);
 
         if ($validator->fails()) {
@@ -107,11 +107,9 @@ class PaymentGatewayController extends Controller
         return response()->json([
             'status' => true,
             'payment_methods' => [
-                'card' => 'Credit/Debit Card',
-                'bank_transfer' => 'Bank Transfer',
-                'paypal' => 'PayPal',
+                'card' => 'Credit/Debit Card (Stripe)',
             ],
-            'currency' => 'USD',
+            'currency' => 'GBP',
         ]);
     }
 }
