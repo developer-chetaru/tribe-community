@@ -264,31 +264,25 @@ class SessionManagementService
                 }
             }
             
-            // Device ID must match (but allow if user's deviceId is null - might be web or first login)
+            // Device ID must match - if it doesn't, the token is from a different device
+            // This means user logged in from a new device, so old device's token should be rejected
             if ($currentDeviceId !== $deviceId) {
-                // If user's deviceId is null but cache has a device ID, it might be a web session
-                // Allow it if the device ID starts with 'web_'
-                if (!$deviceId || $deviceId === 'web_default') {
-                    // User doesn't have deviceId set, might be web login
-                    // Check if current device is also web
-                    if (strpos($currentDeviceId, 'web_') === 0) {
-                        // Both are web sessions, allow it
-                        Log::debug("Allowing web session with different device IDs", [
-                            'user_id' => $user->id,
-                            'token_device_id' => $deviceId,
-                            'current_device_id' => $currentDeviceId,
-                        ]);
-                    } else {
-                        // Current device is mobile, token is from web - reject
-                        Log::warning("Token rejected - device ID mismatch (web vs mobile)", [
-                            'user_id' => $user->id,
-                            'token_device_id' => $deviceId,
-                            'current_device_id' => $currentDeviceId,
-                        ]);
-                        return false;
-                    }
+                // Check if this is a web session (both might be web but different sessions)
+                $isWebToken = (!$deviceId || $deviceId === 'web_default' || strpos($deviceId, 'web_') === 0);
+                $isWebCurrent = strpos($currentDeviceId, 'web_') === 0;
+                
+                if ($isWebToken && $isWebCurrent) {
+                    // Both are web sessions - check token timestamp instead
+                    // If token is old, reject it (user logged in from another browser)
+                    // We'll check timestamp below
+                    Log::debug("Web session device ID mismatch, checking timestamp", [
+                        'user_id' => $user->id,
+                        'token_device_id' => $deviceId,
+                        'current_device_id' => $currentDeviceId,
+                    ]);
                 } else {
-                    // Device IDs don't match and both are set
+                    // Different device types (mobile vs web) or different mobile devices
+                    // Reject immediately
                     Log::warning("Token rejected - device ID mismatch", [
                         'user_id' => $user->id,
                         'token_device_id' => $deviceId,
@@ -298,9 +292,40 @@ class SessionManagementService
                 }
             }
             
-            // Check token timestamp for this device
-            $tokenTimestampKey = "user_token_timestamp_{$user->id}_{$deviceId}";
-            $lastValidTimestamp = Cache::get($tokenTimestampKey);
+            // Get token's issued at time first
+            try {
+                $payload = JWTAuth::setToken($token)->getPayload();
+                $tokenIat = $payload->get('iat');
+            } catch (\Exception $e) {
+                Log::warning("Failed to decode token", [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+                return false;
+            }
+            
+            // Check timestamp for current device (the one that should be active)
+            $currentDeviceTimestampKey = "user_token_timestamp_{$user->id}_{$currentDeviceId}";
+            $currentDeviceTimestamp = Cache::get($currentDeviceTimestampKey);
+            
+            // If token was issued before current device's login, it's from an old device
+            // Reject it (unless it's the same device and timestamp matches)
+            if ($currentDeviceTimestamp && $tokenIat < $currentDeviceTimestamp) {
+                // Token is older than current device's login - check if it's from an invalidated device
+                // Check all device timestamps to see if any were invalidated (future timestamp)
+                // This is a simple check: if token is older than current device, and current device exists, reject
+                Log::warning("Token rejected - issued before current device login", [
+                    'user_id' => $user->id,
+                    'token_device_id' => $deviceId,
+                    'current_device_id' => $currentDeviceId,
+                    'token_iat' => $tokenIat,
+                    'current_device_timestamp' => $currentDeviceTimestamp,
+                ]);
+                return false;
+            }
+            
+            // Use current device's timestamp for validation
+            $lastValidTimestamp = $currentDeviceTimestamp;
             
             if (!$lastValidTimestamp) {
                 // No timestamp for this device, might be from before device tracking
@@ -447,6 +472,7 @@ class SessionManagementService
     
     /**
      * Invalidate session for a specific device
+     * This invalidates all tokens/sessions for the specified device
      * 
      * @param User $user
      * @param string $deviceId
@@ -458,10 +484,37 @@ class SessionManagementService
             $cacheKey = "user_active_session_{$user->id}_{$deviceId}";
             $tokenTimestampKey = "user_token_timestamp_{$user->id}_{$deviceId}";
             
+            // Clear the session cache
             Cache::forget($cacheKey);
-            Cache::put($tokenTimestampKey, now()->timestamp, now()->addDays(30));
             
-            Log::info("Device session invalidated for user {$user->id} on device {$deviceId}");
+            // Set token timestamp to a future time to invalidate all existing tokens
+            // This ensures any token issued before now will be rejected
+            $invalidationTimestamp = now()->addSecond()->timestamp; // Future timestamp
+            Cache::put($tokenTimestampKey, $invalidationTimestamp, now()->addDays(30));
+            
+            // If it's a web session, delete it from database
+            if (strpos($deviceId, 'web_') === 0) {
+                $sessionId = str_replace('web_', '', $deviceId);
+                try {
+                    DB::table('sessions')
+                        ->where('id', $sessionId)
+                        ->where('user_id', $user->id)
+                        ->delete();
+                    Log::info("Web session deleted from database for user {$user->id}", [
+                        'session_id' => $sessionId,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warning("Failed to delete web session from database", [
+                        'user_id' => $user->id,
+                        'session_id' => $sessionId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+            
+            Log::info("Device session invalidated for user {$user->id} on device {$deviceId}", [
+                'invalidation_timestamp' => $invalidationTimestamp,
+            ]);
         } catch (\Exception $e) {
             Log::error("Failed to invalidate device session for user {$user->id}", [
                 'device_id' => $deviceId,
