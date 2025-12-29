@@ -43,7 +43,9 @@ class SessionManagementService
             // Also store a mapping of user_id -> current device_id for quick lookup
             $userDeviceKey = "user_current_device_{$user->id}";
             $previousDeviceId = Cache::get($userDeviceKey);
-            Cache::put($userDeviceKey, $deviceId, now()->addDays(30));
+            
+            // Check if this is a web session (browser/private tab)
+            $isWebSession = ($deviceType === 'web' || strpos($deviceId, 'web_') === 0);
             
             // If user logged in from a different device, invalidate previous device's session
             if ($previousDeviceId && $previousDeviceId !== $deviceId) {
@@ -54,8 +56,25 @@ class SessionManagementService
                 ]);
             }
             
-            // Invalidate all web sessions for this user (except current)
-            $this->invalidateWebSessions($user, $currentSessionId);
+            // Store last login timestamp FIRST - this will be used to invalidate old sessions
+            $lastLoginKey = "user_last_login_{$user->id}";
+            $lastLoginTimestamp = now()->timestamp;
+            Cache::put($lastLoginKey, $lastLoginTimestamp, now()->addDays(30));
+            
+            // For web sessions, ALWAYS invalidate ALL previous web sessions (including private tabs)
+            // This ensures only the latest browser/tab is active
+            if ($isWebSession) {
+                // Clear ALL previous web session cache entries by updating device mapping first
+                // This ensures old sessions can't find their cache entries
+                Cache::put($userDeviceKey, $deviceId, now()->addDays(30));
+                
+                // Then delete all old sessions from database
+                $this->invalidateAllWebSessions($user, $currentSessionId);
+            } else {
+                // For mobile devices, invalidate all web sessions too
+                Cache::put($userDeviceKey, $deviceId, now()->addDays(30));
+                $this->invalidateWebSessions($user, $currentSessionId);
+            }
             
             // For JWT tokens, store timestamp with device ID
             // Use token's issued at time if available, otherwise use current time
@@ -222,6 +241,52 @@ class SessionManagementService
             }
         } catch (\Exception $e) {
             Log::error("Failed to invalidate web sessions for user {$user->id}", [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+    
+    /**
+     * Invalidate ALL web sessions for a user (including private tabs)
+     * This is called when a new web session is created to ensure only one browser/tab is active
+     * 
+     * @param User $user
+     * @param string|null $currentSessionId
+     * @return void
+     */
+    protected function invalidateAllWebSessions(User $user, $currentSessionId = null)
+    {
+        try {
+            // Delete ALL web sessions from database (including private tabs)
+            $deleted = DB::table('sessions')
+                ->where('user_id', $user->id)
+                ->where('id', '!=', $currentSessionId)
+                ->delete();
+            
+            // Clear all web session cache entries for this user
+            // We need to invalidate all cache entries that start with "user_active_session_{$user->id}_web_"
+            // Since Laravel cache doesn't support wildcard deletion, we'll use a different approach:
+            // Store a "last_web_session_invalidation" timestamp and check it in middleware
+            
+            $invalidationKey = "user_web_sessions_invalidated_{$user->id}";
+            Cache::put($invalidationKey, now()->timestamp, now()->addDays(30));
+            
+            // Also clear the old device mapping if it was a web session
+            $userDeviceKey = "user_current_device_{$user->id}";
+            $oldDeviceId = Cache::get($userDeviceKey);
+            if ($oldDeviceId && strpos($oldDeviceId, 'web_') === 0) {
+                // Clear the old web session cache
+                $oldCacheKey = "user_active_session_{$user->id}_{$oldDeviceId}";
+                Cache::forget($oldCacheKey);
+            }
+            
+            Log::info("Invalidated all web sessions for user {$user->id}", [
+                'deleted_sessions' => $deleted,
+                'current_session_id' => $currentSessionId,
+                'invalidation_timestamp' => now()->timestamp,
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Failed to invalidate all web sessions for user {$user->id}", [
                 'error' => $e->getMessage(),
             ]);
         }

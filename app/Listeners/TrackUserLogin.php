@@ -56,6 +56,7 @@ class TrackUserLogin
 
         // ✅ Store active session for single session management
         // This runs after session regeneration in LoginForm
+        // Note: LoginForm already stores the session, so we only store if it wasn't stored yet
         try {
             $sessionService = new SessionManagementService();
             
@@ -63,12 +64,20 @@ class TrackUserLogin
             if (session()->isStarted()) {
                 $currentSessionId = session()->getId();
                 
-                // Always store the current session ID (this is the new session after regeneration)
-                // This ensures we have the correct session ID after login
-                $sessionService->storeActiveSession($user, $currentSessionId);
-                Log::info("Active session stored in listener for user {$user->id}", [
-                    'session_id' => $currentSessionId,
-                ]);
+                // Check if session is already stored (LoginForm might have stored it)
+                $activeSessionInfo = $sessionService->getActiveSessionInfo($user, $currentSessionId);
+                
+                if (!$activeSessionInfo) {
+                    // Session not stored yet, store it now
+                    $sessionService->storeActiveSession($user, $currentSessionId);
+                    Log::info("Active session stored in listener for user {$user->id}", [
+                        'session_id' => $currentSessionId,
+                    ]);
+                } else {
+                    Log::debug("Session already stored for user {$user->id}", [
+                        'session_id' => $currentSessionId,
+                    ]);
+                }
             }
             // For API login, session management is handled in AuthController
         } catch (\Exception $e) {
