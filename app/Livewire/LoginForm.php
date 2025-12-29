@@ -67,8 +67,23 @@ class LoginForm extends Component
             }
             
             // Regenerate session to create new session ID
-            // This will trigger Login event, and TrackUserLogin listener will handle session storage
             session()->regenerate();
+            
+            // ✅ Immediately store the new session ID to avoid timing issues
+            // This ensures ValidateWebSession middleware can find it right away
+            try {
+                $sessionService = new SessionManagementService();
+                $newSessionId = session()->getId();
+                $sessionService->storeActiveSession($user, $newSessionId);
+                Log::info("New session stored immediately after regeneration for user {$user->id}", [
+                    'session_id' => $newSessionId,
+                ]);
+            } catch (\Exception $e) {
+                Log::warning('Failed to store session immediately after regeneration', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
             
             return redirect()->intended('/dashboard');
         }

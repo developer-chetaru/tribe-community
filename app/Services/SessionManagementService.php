@@ -58,15 +58,33 @@ class SessionManagementService
             $this->invalidateWebSessions($user, $currentSessionId);
             
             // For JWT tokens, store timestamp with device ID
+            // Use token's issued at time if available, otherwise use current time
+            $tokenTimestamp = now()->timestamp;
+            if ($currentToken) {
+                try {
+                    $payload = JWTAuth::setToken($currentToken)->getPayload();
+                    $tokenIat = $payload->get('iat');
+                    if ($tokenIat) {
+                        $tokenTimestamp = $tokenIat;
+                    }
+                } catch (\Exception $e) {
+                    // If we can't decode token, use current time
+                    Log::debug("Could not decode token for timestamp", [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+            
             $tokenTimestampKey = "user_token_timestamp_{$user->id}_{$deviceId}";
             $previousTimestamp = Cache::get($tokenTimestampKey);
-            Cache::put($tokenTimestampKey, now()->timestamp, now()->addDays(30));
+            Cache::put($tokenTimestampKey, $tokenTimestamp, now()->addDays(30));
             
             // If there was a previous timestamp for this device, log it
             if ($previousTimestamp) {
                 Log::info("Previous session invalidated for user {$user->id} on device {$deviceId}", [
                     'previous_timestamp' => $previousTimestamp,
-                    'new_timestamp' => now()->timestamp,
+                    'new_timestamp' => $tokenTimestamp,
                 ]);
             }
             
@@ -100,9 +118,32 @@ class SessionManagementService
             
             Log::info("All web sessions invalidated for user {$user->id}");
             
-            // Update token timestamp to invalidate all JWT tokens
-            $tokenTimestampKey = "user_token_timestamp_{$user->id}";
-            Cache::put($tokenTimestampKey, now()->timestamp, now()->addDays(30));
+            // Clear all device-specific cache keys
+            // Get current device ID if exists
+            $userDeviceKey = "user_current_device_{$user->id}";
+            $currentDeviceId = Cache::get($userDeviceKey);
+            
+            // Clear device-specific session cache
+            if ($currentDeviceId) {
+                $deviceSessionKey = "user_active_session_{$user->id}_{$currentDeviceId}";
+                $deviceTokenKey = "user_token_timestamp_{$user->id}_{$currentDeviceId}";
+                Cache::forget($deviceSessionKey);
+                Cache::forget($deviceTokenKey);
+            }
+            
+            // Clear device mapping
+            Cache::forget($userDeviceKey);
+            
+            // Also clear old format keys for backward compatibility
+            $oldSessionKey = "user_active_session_{$user->id}";
+            $oldTokenTimestampKey = "user_token_timestamp_{$user->id}";
+            Cache::forget($oldSessionKey);
+            Cache::forget($oldTokenTimestampKey);
+            
+            // Update token timestamp to invalidate all JWT tokens (old format)
+            Cache::put($oldTokenTimestampKey, now()->timestamp, now()->addDays(30));
+            
+            Log::info("All session cache cleared for user {$user->id}");
             
         } catch (\Exception $e) {
             Log::error("Failed to invalidate all sessions for user {$user->id}", [
@@ -223,14 +264,38 @@ class SessionManagementService
                 }
             }
             
-            // Device ID must match
+            // Device ID must match (but allow if user's deviceId is null - might be web or first login)
             if ($currentDeviceId !== $deviceId) {
-                Log::warning("Token rejected - device ID mismatch", [
-                    'user_id' => $user->id,
-                    'token_device_id' => $deviceId,
-                    'current_device_id' => $currentDeviceId,
-                ]);
-                return false;
+                // If user's deviceId is null but cache has a device ID, it might be a web session
+                // Allow it if the device ID starts with 'web_'
+                if (!$deviceId || $deviceId === 'web_default') {
+                    // User doesn't have deviceId set, might be web login
+                    // Check if current device is also web
+                    if (strpos($currentDeviceId, 'web_') === 0) {
+                        // Both are web sessions, allow it
+                        Log::debug("Allowing web session with different device IDs", [
+                            'user_id' => $user->id,
+                            'token_device_id' => $deviceId,
+                            'current_device_id' => $currentDeviceId,
+                        ]);
+                    } else {
+                        // Current device is mobile, token is from web - reject
+                        Log::warning("Token rejected - device ID mismatch (web vs mobile)", [
+                            'user_id' => $user->id,
+                            'token_device_id' => $deviceId,
+                            'current_device_id' => $currentDeviceId,
+                        ]);
+                        return false;
+                    }
+                } else {
+                    // Device IDs don't match and both are set
+                    Log::warning("Token rejected - device ID mismatch", [
+                        'user_id' => $user->id,
+                        'token_device_id' => $deviceId,
+                        'current_device_id' => $currentDeviceId,
+                    ]);
+                    return false;
+                }
             }
             
             // Check token timestamp for this device
@@ -244,6 +309,26 @@ class SessionManagementService
                 $lastValidTimestamp = Cache::get($oldTokenTimestampKey);
                 
                 if (!$lastValidTimestamp) {
+                    // No tracking at all - might be first login or cache not set yet
+                    // Check if token was issued recently (within last 60 seconds) - allow it
+                    try {
+                        $payload = JWTAuth::setToken($token)->getPayload();
+                        $tokenIat = $payload->get('iat');
+                        $tokenAge = now()->timestamp - $tokenIat;
+                        
+                        // If token was issued within last 60 seconds, allow it (might be fresh login)
+                        if ($tokenAge <= 60) {
+                            Log::debug("Allowing token without cache - issued recently", [
+                                'user_id' => $user->id,
+                                'device_id' => $deviceId,
+                                'token_age' => $tokenAge,
+                            ]);
+                            return true;
+                        }
+                    } catch (\Exception $e) {
+                        // If we can't decode, allow for backward compatibility
+                    }
+                    
                     return true; // No tracking, allow token
                 }
             }
@@ -254,7 +339,9 @@ class SessionManagementService
                 $tokenIat = $payload->get('iat'); // Issued at timestamp
                 
                 // Token is valid if it was issued after or at the last valid timestamp
-                return $tokenIat >= $lastValidTimestamp;
+                // Allow a 5 second grace period for timing issues
+                $gracePeriod = 5;
+                return $tokenIat >= ($lastValidTimestamp - $gracePeriod);
             } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
                 return false;
             } catch (\Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
@@ -312,14 +399,36 @@ class SessionManagementService
      * Get current active session info for a user
      * 
      * @param User $user
+     * @param string|null $sessionId Optional session ID to check (for web sessions)
      * @return array|null
      */
-    public function getActiveSessionInfo(User $user)
+    public function getActiveSessionInfo(User $user, $sessionId = null)
     {
         try {
-            $deviceId = $user->deviceId ?? 'web_default';
+            // For web sessions, try to find by session ID first
+            if ($sessionId) {
+                $webDeviceId = 'web_' . $sessionId;
+                $cacheKey = "user_active_session_{$user->id}_{$webDeviceId}";
+                $sessionInfo = Cache::get($cacheKey);
+                if ($sessionInfo) {
+                    return $sessionInfo;
+                }
+            }
+            
+            // Try with user's device ID
+            $deviceId = $user->deviceId ?? ($sessionId ? 'web_' . $sessionId : 'web_default');
             $cacheKey = "user_active_session_{$user->id}_{$deviceId}";
             $sessionInfo = Cache::get($cacheKey);
+            
+            // If not found, try to get from current device mapping
+            if (!$sessionInfo) {
+                $userDeviceKey = "user_current_device_{$user->id}";
+                $currentDeviceId = Cache::get($userDeviceKey);
+                if ($currentDeviceId) {
+                    $cacheKey = "user_active_session_{$user->id}_{$currentDeviceId}";
+                    $sessionInfo = Cache::get($cacheKey);
+                }
+            }
             
             // Fallback to old format for backward compatibility
             if (!$sessionInfo) {

@@ -48,7 +48,7 @@ class ValidateWebSession
         
         try {
             $sessionService = new SessionManagementService();
-            $activeSessionInfo = $sessionService->getActiveSessionInfo($user);
+            $activeSessionInfo = $sessionService->getActiveSessionInfo($user, $currentSessionId);
             
             // If no active session info stored, allow (backward compatibility)
             // But also store current session as active for future checks
@@ -68,13 +68,14 @@ class ValidateWebSession
             }
             
             // Check if current session ID matches the active session
-            // Allow a small time window (5 seconds) after login for session to stabilize
+            // Allow a time window (30 seconds) after login for session to stabilize
+            // This handles cases where session ID changes during redirect or cache hasn't updated yet
             $sessionAge = now()->timestamp - ($activeSessionInfo['token_issued_at'] ?? 0);
             
             if (isset($activeSessionInfo['session_id']) && $activeSessionInfo['session_id'] !== $currentSessionId) {
-                // If session was just created (within 5 seconds), update it instead of rejecting
-                // This handles cases where session ID changes during redirect
-                if ($sessionAge < 5) {
+                // If session was just created (within 30 seconds), update it instead of rejecting
+                // This handles cases where session ID changes during redirect or listener hasn't run yet
+                if ($sessionAge < 30) {
                     Log::info("Session ID changed shortly after login, updating active session", [
                         'user_id' => $user->id,
                         'old_session_id' => $activeSessionInfo['session_id'],
