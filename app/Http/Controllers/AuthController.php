@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Mail;
 use App\Services\OneSignalService;
+use App\Services\SessionManagementService;
 use App\Mail\VerifyUserEmail;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -95,6 +96,17 @@ class AuthController extends Controller
 
     if (! $roleName) {
         return response()->json(['status' => false, 'message' => 'User has no role assigned'], 401);
+    }
+  
+    // ✅ Invalidate all previous sessions/tokens before updating user
+    try {
+        $sessionService = new SessionManagementService();
+        $sessionService->invalidatePreviousSessions($user, $token, null);
+    } catch (\Exception $e) {
+        Log::warning('Failed to invalidate previous sessions on login', [
+            'user_id' => $user->id,
+            'error' => $e->getMessage(),
+        ]);
     }
   
     $user->update([
@@ -323,6 +335,17 @@ class AuthController extends Controller
 
             // Invalidate JWT token
             JWTAuth::setToken($token)->invalidate();
+            
+            // ✅ Clear session tracking
+            try {
+                $sessionService = new SessionManagementService();
+                $sessionService->clearSessionTracking($user);
+            } catch (\Exception $e) {
+                Log::warning('Failed to clear session tracking on logout', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return response()->json([
                 'message' => 'User logged out successfully',
@@ -375,13 +398,24 @@ class AuthController extends Controller
 
     	if ($user) {
      	
-        	if ($user->hasRole('organisation_user')) {
+        if ($user->hasRole('organisation_user')) {
 				$user->update([
                 'password' => Hash::make($request->password),
                 'status'   => true,
             ]);
 
             $token = JWTAuth::fromUser($user);
+            
+            // ✅ Invalidate all previous sessions/tokens
+            try {
+                $sessionService = new SessionManagementService();
+                $sessionService->invalidatePreviousSessions($user, $token, null);
+            } catch (\Exception $e) {
+                Log::warning('Failed to invalidate previous sessions on setPassword', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return response()->json([
                 'success' => true,
@@ -393,6 +427,17 @@ class AuthController extends Controller
 
         if (Hash::check($request->password, $user->password)) {
             $token = JWTAuth::fromUser($user);
+            
+            // ✅ Invalidate all previous sessions/tokens
+            try {
+                $sessionService = new SessionManagementService();
+                $sessionService->invalidatePreviousSessions($user, $token, null);
+            } catch (\Exception $e) {
+                Log::warning('Failed to invalidate previous sessions on setPassword login', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             // Send welcome email on login
             try {

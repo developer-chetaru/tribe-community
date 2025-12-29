@@ -21,7 +21,7 @@ Route::post('/login-admin', [AuthController::class, 'adminLogin']);
 Route::post('/logout', [AuthController::class, 'logout']);
 
 
-Route::middleware('auth:api')->group(function () {
+Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     // flutter api
     Route::get('/user-profile', [HPTMController::class, 'userProfile']);
   	Route::Post('/update-user-profile', [HPTMController::class, 'updateUserProfile']);

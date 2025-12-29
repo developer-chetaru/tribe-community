@@ -107,6 +107,7 @@ Route::middleware([
     'auth:sanctum',
     config('jetstream.auth_session'),
     'verified',
+    'validate.web.session', // Validate session is from most recent login
 ])->group(function () {
      Route::get('/change-password', function () {
         return view('profile.change-password');

@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Services\OneSignalService;
 use App\Services\SubscriptionService;
+use App\Services\SessionManagementService;
 
 class TrackUserLogin
 {
@@ -52,6 +53,30 @@ class TrackUserLogin
         
         $saved = $user->save();
         \Log::info("Login save result: " . ($saved ? "success" : "fail"));
+
+        // ✅ Store active session for single session management
+        // This runs after session regeneration in LoginForm
+        try {
+            $sessionService = new SessionManagementService();
+            
+            // Check if this is a web login (has session) or API login
+            if (session()->isStarted()) {
+                $currentSessionId = session()->getId();
+                
+                // Always store the current session ID (this is the new session after regeneration)
+                // This ensures we have the correct session ID after login
+                $sessionService->storeActiveSession($user, $currentSessionId);
+                Log::info("Active session stored in listener for user {$user->id}", [
+                    'session_id' => $currentSessionId,
+                ]);
+            }
+            // For API login, session management is handled in AuthController
+        } catch (\Exception $e) {
+            Log::warning('Failed to store session on login event', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         // ✅ Set OneSignal tags on login (for automation)
         try {
