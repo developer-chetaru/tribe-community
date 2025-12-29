@@ -56,20 +56,34 @@
     <script>
         (function() {
             @if($platform === 'android')
-                // Android: Multiple attempts to open app
+                // Android: Try to open app without auto-redirecting to Play Store
                 var deepLinkUrl = "{{ $deepLinkUrl ?? 'tribe365://dashboard' }}";
-                var intentUrlDirect = "{{ $intentUrlDirect ?? $intentUrl }}";
-                var intentUrl = "{{ $intentUrl }}";
+                var intentUrlDirect = "{{ $intentUrlDirect }}";
+                var intentUrlWithAction = "{{ $intentUrlWithAction ?? intentUrlDirect }}";
                 var fallbackUrl = "{{ $fallbackUrl }}";
                 var dashboardUrl = "{{ $dashboardUrl }}";
                 
                 var appOpened = false;
                 var startTime = Date.now();
+                var pageHidden = false;
+                
+                // Track if page becomes hidden (app likely opened)
+                document.addEventListener('visibilitychange', function() {
+                    if (document.visibilityState === 'hidden') {
+                        pageHidden = true;
+                        appOpened = true;
+                    }
+                });
+                
+                // Track if page loses focus (app likely opened)
+                window.addEventListener('blur', function() {
+                    pageHidden = true;
+                    appOpened = true;
+                });
                 
                 // Function to check if app opened
                 function checkAppOpened() {
-                    // If page lost focus or became hidden, app likely opened
-                    if (!document.hasFocus() || document.visibilityState === 'hidden') {
+                    if (pageHidden || !document.hasFocus() || document.visibilityState === 'hidden') {
                         appOpened = true;
                         return true;
                     }
@@ -77,47 +91,59 @@
                 }
                 
                 // Method 1: Try direct deep link first (tribe365://dashboard)
+                // This is the most reliable method if app is configured correctly
                 try {
                     window.location.href = deepLinkUrl;
                 } catch(e) {
-                    console.log('Deep link failed');
+                    console.log('Deep link failed: ' + e);
                 }
                 
-                // Method 2: Try intent URL without fallback (after 500ms)
+                // Method 2: Try intent URL without fallback (after 800ms if app didn't open)
                 setTimeout(function() {
                     if (!checkAppOpened() && !appOpened) {
                         try {
-                            window.location.href = intentUrlDirect;
+                            // Try intent URL with action
+                            window.location.href = intentUrlWithAction;
                         } catch(e) {
-                            console.log('Intent direct failed');
+                            console.log('Intent with action failed: ' + e);
+                            // Try simple intent URL
+                            try {
+                                window.location.href = intentUrlDirect;
+                            } catch(e2) {
+                                console.log('Intent direct failed: ' + e2);
+                            }
                         }
                     }
-                }, 500);
+                }, 800);
                 
-                // Method 3: Try intent URL with iframe (for browsers that block direct navigation)
+                // Method 3: Try with iframe as last resort (after 1.5 seconds)
                 setTimeout(function() {
-                    if (!appOpened && (document.hasFocus() || document.visibilityState === 'visible')) {
+                    if (!appOpened && !checkAppOpened() && (document.hasFocus() || document.visibilityState === 'visible')) {
                         try {
                             var iframe = document.createElement('iframe');
                             iframe.style.display = 'none';
                             iframe.style.width = '1px';
                             iframe.style.height = '1px';
+                            iframe.style.position = 'absolute';
+                            iframe.style.left = '-9999px';
                             iframe.src = intentUrlDirect;
                             document.body.appendChild(iframe);
                             
                             // Remove iframe after attempt
                             setTimeout(function() {
-                                if (iframe.parentNode) {
-                                    iframe.parentNode.removeChild(iframe);
-                                }
-                            }, 1000);
+                                try {
+                                    if (iframe && iframe.parentNode) {
+                                        iframe.parentNode.removeChild(iframe);
+                                    }
+                                } catch(e) {}
+                            }, 2000);
                         } catch(e) {
-                            console.log('Iframe method failed');
+                            console.log('Iframe method failed: ' + e);
                         }
                     }
-                }, 1000);
+                }, 1500);
                 
-                // Fallback: If app doesn't open within 4 seconds, redirect to Play Store
+                // Fallback: Only redirect to Play Store if app definitely didn't open (after 5 seconds)
                 var checkInterval = setInterval(function() {
                     var elapsed = Date.now() - startTime;
                     
@@ -128,15 +154,15 @@
                         return;
                     }
                     
-                    // If timeout reached and app didn't open
-                    if (elapsed > 4000) {
+                    // If timeout reached (5 seconds) and app didn't open, redirect to Play Store
+                    if (elapsed > 5000) {
                         clearInterval(checkInterval);
-                        // Only redirect if we're sure app didn't open
-                        if (document.hasFocus() && document.visibilityState === 'visible') {
+                        // Only redirect if we're absolutely sure app didn't open
+                        if (document.hasFocus() && document.visibilityState === 'visible' && !pageHidden) {
                             window.location.href = fallbackUrl;
                         }
                     }
-                }, 100);
+                }, 200);
             @elseif($platform === 'ios')
                 // iOS: Try custom URL scheme first
                 var customScheme = "{{ $customScheme }}";
