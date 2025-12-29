@@ -98,7 +98,18 @@ class AuthController extends Controller
         return response()->json(['status' => false, 'message' => 'User has no role assigned'], 401);
     }
   
-    // ✅ Invalidate all previous sessions/tokens before updating user
+    // ✅ Update device info FIRST, then invalidate previous sessions
+    // This ensures device ID is available for session management
+    $user->update([
+        'fcmToken'   => $request->fcmToken,
+        'deviceType' => $request->deviceType,
+        'deviceId'   => $request->deviceId,
+    ]);
+    
+    // Refresh user model to get updated deviceId
+    $user->refresh();
+  
+    // ✅ Invalidate all previous sessions/tokens for other devices
     try {
         $sessionService = new SessionManagementService();
         $sessionService->invalidatePreviousSessions($user, $token, null);
@@ -108,12 +119,6 @@ class AuthController extends Controller
             'error' => $e->getMessage(),
         ]);
     }
-  
-    $user->update([
-        'fcmToken'   => $request->fcmToken,
-        'deviceType' => $request->deviceType,
-        'deviceId'   => $request->deviceId,
-    ]);
 
     // ✅ Set OneSignal tags on login (for automation)
     try {

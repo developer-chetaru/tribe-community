@@ -27,20 +27,35 @@ class ValidateJWTToken
                 $user = JWTAuth::setToken($token)->authenticate();
                 
                 if ($user) {
-                    // Check if token is from current session
+                    // Get device ID from request header or user model
+                    $requestDeviceId = $request->header('X-Device-Id') ?? $user->deviceId ?? null;
+                    
+                    // If device ID is provided in request but doesn't match user's device ID, update it
+                    if ($requestDeviceId && $requestDeviceId !== $user->deviceId) {
+                        Log::warning("Device ID mismatch in request vs user model", [
+                            'user_id' => $user->id,
+                            'request_device_id' => $requestDeviceId,
+                            'user_device_id' => $user->deviceId,
+                        ]);
+                        // Update user's device ID to match request
+                        $user->deviceId = $requestDeviceId;
+                    }
+                    
+                    // Check if token is from current session and device
                     $sessionService = new SessionManagementService();
                     $isValid = $sessionService->isTokenValid($token, $user);
                     
                     if (!$isValid) {
-                        // Token is from a previous session, invalidate it
+                        // Token is from a previous session/device, invalidate it
                         try {
                             JWTAuth::setToken($token)->invalidate();
                         } catch (\Exception $e) {
                             // Token might already be invalid
                         }
                         
-                        Log::warning("Token rejected - from previous session", [
+                        Log::warning("Token rejected - from previous session or device", [
                             'user_id' => $user->id,
+                            'device_id' => $user->deviceId,
                         ]);
                         
                         return response()->json([
