@@ -56,40 +56,83 @@
     <script>
         (function() {
             @if($platform === 'android')
-                // Android: Try deep link first, then intent:// URL
+                // Android: Multiple attempts to open app
                 var deepLinkUrl = "{{ $deepLinkUrl ?? 'tribe365://dashboard' }}";
+                var intentUrlDirect = "{{ $intentUrlDirect ?? $intentUrl }}";
                 var intentUrl = "{{ $intentUrl }}";
                 var fallbackUrl = "{{ $fallbackUrl }}";
                 var dashboardUrl = "{{ $dashboardUrl }}";
                 
-                // First try: Direct deep link
-                var triedDeepLink = false;
-                try {
-                    window.location.href = deepLinkUrl;
-                    triedDeepLink = true;
-                } catch(e) {
-                    console.log('Deep link failed, trying intent URL');
+                var appOpened = false;
+                var startTime = Date.now();
+                
+                // Function to check if app opened
+                function checkAppOpened() {
+                    // If page lost focus or became hidden, app likely opened
+                    if (!document.hasFocus() || document.visibilityState === 'hidden') {
+                        appOpened = true;
+                        return true;
+                    }
+                    return false;
                 }
                 
-                // Second try: Intent URL (if deep link didn't work)
+                // Method 1: Try direct deep link first (tribe365://dashboard)
+                try {
+                    window.location.href = deepLinkUrl;
+                } catch(e) {
+                    console.log('Deep link failed');
+                }
+                
+                // Method 2: Try intent URL without fallback (after 500ms)
                 setTimeout(function() {
-                    if (!triedDeepLink || document.hasFocus()) {
-                        // Create hidden iframe to try opening app via intent
-                        var iframe = document.createElement('iframe');
-                        iframe.style.display = 'none';
-                        iframe.src = intentUrl;
-                        document.body.appendChild(iframe);
+                    if (!checkAppOpened() && !appOpened) {
+                        try {
+                            window.location.href = intentUrlDirect;
+                        } catch(e) {
+                            console.log('Intent direct failed');
+                        }
                     }
                 }, 500);
                 
-                // Fallback: If app doesn't open within 2 seconds, redirect to Play Store
-                var startTime = Date.now();
+                // Method 3: Try intent URL with iframe (for browsers that block direct navigation)
+                setTimeout(function() {
+                    if (!appOpened && (document.hasFocus() || document.visibilityState === 'visible')) {
+                        try {
+                            var iframe = document.createElement('iframe');
+                            iframe.style.display = 'none';
+                            iframe.style.width = '1px';
+                            iframe.style.height = '1px';
+                            iframe.src = intentUrlDirect;
+                            document.body.appendChild(iframe);
+                            
+                            // Remove iframe after attempt
+                            setTimeout(function() {
+                                if (iframe.parentNode) {
+                                    iframe.parentNode.removeChild(iframe);
+                                }
+                            }, 1000);
+                        } catch(e) {
+                            console.log('Iframe method failed');
+                        }
+                    }
+                }, 1000);
+                
+                // Fallback: If app doesn't open within 4 seconds, redirect to Play Store
                 var checkInterval = setInterval(function() {
                     var elapsed = Date.now() - startTime;
-                    if (elapsed > 2000) {
+                    
+                    // Check if app opened
+                    if (checkAppOpened()) {
+                        appOpened = true;
                         clearInterval(checkInterval);
-                        // Check if page is still visible (app didn't open)
-                        if (document.hasFocus() || document.visibilityState === 'visible') {
+                        return;
+                    }
+                    
+                    // If timeout reached and app didn't open
+                    if (elapsed > 4000) {
+                        clearInterval(checkInterval);
+                        // Only redirect if we're sure app didn't open
+                        if (document.hasFocus() && document.visibilityState === 'visible') {
                             window.location.href = fallbackUrl;
                         }
                     }

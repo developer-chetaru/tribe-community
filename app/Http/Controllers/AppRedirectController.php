@@ -28,17 +28,20 @@ class AppRedirectController extends Controller
         
         // Detect Android
         if (preg_match('/android/i', $userAgent)) {
-            // Try to open app using intent:// URL
+            // Deep link URL - direct app scheme
+            $deepLinkUrl = "tribe365://dashboard";
+            
+            // Intent URL format for Android
             // Format: intent://[path]#Intent;scheme=[scheme];package=[package];S.browser_fallback_url=[fallback];end
             $intentUrl = "intent://dashboard#Intent;scheme=tribe365;package={$androidPackage};S.browser_fallback_url=" . urlencode($androidPlayStoreUrl) . ";end";
             
-            // Alternative: Try using the app's deep link scheme directly
-            // If app supports deep links like tribe365://dashboard
-            $deepLinkUrl = "tribe365://dashboard";
+            // Alternative intent without fallback (for better app opening)
+            $intentUrlDirect = "intent://dashboard#Intent;scheme=tribe365;package={$androidPackage};end";
             
             // Return HTML page that tries to open app, then redirects to Play Store if app not installed
             return response()->view('app-redirect', [
                 'intentUrl' => $intentUrl,
+                'intentUrlDirect' => $intentUrlDirect,
                 'deepLinkUrl' => $deepLinkUrl,
                 'fallbackUrl' => $androidPlayStoreUrl,
                 'dashboardUrl' => $dashboardUrl,
