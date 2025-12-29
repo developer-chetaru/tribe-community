@@ -69,8 +69,12 @@ use App\Http\Controllers\Billing\RefundController;
 use App\Http\Controllers\ForgotController;
 
 use App\Http\Controllers\TestEmailController;
+use App\Http\Controllers\AppRedirectController;
 
 Route::get('/test-email', [TestEmailController::class, 'sendTestEmail']);
+
+// App redirect route for mobile deep linking
+Route::get('/app-redirect', [AppRedirectController::class, 'redirectToApp'])->name('app.redirect');
 
  Route::post('/forgot-password', [ForgotResetPasswordController::class, 'sendResetLinkEmail'])
     ->name('password.email');
