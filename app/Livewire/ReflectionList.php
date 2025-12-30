@@ -61,8 +61,8 @@ class ReflectionList extends Component
         $user = Auth::user();
 
         // Reflections is accessible to super_admin (via Universal Setting > HPTM) 
-        // and organisation_user|organisation_admin|basecamp (via standalone menu)
-        $allowedRoles = ['super_admin', 'organisation_user', 'organisation_admin', 'basecamp'];
+        // and organisation_user|organisation_admin|basecamp|director (via standalone menu)
+        $allowedRoles = ['super_admin', 'organisation_user', 'organisation_admin', 'basecamp', 'director'];
         
         // Check if user has any of the allowed roles (handle case where role might not exist)
         $hasAccess = false;
