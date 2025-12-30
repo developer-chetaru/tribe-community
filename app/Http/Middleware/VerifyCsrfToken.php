@@ -34,5 +34,26 @@ class VerifyCsrfToken extends Middleware
 
         return parent::tokensMatch($request);
     }
+    
+    /**
+     * Handle a failed CSRF token verification.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \Exception  $exception
+     * @return mixed
+     */
+    protected function handleTokenMismatch($request, $exception)
+    {
+        // For AJAX/Livewire requests, return JSON instead of throwing exception
+        if ($request->expectsJson() || $request->header('X-Livewire') || $request->ajax()) {
+            return response()->json([
+                'message' => 'CSRF token mismatch. Please refresh the page.',
+                'error' => 'Page Expired'
+            ], 419);
+        }
+        
+        // For regular requests, use default behavior
+        return parent::handleTokenMismatch($request, $exception);
+    }
 }
 

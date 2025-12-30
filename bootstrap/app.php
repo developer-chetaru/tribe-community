@@ -21,5 +21,18 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Handle 419 CSRF token mismatch errors gracefully
+        $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, $request) {
+            // For AJAX/Livewire requests, return JSON instead of HTML error page
+            if ($request->expectsJson() || $request->header('X-Livewire') || $request->ajax()) {
+                return response()->json([
+                    'message' => 'CSRF token mismatch. Please refresh the page.',
+                    'error' => 'Page Expired'
+                ], 419);
+            }
+            
+            // For regular requests, redirect to login with a message
+            return redirect()->route('login')
+                ->with('error', 'Your session has expired. Please log in again.');
+        });
     })->create();

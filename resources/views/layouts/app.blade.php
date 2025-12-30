@@ -91,21 +91,115 @@
              });
          }, 30 * 60 * 1000); // 30 minutes
          
-         // Handle Livewire 419 errors (Page Expired)
-         document.addEventListener('livewire:error', (event) => {
-             if (event.detail.status === 419) {
-                 // Refresh the page to get a new CSRF token
-                 window.location.reload();
-             }
-         });
+         // Handle Livewire 419 errors (Page Expired) - Auto refresh token and retry
+         let retryCount = 0;
+         const maxRetries = 1;
          
-         // Listen for Livewire network errors
-         window.addEventListener('livewire:error', (event) => {
-             if (event.detail.status === 419) {
-                 alert('Your session has expired. The page will reload.');
-                 window.location.reload();
+         async function refreshCsrfToken() {
+             try {
+                 const response = await fetch('/refresh-csrf-token', {
+                     method: 'GET',
+                     headers: {
+                         'X-Requested-With': 'XMLHttpRequest',
+                         'Accept': 'application/json',
+                     },
+                     credentials: 'same-origin'
+                 });
+                 const data = await response.json();
+                 if (data.token) {
+                     // Update meta tag
+                     const metaTag = document.querySelector('meta[name="csrf-token"]');
+                     if (metaTag) {
+                         metaTag.setAttribute('content', data.token);
+                     }
+                     
+                     // Update Livewire token
+                     if (window.Livewire && window.Livewire.find) {
+                         window.Livewire.all().forEach(component => {
+                             if (component.__instance && component.__instance.csrf) {
+                                 component.__instance.csrf = data.token;
+                             }
+                         });
+                     }
+                     return data.token;
+                 }
+             } catch (err) {
+                 console.log('CSRF token refresh failed:', err);
              }
-         });
+             return null;
+         }
+         
+         // Intercept Livewire requests to handle 419 errors - prevent error modal from showing
+         // Use capture phase to intercept early before Livewire processes the error
+         window.addEventListener('livewire:error', async (event) => {
+             if (event.detail && event.detail.status === 419) {
+                 event.preventDefault(); // Prevent default error handling and modal
+                 event.stopPropagation(); // Stop event from bubbling
+                 
+                 if (retryCount < maxRetries) {
+                     retryCount++;
+                     
+                     // Refresh CSRF token silently
+                     const newToken = await refreshCsrfToken();
+                     
+                     if (newToken) {
+                         // Silently reload page to get fresh token
+                         setTimeout(() => {
+                             retryCount = 0;
+                             window.location.reload();
+                         }, 100);
+                     } else {
+                         // If token refresh fails, reload page
+                         window.location.reload();
+                     }
+                 } else {
+                     // If max retries reached, silently reload
+                     window.location.reload();
+                 }
+                 return false; // Prevent further processing
+             }
+         }, true); // Use capture phase to intercept early
+         
+         // Also handle fetch errors for non-Livewire requests
+         const originalFetch = window.fetch;
+         window.fetch = async function(...args) {
+             const response = await originalFetch.apply(this, args);
+             
+             if (response.status === 419 && retryCount < maxRetries) {
+                 retryCount++;
+                 const newToken = await refreshCsrfToken();
+                 
+                 if (newToken) {
+                     // Clone the original request and update CSRF token
+                     const [url, options = {}] = args;
+                     const newOptions = {
+                         ...options,
+                         headers: {
+                             ...options.headers,
+                             'X-CSRF-TOKEN': newToken
+                         }
+                     };
+                     
+                     if (options.body && typeof options.body === 'string') {
+                         try {
+                             const body = JSON.parse(options.body);
+                             body._token = newToken;
+                             newOptions.body = JSON.stringify(body);
+                         } catch (e) {
+                             // If body is not JSON, add token to form data
+                             if (options.body instanceof FormData) {
+                                 options.body.set('_token', newToken);
+                             }
+                         }
+                     }
+                     
+                     retryCount = 0;
+                     return originalFetch(url, newOptions);
+                 }
+             }
+             
+             return response;
+         };
      </script>
     <script src="https://cdn.jsdelivr.net/npm/@material-tailwind/html@3.0.0-beta.7/dist/material-tailwind.umd.min.js"></script>
       <!-- intl-tel-input JS -->
