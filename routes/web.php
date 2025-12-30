@@ -72,7 +72,8 @@ use App\Http\Controllers\AppRedirectController;
 Route::get('/test-email', [TestEmailController::class, 'sendTestEmail']);
 
 // App redirect route for mobile deep linking
-Route::get('/app-redirect', [AppRedirectController::class, 'redirectToApp'])->name('app.redirect');
+Route::get('/app-redirect', [AppRedirectController::class, 'redirect']);
+Route::get('/open', [AppRedirectController::class, 'redirect']); // optional alias
 
  Route::post('/forgot-password', [ForgotResetPasswordController::class, 'sendResetLinkEmail'])
     ->name('password.email');

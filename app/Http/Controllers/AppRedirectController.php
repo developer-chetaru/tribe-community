@@ -6,65 +6,41 @@ use Illuminate\Http\Request;
 
 class AppRedirectController extends Controller
 {
-    /**
-     * Redirect to app or dashboard based on device type
-     * 
-     * @param Request $request
-     * @return \Illuminate\Http\RedirectResponse
-     */
-    public function redirectToApp(Request $request)
+    public function redirect(Request $request)
     {
-        $userAgent = $request->header('User-Agent', '');
-        
-        // Android app package
+        $ua = strtolower($request->header('User-Agent', ''));
         $androidPackage = 'com.chetaru.tribe365_new';
-        $androidPlayStoreUrl = 'https://play.google.com/store/apps/details?id=' . $androidPackage . '&hl=en_IN';
-        
-        // iOS app
-        $iosAppStoreUrl = 'https://apps.apple.com/us/app/tribe365/id1435273330';
-        
-        // Dashboard URL (fallback for desktop)
-        $dashboardUrl = 'https://community.tribe365.co/dashboard';
-        
-        // Detect Android
-        if (preg_match('/android/i', $userAgent)) {
-            // Deep link URL - direct app scheme (try this first)
-            $deepLinkUrl = "tribe365://dashboard";
+        $androidStore = "https://play.google.com/store/apps/details?id={$androidPackage}";
+        $iosStore = "https://apps.apple.com/app/id1435273330";
+        $webUrl = "https://community.tribe365.co/dashboard";
+
+        // ANDROID
+        if (str_contains($ua, 'android')) {
+            // Intent URL format: intent://[path]#Intent;scheme=[scheme];package=[package];end
+            $intentUrl = "intent://open#Intent;scheme=tribe365;package={$androidPackage};end";
             
-            // Intent URL without fallback - this won't auto-redirect to Play Store
-            // Format: intent://[path]#Intent;scheme=[scheme];package=[package];end
-            $intentUrlDirect = "intent://dashboard#Intent;scheme=tribe365;package={$androidPackage};end";
-            
-            // Alternative: Try with action
-            $intentUrlWithAction = "intent://dashboard#Intent;action=android.intent.action.VIEW;scheme=tribe365;package={$androidPackage};end";
-            
-            // Return HTML page that tries to open app, then redirects to Play Store if app not installed
             return response()->view('app-redirect', [
-                'intentUrlDirect' => $intentUrlDirect,
-                'intentUrlWithAction' => $intentUrlWithAction,
-                'deepLinkUrl' => $deepLinkUrl,
-                'fallbackUrl' => $androidPlayStoreUrl,
-                'dashboardUrl' => $dashboardUrl,
-                'platform' => 'android'
+                'platform' => 'android',
+                'intentUrl' => $intentUrl,
+                'fallback' => $androidStore,
             ]);
         }
-        
-        // Detect iOS
-        if (preg_match('/iphone|ipad|ipod/i', $userAgent)) {
-            // Try custom URL scheme first, then App Store
-            $customScheme = 'tribe365://dashboard';
-            
-            // Return HTML page that tries to open app, then redirects to App Store if app not installed
+
+        // IOS
+        if (
+            str_contains($ua, 'iphone') ||
+            str_contains($ua, 'ipad') ||
+            str_contains($ua, 'ipod')
+        ) {
             return response()->view('app-redirect', [
-                'customScheme' => $customScheme,
-                'fallbackUrl' => $iosAppStoreUrl,
-                'dashboardUrl' => $dashboardUrl,
-                'platform' => 'ios'
+                'platform' => 'ios',
+                'schemeUrl' => 'tribe365://open',
+                'fallback' => $iosStore,
             ]);
         }
-        
-        // Desktop or unknown device - redirect to dashboard
-        return redirect($dashboardUrl);
+
+        // DESKTOP
+        return redirect($webUrl);
     }
 }
 
