@@ -125,8 +125,8 @@ class StripeService
 
             $price = \Stripe\Price::create([
                 'product' => $productId,
-                'unit_amount' => $unitAmount * 100, // Convert £ to pence
-                'currency' => 'gbp',
+                'unit_amount' => $unitAmount * 100, // Convert $ to cents
+                'currency' => 'usd',
                 'recurring' => [
                     'interval' => 'month',
                 ],
@@ -303,8 +303,8 @@ class StripeService
 
             $invoiceItem = \Stripe\InvoiceItem::create([
                 'customer' => $customerId,
-                'amount' => $amount * 100, // Convert £ to pence
-                'currency' => 'gbp',
+                'amount' => $amount * 100, // Convert $ to cents
+                'currency' => 'usd',
                 'description' => $description,
                 'metadata' => $metadata,
             ]);
@@ -396,7 +396,7 @@ class StripeService
 
             // Partial refund if amount specified
             if ($amount !== null) {
-                $refundParams['amount'] = $amount * 100; // Convert £ to pence
+                $refundParams['amount'] = $amount * 100; // Convert $ to cents
             }
 
             $refund = \Stripe\Refund::create($refundParams);

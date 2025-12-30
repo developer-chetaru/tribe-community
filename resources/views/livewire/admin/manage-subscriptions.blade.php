@@ -66,7 +66,7 @@
                                         $pricePerUser = $prices[$organisation->subscriptionRecord->tier] ?? 0;
                                         $total = $pricePerUser * $organisation->subscriptionRecord->user_count;
                                     @endphp
-                                    £{{ number_format($total, 2) }}
+                                    ${{ number_format($total, 2) }}
                                 @else
                                     <span class="text-gray-400">-</span>
                                 @endif

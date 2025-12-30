@@ -286,12 +286,12 @@ class InvoiceController extends Controller
                 'payment_method_types' => ['card'],
                 'line_items' => [[
                     'price_data' => [
-                        'currency' => 'gbp',
+                        'currency' => 'usd',
                         'product_data' => [
                             'name' => "Invoice #{$invoice->invoice_number}",
                             'description' => "Payment for {$invoice->user_count} users - {$organisation->name}",
                         ],
-                        'unit_amount' => $invoice->total_amount * 100, // Convert to pence
+                        'unit_amount' => $invoice->total_amount * 100, // Convert to cents
                     ],
                     'quantity' => 1,
                 ]],
@@ -396,7 +396,7 @@ class InvoiceController extends Controller
                     'subscription_id' => $invoice->subscription_id,
                     'stripe_payment_intent_id' => $session->payment_intent,
                     'amount' => $invoice->total_amount,
-                    'currency' => 'gbp',
+                    'currency' => 'usd',
                     'status' => 'succeeded',
                     'type' => 'one_time_payment',
                     'paid_at' => now(),

@@ -152,7 +152,7 @@ class PayPalService
                             'pricing_scheme' => [
                                 'fixed_price' => [
                                     'value' => $pricePerUser,
-                                    'currency_code' => 'GBP',
+                                    'currency_code' => 'USD',
                                 ],
                             ],
                         ],

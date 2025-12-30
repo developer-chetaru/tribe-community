@@ -40,11 +40,11 @@
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Price per User</p>
-                            <p class="text-lg font-semibold">£{{ number_format(($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30)), 2) }}</p>
+                            <p class="text-lg font-semibold">${{ number_format(($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30)), 2) }}</p>
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Monthly Total</p>
-                            <p class="text-lg font-semibold">£{{ number_format(($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30)) * $subscription->user_count, 2) }}</p>
+                            <p class="text-lg font-semibold">${{ number_format(($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30)) * $subscription->user_count, 2) }}</p>
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Subscription End</p>
@@ -201,11 +201,11 @@
                             </div>
                             <div>
                                 <span class="text-sm text-gray-600">Price per User:</span>
-                                <p class="font-semibold text-gray-900">£{{ number_format($selectedInvoice->price_per_user, 2) }}</p>
+                                <p class="font-semibold text-gray-900">${{ number_format($selectedInvoice->price_per_user, 2) }}</p>
                             </div>
                             <div>
                                 <span class="text-sm text-gray-600">Total Amount:</span>
-                                <p class="font-bold text-xl text-[#EB1C24]">£{{ number_format($selectedInvoice->total_amount, 2) }}</p>
+                                <p class="font-bold text-xl text-[#EB1C24]">${{ number_format($selectedInvoice->total_amount, 2) }}</p>
                             </div>
                         </div>
                     </div>
@@ -390,7 +390,7 @@
                                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
                                     </svg>
-                                    Pay £{{ number_format($selectedInvoice->total_amount, 2) }}
+                                    Pay ${{ number_format($selectedInvoice->total_amount, 2) }}
                                 </span>
                                 <span wire:loading wire:target="confirmStripePayment,createStripePaymentIntent" class="flex items-center justify-center">
                                     <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -713,7 +713,7 @@
                 <div class="mt-6 flex justify-end space-x-2">
                     <button type="button" wire:click="closePaymentModal" class="px-4 py-2 border rounded-md hover:bg-gray-50">Cancel</button>
                     <button type="button" id="stripe-submit-button" class="px-4 py-2 bg-[#EB1C24] text-white rounded-md hover:bg-red-700 disabled:opacity-50" disabled>
-                        <span wire:loading.remove wire:target="confirmStripePayment,createStripePaymentIntent">Pay £{{ number_format($selectedInvoice->total_amount, 2) }}</span>
+                        <span wire:loading.remove wire:target="confirmStripePayment,createStripePaymentIntent">Pay ${{ number_format($selectedInvoice->total_amount, 2) }}</span>
                         <span wire:loading wire:target="confirmStripePayment,createStripePaymentIntent">Processing...</span>
                     </button>
                 </div>
@@ -822,7 +822,7 @@
                                             const errorDiv = document.getElementById('stripe-card-errors');
                                             if (errorDiv) errorDiv.textContent = error.message;
                                             newBtn.disabled = false;
-                                            newBtn.innerHTML = '<span>Pay £{{ number_format($selectedInvoice->total_amount ?? 0, 2) }}</span>';
+                                            newBtn.innerHTML = '<span>Pay ${{ number_format($selectedInvoice->total_amount ?? 0, 2) }}</span>';
                                         } else if (paymentIntent && paymentIntent.status === 'succeeded') {
                                             @this.confirmStripePayment(paymentIntent.id);
                                         }
@@ -831,7 +831,7 @@
                                         const errorDiv = document.getElementById('stripe-card-errors');
                                         if (errorDiv) errorDiv.textContent = 'Payment failed. Please try again.';
                                         newBtn.disabled = false;
-                                        newBtn.innerHTML = '<span>Pay £{{ number_format($selectedInvoice->total_amount ?? 0, 2) }}</span>';
+                                        newBtn.innerHTML = '<span>Pay ${{ number_format($selectedInvoice->total_amount ?? 0, 2) }}</span>';
                                     }
                                 });
                             }
@@ -868,14 +868,14 @@
                                         if (error) {
                                             document.getElementById('stripe-card-errors').textContent = error.message;
                                             newBtn.disabled = false;
-                                            newBtn.innerHTML = '<span>Pay £{{ number_format($selectedInvoice->total_amount ?? 0, 2) }}</span>';
+                                            newBtn.innerHTML = '<span>Pay ${{ number_format($selectedInvoice->total_amount ?? 0, 2) }}</span>';
                                         } else if (paymentIntent?.status === 'succeeded') {
                                             @this.confirmStripePayment(paymentIntent.id);
                                         }
                                     } catch (err) {
                                         document.getElementById('stripe-card-errors').textContent = 'Payment failed. Please try again.';
                                         newBtn.disabled = false;
-                                        newBtn.innerHTML = '<span>Pay £{{ number_format($selectedInvoice->total_amount ?? 0, 2) }}</span>';
+                                        newBtn.innerHTML = '<span>Pay ${{ number_format($selectedInvoice->total_amount ?? 0, 2) }}</span>';
                                     }
                                 };
                             }
@@ -1128,7 +1128,7 @@
                         </div>
                         <div>
                             <span class="text-sm text-gray-600">Price per User:</span>
-                            <p class="font-semibold text-gray-900">£{{ number_format($selectedInvoiceForView->price_per_user, 2) }}</p>
+                            <p class="font-semibold text-gray-900">${{ number_format($selectedInvoiceForView->price_per_user, 2) }}</p>
                         </div>
                         <div>
                             <span class="text-sm text-gray-600">Subscription Status:</span>
@@ -1165,7 +1165,7 @@
                                 </div>
                                 <div>
                                     <span class="text-sm text-gray-600">Amount:</span>
-                                    <p class="font-semibold text-gray-900">£{{ number_format($payment->amount, 2) }}</p>
+                                    <p class="font-semibold text-gray-900">${{ number_format($payment->amount, 2) }}</p>
                                 </div>
                                 <div>
                                     <span class="text-sm text-gray-600">Transaction ID:</span>
@@ -1247,17 +1247,17 @@
                     <div class="space-y-3">
                         <div class="flex justify-between py-2 border-b border-gray-200">
                             <span class="text-gray-600">Subtotal:</span>
-                            <span class="font-semibold text-gray-900">£{{ number_format($selectedInvoiceForView->subtotal ?? ($selectedInvoiceForView->total_amount - ($selectedInvoiceForView->tax_amount ?? 0)), 2) }}</span>
+                            <span class="font-semibold text-gray-900">${{ number_format($selectedInvoiceForView->subtotal ?? ($selectedInvoiceForView->total_amount - ($selectedInvoiceForView->tax_amount ?? 0)), 2) }}</span>
                         </div>
                         @if($selectedInvoiceForView->tax_amount)
                         <div class="flex justify-between py-2 border-b border-gray-200">
                             <span class="text-gray-600">Tax (VAT):</span>
-                            <span class="font-semibold text-gray-900">£{{ number_format($selectedInvoiceForView->tax_amount, 2) }}</span>
+                            <span class="font-semibold text-gray-900">${{ number_format($selectedInvoiceForView->tax_amount, 2) }}</span>
                         </div>
                         @endif
                         <div class="flex justify-between py-2 border-t-2 border-gray-300 pt-3">
                             <span class="text-lg font-semibold text-gray-900">Total Amount:</span>
-                            <span class="text-xl font-bold text-[#EB1C24]">£{{ number_format($selectedInvoiceForView->total_amount, 2) }}</span>
+                            <span class="text-xl font-bold text-[#EB1C24]">${{ number_format($selectedInvoiceForView->total_amount, 2) }}</span>
                         </div>
                     </div>
                 </div>

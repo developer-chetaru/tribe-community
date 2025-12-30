@@ -404,12 +404,12 @@ class Billing extends Component
                 'payment_method_types' => ['card'],
                 'line_items' => [[
                     'price_data' => [
-                        'currency' => 'gbp',
+                        'currency' => 'usd',
                         'product_data' => [
                             'name' => "Invoice #{$invoice->invoice_number}",
                             'description' => "Payment for {$invoice->user_count} users - {$organisation->name}",
                         ],
-                        'unit_amount' => $invoice->total_amount * 100, // Convert to pence
+                        'unit_amount' => $invoice->total_amount * 100, // Convert to cents
                     ],
                     'quantity' => 1,
                 ]],
@@ -486,8 +486,8 @@ class Billing extends Component
             }
             
             $paymentIntent = \Stripe\PaymentIntent::create([
-                'amount' => $this->selectedInvoice->total_amount * 100, // Convert to pence
-                'currency' => 'gbp',
+                'amount' => $this->selectedInvoice->total_amount * 100, // Convert to cents
+                'currency' => 'usd',
                 'customer' => $organisation->stripe_customer_id,
                 'metadata' => [
                     'invoice_id' => $this->selectedInvoice->id,
@@ -564,7 +564,7 @@ class Billing extends Component
                     'organisation_id' => $this->selectedInvoice->organisation_id,
                     'paid_by_user_id' => auth()->id(),
                     'payment_method' => 'card',
-                    'amount' => $paymentIntent->amount / 100, // Convert from pence
+                    'amount' => $paymentIntent->amount / 100, // Convert from cents
                     'transaction_id' => $paymentIntent->id,
                     'status' => 'completed',
                     'payment_date' => now()->toDateString(),

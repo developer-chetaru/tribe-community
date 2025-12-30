@@ -89,7 +89,7 @@ class StripeCheckoutController extends Controller
                     'subscription_id' => $invoice->subscription_id,
                     'stripe_payment_intent_id' => $session->payment_intent,
                     'amount' => $invoice->total_amount,
-                    'currency' => 'gbp',
+                    'currency' => 'usd',
                     'status' => 'succeeded',
                     'type' => 'one_time_payment',
                     'paid_at' => now(),

@@ -63,8 +63,8 @@ class StripePaymentController extends Controller
             }
 
             $paymentIntent = \Stripe\PaymentIntent::create([
-                'amount' => $invoice->total_amount * 100, // Convert to pence
-                'currency' => 'gbp',
+                'amount' => $invoice->total_amount * 100, // Convert to cents
+                'currency' => 'usd',
                 'customer' => $organisation->stripe_customer_id,
                 'metadata' => [
                     'invoice_id' => $invoice->id,
@@ -160,7 +160,7 @@ class StripePaymentController extends Controller
                 'organisation_id' => $invoice->organisation_id,
                 'paid_by_user_id' => $user->id,
                 'payment_method' => 'card',
-                'amount' => $paymentIntent->amount / 100, // Convert from pence
+                'amount' => $paymentIntent->amount / 100, // Convert from cents
                 'transaction_id' => $paymentIntent->id,
                 'status' => 'completed',
                 'payment_date' => now()->toDateString(),
