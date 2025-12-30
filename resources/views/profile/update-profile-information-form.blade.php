@@ -148,11 +148,34 @@
                 'Africa/Nairobi' => 'KE',
             ];
             $timezones = collect(timezone_identifiers_list())->map(function($tz) use ($tzToCountry) {
+                try {
+                    $dt = new \DateTime('now', new \DateTimeZone($tz));
+                    $offset = $dt->getOffset();
+                    $hours = intval(abs($offset) / 3600);
+                    $minutes = intval((abs($offset) % 3600) / 60);
+                    $sign = $offset >= 0 ? '+' : '-';
+                    $utcOffset = sprintf('UTC%s%02d:%02d', $sign, $hours, $minutes);
+                } catch (\Exception $e) {
+                    $utcOffset = '';
+                }
+                
                 $countryCode = $tzToCountry[$tz] ?? '';
                 $parts = explode('/', $tz);
                 $city = str_replace('_', ' ', end($parts));
-                $display = $countryCode ? $countryCode . ' - ' . $city . ' (' . $tz . ')' : $tz;
-                return ['value' => $tz, 'display' => $display, 'search' => strtolower($tz . ' ' . $city . ' ' . ($countryCode ?? ''))];
+                $city = ucwords(strtolower($city)); // Proper capitalization
+                
+                // Standard display format: Country Code - City (UTC Offset) - IANA Identifier
+                if ($countryCode && $utcOffset) {
+                    $display = $countryCode . ' - ' . $city . ' (' . $utcOffset . ') - ' . $tz;
+                } elseif ($countryCode) {
+                    $display = $countryCode . ' - ' . $city . ' (' . $tz . ')';
+                } elseif ($utcOffset) {
+                    $display = $city . ' (' . $utcOffset . ') - ' . $tz;
+                } else {
+                    $display = $tz;
+                }
+                
+                return ['value' => $tz, 'display' => $display, 'search' => strtolower($tz . ' ' . $city . ' ' . ($countryCode ?? '') . ' ' . ($utcOffset ?? ''))];
             })->values()->all();
             $currentTz = $this->user->timezone ?? ($this->state['timezone'] ?? '');
             $currentDisplay = collect($timezones)->firstWhere('value', $currentTz)['display'] ?? $currentTz;
