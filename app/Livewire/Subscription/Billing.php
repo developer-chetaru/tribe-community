@@ -27,6 +27,9 @@ class Billing extends Component
     public $showPaymentPage = false;
     public $showInvoiceModal = false;
     public $selectedInvoiceForView = null;
+    public $showShareModal = false;
+    public $selectedInvoiceForShare = null;
+    public $shareLink = '';
     
     protected $listeners = ['refreshPayments' => '$refresh'];
     
@@ -111,6 +114,60 @@ class Billing extends Component
     {
         $this->showInvoiceModal = false;
         $this->selectedInvoiceForView = null;
+    }
+
+    public function openShareModal($invoiceId)
+    {
+        $invoice = Invoice::findOrFail($invoiceId);
+        
+        // Check permissions
+        $user = auth()->user();
+        if (!$user->hasRole('super_admin') && !$user->hasRole('director')) {
+            session()->flash('error', 'You do not have permission to share invoices.');
+            return;
+        }
+        
+        if ($user->hasRole('director') && $invoice->organisation_id !== $user->orgId) {
+            session()->flash('error', 'You can only share invoices from your organisation.');
+            return;
+        }
+        
+        $this->selectedInvoiceForShare = $invoice;
+        $this->shareLink = $invoice->getShareableUrl();
+        $this->showShareModal = true;
+    }
+
+    public function closeShareModal()
+    {
+        $this->showShareModal = false;
+        $this->selectedInvoiceForShare = null;
+        $this->shareLink = '';
+    }
+
+    public function copyShareLink()
+    {
+        if ($this->shareLink) {
+            $this->dispatch('copy-to-clipboard', text: $this->shareLink);
+        }
+    }
+
+    public function shareViaWhatsApp()
+    {
+        if ($this->shareLink && $this->selectedInvoiceForShare) {
+            $message = urlencode("Please find the invoice link for Invoice {$this->selectedInvoiceForShare->invoice_number}:\n\n{$this->shareLink}");
+            $whatsappUrl = "https://wa.me/?text={$message}";
+            $this->dispatch('open-window', url: $whatsappUrl);
+        }
+    }
+
+    public function shareViaEmail()
+    {
+        if ($this->shareLink && $this->selectedInvoiceForShare) {
+            $subject = urlencode("Invoice {$this->selectedInvoiceForShare->invoice_number}");
+            $body = urlencode("Please find the invoice link:\n\n{$this->shareLink}");
+            $mailtoUrl = "mailto:?subject={$subject}&body={$body}";
+            $this->dispatch('open-window', url: $mailtoUrl);
+        }
     }
 
     public function checkSubscriptionStatus()

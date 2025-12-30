@@ -75,6 +75,11 @@ Route::get('/test-email', [TestEmailController::class, 'sendTestEmail']);
 Route::get('/app-redirect', [AppRedirectController::class, 'redirect']);
 Route::get('/open', [AppRedirectController::class, 'redirect']); // optional alias
 
+// Public invoice sharing route (no authentication required)
+Route::get('/invoices/shared/{token}', [InvoiceController::class, 'shared'])->name('invoices.shared');
+Route::get('/invoices/shared/{token}/pay', [InvoiceController::class, 'initiateSharedPayment'])->name('invoices.shared.pay');
+Route::get('/invoices/shared/{token}/payment/success', [InvoiceController::class, 'handleSharedPaymentSuccess'])->name('invoices.shared.payment.success');
+
  Route::post('/forgot-password', [ForgotResetPasswordController::class, 'sendResetLinkEmail'])
     ->name('password.email');
     Route::get('/reset-password', [ForgotResetPasswordController::class, 'showResetForm'])

@@ -22,6 +22,7 @@ class Invoice extends Model
         'status',
         'paid_date',
         'notes',
+        'share_token',
     ];
 
     protected $casts = [
@@ -74,5 +75,26 @@ class Invoice extends Model
         $number = $lastInvoice ? (int) substr($lastInvoice->invoice_number, -4) + 1 : 1;
         
         return 'INV-' . $year . $month . '-' . str_pad($number, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Generate or retrieve share token for this invoice.
+     */
+    public function generateShareToken(): string
+    {
+        if (!$this->share_token) {
+            $this->share_token = bin2hex(random_bytes(32));
+            $this->save();
+        }
+        return $this->share_token;
+    }
+
+    /**
+     * Get the shareable URL for this invoice.
+     */
+    public function getShareableUrl(): string
+    {
+        $token = $this->generateShareToken();
+        return route('invoices.shared', ['token' => $token]);
     }
 }
