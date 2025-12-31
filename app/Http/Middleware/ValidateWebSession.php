@@ -21,15 +21,16 @@ class ValidateWebSession
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // Skip validation for login, register, and password reset routes
-        $excludedRoutes = ['login', 'register', 'password.reset', 'password.email', 'password.update', 'custom.password.reset'];
+        // Skip validation for login, register, password reset, and basecamp billing routes
+        $excludedRoutes = ['login', 'register', 'password.reset', 'password.email', 'password.update', 'custom.password.reset', 'basecamp.billing'];
         $routeName = $request->route()?->getName();
         
         if (in_array($routeName, $excludedRoutes) || 
             $request->is('login') || 
             $request->is('register') || 
             $request->is('password/*') ||
-            $request->is('reset-password')) {
+            $request->is('reset-password') ||
+            $request->is('basecamp/billing')) {
             return $next($request);
         }
         

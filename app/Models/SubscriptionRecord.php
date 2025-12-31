@@ -10,6 +10,7 @@ class SubscriptionRecord extends Model
 {
     protected $fillable = [
         'organisation_id',
+        'user_id',
         'stripe_subscription_id',
         'stripe_customer_id',
         'paypal_subscription_id',
@@ -45,6 +46,14 @@ class SubscriptionRecord extends Model
     public function organisation(): BelongsTo
     {
         return $this->belongsTo(Organisation::class);
+    }
+
+    /**
+     * Get the user that owns the subscription (for basecamp users).
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     /**

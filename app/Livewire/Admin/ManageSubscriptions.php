@@ -8,6 +8,7 @@ use App\Models\SubscriptionRecord;
 use App\Models\Organisation;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\User;
 use App\Services\SubscriptionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -34,6 +35,7 @@ class ManageSubscriptions extends Component
     public $notes;
 
     public $search = '';
+    public $activeTab = 'organisation'; // 'organisation', 'basecamp'
 
     public function mount()
     {
@@ -174,29 +176,46 @@ class ManageSubscriptions extends Component
 
     public function updateSubscription()
     {
-        $this->validate([
-            'organisation_id' => 'required|exists:organisations,id',
+        // For basecamp tier, organisation_id is not required
+        $rules = [
             'tier' => 'required|in:spark,momentum,vision,basecamp',
             'user_count' => 'required|integer|min:1',
             'current_period_start' => 'required|date',
             'current_period_end' => 'required|date|after:current_period_start',
             'next_billing_date' => 'required|date|after:current_period_start',
-        ]);
+        ];
+        
+        if ($this->tier !== 'basecamp') {
+            $rules['organisation_id'] = 'required|exists:organisations,id';
+        }
+        
+        $this->validate($rules);
 
-        $this->selectedSubscription->update([
-            'organisation_id' => $this->organisation_id,
+        // For basecamp, user_count is always 1
+        $finalUserCount = $this->tier === 'basecamp' ? 1 : $this->user_count;
+        
+        $updateData = [
             'tier' => $this->tier,
-            'user_count' => $this->user_count,
+            'user_count' => $finalUserCount,
             'status' => $this->status,
             'current_period_start' => $this->current_period_start,
             'current_period_end' => $this->current_period_end,
             'next_billing_date' => $this->next_billing_date,
-        ]);
+        ];
+        
+        // Only update organisation_id if it's not a basecamp subscription
+        if ($this->tier !== 'basecamp' && $this->organisation_id) {
+            $updateData['organisation_id'] = $this->organisation_id;
+        }
 
-        // Update organisation tier
-        Organisation::where('id', $this->organisation_id)->update([
-            'subscription_tier' => $this->tier,
-        ]);
+        $this->selectedSubscription->update($updateData);
+
+        // Update organisation tier only if it's not basecamp
+        if ($this->tier !== 'basecamp' && $this->organisation_id) {
+            Organisation::where('id', $this->organisation_id)->update([
+                'subscription_tier' => $this->tier,
+            ]);
+        }
 
         session()->flash('success', 'Subscription updated successfully.');
         $this->closeModal();
@@ -224,14 +243,111 @@ class ManageSubscriptions extends Component
 
     public function getSubscriptionsProperty()
     {
-        // Get all organizations with their subscription records
-        $query = Organisation::with('subscriptionRecord')
-            ->when($this->search, function($q) {
-                $q->where('name', 'like', '%' . $this->search . '%');
-            })
-            ->orderBy('name', 'asc');
+        $combined = collect();
         
-        return $query->paginate(15);
+        // Get organisation subscriptions (only if tab is organisation)
+        if ($this->activeTab === 'organisation') {
+            $orgQuery = Organisation::with('subscriptionRecord')
+                ->when($this->search, function($q) {
+                    $q->where('name', 'like', '%' . $this->search . '%');
+                })
+                ->orderBy('name', 'asc')
+                ->get();
+            
+            // Add organisation subscriptions
+            foreach ($orgQuery as $org) {
+                $subscription = $org->subscriptionRecord;
+                
+                // Get latest invoice payment status
+                $paymentStatus = 'unpaid';
+                if ($subscription) {
+                    $latestInvoice = Invoice::where('subscription_id', $subscription->id)
+                        ->orWhere('organisation_id', $org->id)
+                        ->orderBy('created_at', 'desc')
+                        ->first();
+                    
+                    if ($latestInvoice) {
+                        $paymentStatus = $latestInvoice->status === 'paid' ? 'paid' : 'unpaid';
+                    }
+                }
+                
+                $combined->push([
+                    'type' => 'organisation',
+                    'id' => $org->id,
+                    'name' => $org->name,
+                    'subscription' => $subscription,
+                    'user_count' => $org->users()->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))->count(),
+                    'payment_status' => $paymentStatus,
+                ]);
+            }
+        }
+        
+        // Get basecamp user subscriptions (only if tab is basecamp)
+        if ($this->activeTab === 'basecamp') {
+            $basecampSubscriptions = SubscriptionRecord::where('tier', 'basecamp')
+                ->whereNotNull('user_id')
+                ->with('user')
+                ->when($this->search, function($q) {
+                    $q->whereHas('user', function($userQuery) {
+                        $userQuery->where('first_name', 'like', '%' . $this->search . '%')
+                            ->orWhere('last_name', 'like', '%' . $this->search . '%')
+                            ->orWhere('email', 'like', '%' . $this->search . '%');
+                    });
+                })
+                ->orderBy('created_at', 'desc')
+                ->get();
+            
+            // Add basecamp user subscriptions
+            foreach ($basecampSubscriptions as $subscription) {
+                $user = $subscription->user;
+                
+                // Get latest invoice payment status
+                $latestInvoice = Invoice::where('subscription_id', $subscription->id)
+                    ->orWhere(function($q) use ($subscription) {
+                        $q->where('user_id', $subscription->user_id)
+                          ->where('tier', 'basecamp');
+                    })
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+                
+                $paymentStatus = 'unpaid';
+                if ($latestInvoice) {
+                    $paymentStatus = $latestInvoice->status === 'paid' ? 'paid' : 'unpaid';
+                }
+                
+                $combined->push([
+                    'type' => 'basecamp',
+                    'id' => $subscription->id,
+                    'name' => $user ? ($user->first_name . ' ' . $user->last_name . ' (' . $user->email . ')') : 'Unknown User',
+                    'subscription' => $subscription,
+                    'user' => $user,
+                    'user_count' => 1, // Basecamp is always single user
+                    'payment_status' => $paymentStatus,
+                ]);
+            }
+        }
+        
+        // Sort by name
+        $sorted = $combined->sortBy('name')->values();
+        
+        // Manual pagination
+        $perPage = 15;
+        $currentPage = $this->getPage();
+        $items = $sorted->slice(($currentPage - 1) * $perPage, $perPage)->values();
+        $total = $sorted->count();
+        
+        return new \Illuminate\Pagination\LengthAwarePaginator(
+            $items,
+            $total,
+            $perPage,
+            $currentPage,
+            ['path' => request()->url(), 'query' => request()->query()]
+        );
+    }
+    
+    public function getPage()
+    {
+        return request()->get('page', 1);
     }
 
 

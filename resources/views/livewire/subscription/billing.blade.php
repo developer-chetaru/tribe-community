@@ -40,11 +40,11 @@
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Price per User</p>
-                            <p class="text-lg font-semibold">${{ number_format(($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30)), 2) }}</p>
+                            <p class="text-lg font-semibold">${{ number_format(($subscription->tier === 'basecamp' ? 10 : ($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30))), 2) }}</p>
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Monthly Total</p>
-                            <p class="text-lg font-semibold">${{ number_format(($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30)) * $subscription->user_count, 2) }}</p>
+                            <p class="text-lg font-semibold">${{ number_format(($subscription->tier === 'basecamp' ? 10 : ($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30))) * ($subscription->tier === 'basecamp' ? 1 : $subscription->user_count), 2) }}</p>
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Subscription End</p>
@@ -71,13 +71,13 @@
                                 Renew Subscription
                             </button>
                         </div>
-                    @elseif($daysRemaining <= 7)
+                    @elseif($daysRemaining <= 7 && $daysRemaining > 0)
                         <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                             <p class="text-yellow-800 text-sm font-medium mb-2">
-                                ⚠️ Your subscription is expiring soon ({{ $daysRemaining }} days remaining).
+                                ⚠️ Your subscription is expiring soon ({{ $daysRemaining }} days remaining). Please renew to continue.
                             </p>
                             <button wire:click="openRenewModal" type="button" class="mt-2 px-4 py-2 bg-[#EB1C24] text-white rounded-md hover:bg-red-700">
-                                Renew Now
+                                Pay Now
                             </button>
                         </div>
                     @endif

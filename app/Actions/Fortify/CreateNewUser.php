@@ -48,45 +48,20 @@ class CreateNewUser implements CreatesNewUsers
             'user.verify', $expires, ['id' => $user->id]
         );
 
+        // Assign basecamp role to all new users
         $user->assignRole('basecamp');
+        
+        // Refresh user to ensure role is saved
+        $user->refresh();
+        $user->load('roles');
+        
+        // Debug: Log role assignment
+        Log::info('CreateNewUser - User ID: ' . $user->id . ', Role assigned: basecamp');
+        Log::info('CreateNewUser - User roles after assignment: ' . $user->roles->pluck('name')->implode(', '));
       
-        try {
-            Log::info('📧 Starting email send for new user registration', [
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'verification_url' => $verificationUrl,
-            ]);
-
-            $oneSignal = new OneSignalService();
-
-            $verifyBody = view('emails.verify-user-inline', [
-                'user' => $user,
-                'verificationUrl' => $verificationUrl,
-            ])->render();
-
-            Log::info('📧 Email body rendered, calling OneSignal', [
-                'email' => $user->email,
-                'body_length' => strlen($verifyBody),
-            ]);
-
-            $result = $oneSignal->registerEmailUserFallback($user->email, $user->id, [
-                'subject' => 'Activate Your Tribe365 Account',
-                'body'    => $verifyBody,
-            ]);
-
-            Log::info('✅ OneSignal verification email sent', [
-                'email' => $user->email,
-                'result' => $result,
-            ]);            
-
-        } catch (\Throwable $e) {
-            Log::error('❌ OneSignal registration/email failed for new user', [
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'error'   => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-        }
+        // For basecamp users, don't send activation email yet
+        // Email will be sent after payment is completed
+        // For non-basecamp users, send email immediately (if needed in future)
 
         return $user;
     }

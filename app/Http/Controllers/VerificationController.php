@@ -57,6 +57,10 @@ class VerificationController extends Controller
         if (! $user->status) {
             $user->status = true;
             $user->save();
+            
+            // Check if this is a basecamp user who needs to set up billing
+            $isBasecamp = $user->hasRole('basecamp');
+            $redirectUrl = $isBasecamp ? url('/basecamp/billing') : url('/login');
             // --------------------------------------
             // Create HTML email body from your template
             // --------------------------------------
@@ -112,12 +116,12 @@ class VerificationController extends Controller
             <body>
                 <div class="message">
                     <h2 class="success">Your account has been activated successfully!</h2>
-                    <p>We’re setting things up for you. Please proceed to login.</p>
-                    <a href="'.url('/login').'" class="btn btn-login">Go to Login</a>
+                    <p>We\'re setting things up for you.' . ($isBasecamp ? ' Please proceed to set up your billing.' : ' Please proceed to login.') . '</p>
+                    <a href="' . $redirectUrl . '" class="btn btn-login">' . ($isBasecamp ? 'Set Up Billing' : 'Go to Login') . '</a>
                 </div>
                 <script>
                     setTimeout(function() {
-                        window.location.href = "'.url('/login').'";
+                        window.location.href = "' . $redirectUrl . '";
                     }, 5000);
                 </script>
             </body>
@@ -153,22 +157,23 @@ class VerificationController extends Controller
                 ]);
             }
             // Return success page
-            return response("
+            $redirectUrl = $isBasecamp ? url('/basecamp/billing') : url('/login');
+            return response('
                 <html>
                 <head>
                     <title>Account Activated</title>
                 </head>
-                <body style='text-align:center; padding:50px; font-family:sans-serif;'>
-                    <h2 style='color:green;'>Your account has been activated successfully!</h2>
+                <body style="text-align:center; padding:50px; font-family:sans-serif;">
+                    <h2 style="color:green;">Your account has been activated successfully!</h2>
                     <p>You will be redirected in 5 seconds...</p>
                     <script>
                         setTimeout(function() {
-                            window.location.href = '".url('/login')."';
+                            window.location.href = "' . $redirectUrl . '";
                         }, 5000);
                     </script>
                 </body>
                 </html>
-            ");
+            ');
         }
         // Already activated
         return response("

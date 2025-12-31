@@ -11,9 +11,28 @@
             <h2 class="text-[#EB1C24] font-medium text-[24px]">Subscriptions</h2>
         </div>
 
+        <!-- Tabs -->
+        <div class="mb-4 border-b border-gray-200">
+            <nav class="-mb-px flex space-x-8">
+                <button 
+                    wire:click="$set('activeTab', 'organisation')"
+                    type="button"
+                    class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {{ $activeTab === 'organisation' ? 'border-[#EB1C24] text-[#EB1C24]' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+                    Organisation
+                </button>
+                <button 
+                    wire:click="$set('activeTab', 'basecamp')"
+                    type="button"
+                    class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {{ $activeTab === 'basecamp' ? 'border-[#EB1C24] text-[#EB1C24]' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300' }}">
+                    Basecamp
+                </button>
+            </nav>
+        </div>
+
         <!-- Search -->
         <div class="mb-4">
-            <input type="text" wire:model.live="search" placeholder="Search by organisation..." 
+            <input type="text" wire:model.live="search" 
+                placeholder="{{ $activeTab === 'organisation' ? 'Search by organisation...' : 'Search by user name or email...' }}" 
                 class="w-full max-w-md px-4 py-2 border border-gray-300 rounded-md">
         </div>
 
@@ -22,49 +41,69 @@
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Organisation</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                            {{ $activeTab === 'organisation' ? 'Organisation' : 'User' }}
+                        </th>
+                        @if($activeTab === 'organisation')
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                        @endif
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tier</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User Count</th>
+                        @if($activeTab === 'organisation')
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User Count</th>
+                        @endif
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Monthly Total</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment Status</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Period End</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Next Billing</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">
-                    @forelse($subscriptions as $organisation)
+                    @forelse($subscriptions as $item)
                         <tr>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div>
-                                    <div class="font-medium text-gray-900">{{ $organisation->name }}</div>
-                                    @if($organisation->users()->count() > 0)
-                                        <div class="text-sm text-gray-500">{{ $organisation->users()->count() }} user(s)</div>
+                                    <div class="font-medium text-gray-900">{{ $item['name'] }}</div>
+                                    @if($activeTab === 'organisation' && $item['type'] === 'organisation' && isset($item['user_count']))
+                                        <div class="text-sm text-gray-500">{{ $item['user_count'] }} user(s)</div>
+                                    @elseif($activeTab === 'basecamp' && $item['type'] === 'basecamp' && isset($item['user']))
+                                        <div class="text-sm text-gray-500">{{ $item['user']->email ?? '' }}</div>
                                     @endif
                                 </div>
                             </td>
+                            @if($activeTab === 'organisation')
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">
+                                        Organisation
+                                    </span>
+                                </td>
+                            @endif
                             <td class="px-6 py-4 whitespace-nowrap">
-                                @if($organisation->subscriptionRecord)
+                                @if($item['subscription'])
                                     <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
-                                        {{ ucfirst($organisation->subscriptionRecord->tier) }}
+                                        {{ ucfirst($item['subscription']->tier) }}
                                     </span>
                                 @else
                                     <span class="text-gray-400">-</span>
                                 @endif
                             </td>
+                            @if($activeTab === 'organisation')
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    @if($item['subscription'])
+                                        {{ $item['subscription']->user_count }}
+                                    @else
+                                        <span class="text-gray-400">-</span>
+                                    @endif
+                                </td>
+                            @endif
                             <td class="px-6 py-4 whitespace-nowrap">
-                                @if($organisation->subscriptionRecord)
-                                    {{ $organisation->subscriptionRecord->user_count }}
-                                @else
-                                    <span class="text-gray-400">-</span>
-                                @endif
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                @if($organisation->subscriptionRecord)
+                                @if($item['subscription'])
                                     @php
-                                        $prices = ['spark' => 10, 'momentum' => 20, 'vision' => 30];
-                                        $pricePerUser = $prices[$organisation->subscriptionRecord->tier] ?? 0;
-                                        $total = $pricePerUser * $organisation->subscriptionRecord->user_count;
+                                        $prices = ['basecamp' => 10, 'spark' => 10, 'momentum' => 20, 'vision' => 30];
+                                        $pricePerUser = $prices[$item['subscription']->tier] ?? 0;
+                                        $userCount = $item['type'] === 'basecamp' ? 1 : $item['subscription']->user_count;
+                                        $total = $pricePerUser * $userCount;
                                     @endphp
                                     ${{ number_format($total, 2) }}
                                 @else
@@ -72,9 +111,9 @@
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                @if($organisation->subscriptionRecord)
-                                    <span class="px-2 py-1 text-xs rounded-full {{ $organisation->subscriptionRecord->status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                        {{ ucfirst($organisation->subscriptionRecord->status) }}
+                                @if($item['subscription'])
+                                    <span class="px-2 py-1 text-xs rounded-full {{ $item['subscription']->status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                        {{ ucfirst($item['subscription']->status) }}
                                     </span>
                                 @else
                                     <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">
@@ -83,41 +122,50 @@
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                @if($organisation->subscriptionRecord && $organisation->subscriptionRecord->current_period_end)
-                                    <span class="{{ \Carbon\Carbon::parse($organisation->subscriptionRecord->current_period_end)->isPast() ? 'text-red-600 font-semibold' : '' }}">
-                                        {{ $organisation->subscriptionRecord->current_period_end->format('M d, Y') }}
+                                @if($item['subscription'] && isset($item['payment_status']))
+                                    <span class="px-2 py-1 text-xs rounded-full {{ $item['payment_status'] === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800' }}">
+                                        {{ $item['payment_status'] === 'paid' ? 'Paid' : 'Unpaid' }}
                                     </span>
                                 @else
                                     <span class="text-gray-400">-</span>
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
-                                @if($organisation->subscriptionRecord && $organisation->subscriptionRecord->next_billing_date)
-                                    {{ $organisation->subscriptionRecord->next_billing_date->format('M d, Y') }}
+                                @if($item['subscription'] && $item['subscription']->current_period_end)
+                                    <span class="{{ \Carbon\Carbon::parse($item['subscription']->current_period_end)->isPast() ? 'text-red-600 font-semibold' : '' }}">
+                                        {{ $item['subscription']->current_period_end->format('M d, Y') }}
+                                    </span>
+                                @else
+                                    <span class="text-gray-400">-</span>
+                                @endif
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                @if($item['subscription'] && $item['subscription']->next_billing_date)
+                                    {{ $item['subscription']->next_billing_date->format('M d, Y') }}
                                 @else
                                     <span class="text-gray-400">-</span>
                                 @endif
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="flex items-center gap-2 flex-wrap">
-                                    @if($organisation->subscriptionRecord)
+                                    @if($item['subscription'])
                                         <button 
-                                            wire:click="openEditModal({{ $organisation->subscriptionRecord->id }})" 
+                                            wire:click="openEditModal({{ $item['subscription']->id }})" 
                                             type="button" 
                                             class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded border border-blue-200 transition-all duration-200 cursor-pointer">
                                             Edit
                                         </button>
-                                        @if($organisation->subscriptionRecord->status === 'active')
+                                        @if($item['subscription']->status === 'active')
                                             <button 
-                                                wire:click="pauseSubscription({{ $organisation->subscriptionRecord->id }})" 
+                                                wire:click="pauseSubscription({{ $item['subscription']->id }})" 
                                                 wire:confirm="Are you sure you want to pause this subscription?"
                                                 type="button" 
                                                 class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-yellow-600 hover:text-yellow-800 hover:bg-yellow-50 rounded border border-yellow-200 transition-all duration-200 cursor-pointer">
                                                 Pause
                                             </button>
-                                        @elseif($organisation->subscriptionRecord->status === 'suspended')
+                                        @elseif($item['subscription']->status === 'suspended')
                                             <button 
-                                                wire:click="resumeSubscription({{ $organisation->subscriptionRecord->id }})" 
+                                                wire:click="resumeSubscription({{ $item['subscription']->id }})" 
                                                 wire:confirm="Are you sure you want to resume this subscription?"
                                                 type="button" 
                                                 class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded border border-green-200 transition-all duration-200 cursor-pointer">
@@ -130,7 +178,9 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-6 py-4 text-center text-gray-500">No organisations found</td>
+                            <td colspan="{{ $activeTab === 'organisation' ? '10' : '9' }}" class="px-6 py-4 text-center text-gray-500">
+                                No {{ $activeTab === 'organisation' ? 'organisations' : 'basecamp users' }} found
+                            </td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -232,13 +282,18 @@
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Organisation</label>
-                    <select wire:model="organisation_id" class="mt-1 block w-full border-gray-300 rounded-md">
-                        <option value="">Select Organisation</option>
-                        @foreach($organisations as $org)
-                            <option value="{{ $org->id }}">{{ $org->name }}</option>
-                        @endforeach
-                    </select>
-                    @error('organisation_id') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                    @if($selectedSubscription && $selectedSubscription->tier === 'basecamp')
+                        <input type="text" value="Basecamp User (Individual)" disabled class="mt-1 block w-full border-gray-300 rounded-md bg-gray-100">
+                        <p class="mt-1 text-xs text-gray-500">This is a basecamp user subscription (individual user, not organisation).</p>
+                    @else
+                        <select wire:model="organisation_id" class="mt-1 block w-full border-gray-300 rounded-md">
+                            <option value="">Select Organisation</option>
+                            @foreach($organisations as $org)
+                                <option value="{{ $org->id }}">{{ $org->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('organisation_id') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                    @endif
                 </div>
 
                 <div>

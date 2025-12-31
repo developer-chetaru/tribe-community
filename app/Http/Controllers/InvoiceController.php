@@ -24,7 +24,7 @@ class InvoiceController extends Controller
 
         $user = auth()->user();
 
-        // Check permissions - super_admin can access all, director can access their org's invoices
+        // Check permissions - super_admin can access all, director can access their org's invoices, basecamp can access their own
         if ($user->hasRole('super_admin')) {
             // Super admin can access all invoices
         } elseif ($user->hasRole('director')) {
@@ -32,8 +32,13 @@ class InvoiceController extends Controller
             if ($invoice->organisation_id !== $user->orgId) {
                 abort(403, 'Unauthorized access. You can only access invoices from your organisation.');
             }
+        } elseif ($user->hasRole('basecamp')) {
+            // Basecamp users can only access their own invoices
+            if ($invoice->user_id !== $user->id) {
+                abort(403, 'Unauthorized access. You can only access your own invoices.');
+            }
         } else {
-            abort(403, 'Only directors and administrators can download invoices.');
+            abort(403, 'Only directors, basecamp users, and administrators can download invoices.');
         }
 
         // Load Stripe payment method details for each payment
@@ -56,10 +61,14 @@ class InvoiceController extends Controller
             }
         }
 
+        // For basecamp users, get user instead of organisation
+        $invoiceUser = $invoice->user_id ? \App\Models\User::find($invoice->user_id) : null;
+        
         // Return HTML view with download headers (can be printed as PDF by browser)
         $html = view('invoices.pdf', [
             'invoice' => $invoice,
             'organisation' => $invoice->organisation,
+            'user' => $invoiceUser, // For basecamp users
             'subscription' => $invoice->subscription,
             'payments' => $invoice->payments,
         ])->render();
@@ -79,7 +88,7 @@ class InvoiceController extends Controller
 
         $user = auth()->user();
 
-        // Check permissions - super_admin can access all, director can access their org's invoices
+        // Check permissions - super_admin can access all, director can access their org's invoices, basecamp can access their own
         if ($user->hasRole('super_admin')) {
             // Super admin can access all invoices
         } elseif ($user->hasRole('director')) {
@@ -87,8 +96,13 @@ class InvoiceController extends Controller
             if ($invoice->organisation_id !== $user->orgId) {
                 abort(403, 'Unauthorized access. You can only access invoices from your organisation.');
             }
+        } elseif ($user->hasRole('basecamp')) {
+            // Basecamp users can only access their own invoices
+            if ($invoice->user_id !== $user->id) {
+                abort(403, 'Unauthorized access. You can only access your own invoices.');
+            }
         } else {
-            abort(403, 'Only directors and administrators can view invoices.');
+            abort(403, 'Only directors, basecamp users, and administrators can view invoices.');
         }
 
         // Load Stripe payment method details for each payment
@@ -111,10 +125,14 @@ class InvoiceController extends Controller
             }
         }
 
+        // For basecamp users, get user instead of organisation
+        $invoiceUser = $invoice->user_id ? \App\Models\User::find($invoice->user_id) : null;
+        
         // Return HTML view
         return view('invoices.pdf', [
             'invoice' => $invoice,
             'organisation' => $invoice->organisation,
+            'user' => $invoiceUser, // For basecamp users
             'subscription' => $invoice->subscription,
             'payments' => $invoice->payments,
         ]);
@@ -147,11 +165,15 @@ class InvoiceController extends Controller
             }
         }
 
+        // For basecamp users, get user instead of organisation
+        $invoiceUser = $invoice->user_id ? \App\Models\User::find($invoice->user_id) : null;
+        
         // If download is requested, return as download
         if ($request->has('download')) {
             $html = view('invoices.shared', [
                 'invoice' => $invoice,
                 'organisation' => $invoice->organisation,
+                'user' => $invoiceUser, // For basecamp users
                 'subscription' => $invoice->subscription,
                 'payments' => $invoice->payments,
                 'token' => $token,
@@ -162,10 +184,14 @@ class InvoiceController extends Controller
                 ->header('Content-Disposition', 'attachment; filename="invoice-' . $invoice->invoice_number . '.html"');
         }
 
+        // For basecamp users, get user instead of organisation
+        $invoiceUser = $invoice->user_id ? \App\Models\User::find($invoice->user_id) : null;
+        
         // Return HTML view (public access, no authentication required)
         return view('invoices.shared', [
             'invoice' => $invoice,
             'organisation' => $invoice->organisation,
+            'user' => $invoiceUser, // For basecamp users
             'subscription' => $invoice->subscription,
             'payments' => $invoice->payments,
             'token' => $token,

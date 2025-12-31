@@ -109,16 +109,39 @@ class DashboardSummary extends Component
             }
         }
 
-        // Check subscription status for organization users
-        if ($user->orgId && !$user->hasRole('super_admin')) {
-            $subscriptionService = new SubscriptionService();
-            $this->subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId);
-            
-            // Show expired modal if subscription is not active
-            if (!$this->subscriptionStatus['active']) {
-                $this->showSubscriptionExpiredModal = true;
-                // Don't load data if subscription is expired
-                return;
+        // Check subscription status for organization users and basecamp users
+        if (!$user->hasRole('super_admin')) {
+            if ($user->hasRole('basecamp')) {
+                // Check basecamp user subscription
+                $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
+                    ->where('tier', 'basecamp')
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+                    
+                if ($subscription) {
+                    $endDate = $subscription->current_period_end ?? now()->addMonth();
+                    $isExpired = now()->greaterThan($endDate);
+                    
+                    if ($isExpired || $subscription->status !== 'active') {
+                        // Redirect to billing page if subscription is expired
+                        return redirect()->route('billing')
+                            ->with('error', 'Your subscription has expired. Please renew to continue using the service.');
+                    }
+                } else {
+                    // No subscription found, redirect to billing
+                    return redirect()->route('billing')
+                        ->with('error', 'No active subscription found. Please complete your payment.');
+                }
+            } elseif ($user->orgId) {
+                $subscriptionService = new SubscriptionService();
+                $this->subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId);
+                
+                // Show expired modal if subscription is not active
+                if (!$this->subscriptionStatus['active']) {
+                    $this->showSubscriptionExpiredModal = true;
+                    // Don't load data if subscription is expired
+                    return;
+                }
             }
         }
 

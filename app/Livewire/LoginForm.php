@@ -7,6 +7,8 @@ use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
+use App\Models\Invoice;
+use App\Models\SubscriptionRecord;
 use App\Services\SessionManagementService;
 use Illuminate\Support\Facades\Log;
 
@@ -41,7 +43,34 @@ class LoginForm extends Component
             return;
         }
 
-        // Check if account is activated
+        // For basecamp users, check if payment has been completed
+        if ($user->hasRole('basecamp')) {
+            // Check if user has active subscription or paid invoice
+            $hasActiveSubscription = SubscriptionRecord::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->where('status', 'active')
+                ->where('current_period_end', '>', now())
+                ->exists();
+                
+            $hasPaidInvoice = Invoice::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->where('status', 'paid')
+                ->exists();
+            
+            if (!$hasActiveSubscription && !$hasPaidInvoice) {
+                // User needs to complete payment first
+                $this->addError('email', 'Please complete your payment first. You will be redirected to the payment page after login.');
+                \Log::warning('Login failed - basecamp user has not paid: ' . $this->email);
+                
+                // Auto-login temporarily to redirect to billing page
+                Auth::login($user);
+                session()->regenerate();
+                
+                return redirect()->route('basecamp.billing')->with('error', 'Please complete your payment of $10 to continue.');
+            }
+        }
+        
+        // Check if account is activated (for all users including basecamp after payment)
         if (!$user->status) {
             $this->addError('email', 'Your account is not activated yet, please check your email and follow the instruction to verify your account.');
             \Log::warning('Login failed - account not activated: ' . $this->email);

@@ -257,9 +257,19 @@
 
         <div class="invoice-details">
             <h3>Bill To:</h3>
-            <p><strong>{{ $organisation->name }}</strong></p>
-            @if($organisation->address)
-                <p>{{ $organisation->address }}</p>
+            @if($organisation)
+                <p><strong>{{ $organisation->name }}</strong></p>
+                @if($organisation->address)
+                    <p>{{ $organisation->address }}</p>
+                @endif
+            @elseif(isset($user) && $user)
+                <p><strong>{{ $user->first_name }} {{ $user->last_name }}</strong></p>
+                <p>{{ $user->email }}</p>
+                @if($user->phone)
+                    <p>{{ $user->phone }}</p>
+                @endif
+            @else
+                <p><strong>N/A</strong></p>
             @endif
         </div>
 

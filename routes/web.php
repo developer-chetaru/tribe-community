@@ -107,6 +107,12 @@ Route::get('/refresh-csrf-token', function () {
     return response()->json(['token' => csrf_token()]);
 })->middleware('web');
 
+// Basecamp Billing - Allow access without login (payment first, then activation)
+// User ID will be passed via session or query parameter
+Route::get('/basecamp/billing', \App\Livewire\BasecampBilling::class)->name('basecamp.billing');
+Route::get('/basecamp/billing/payment/success', [\App\Http\Controllers\Billing\BasecampStripeCheckoutController::class, 'handleSuccess'])
+    ->name('basecamp.billing.payment.success');
+
 Route::middleware([
     'auth:sanctum',
     config('jetstream.auth_session'),
@@ -131,8 +137,8 @@ Route::middleware([
     // Note: Component-level check ensures user has orgId
     Route::get('/myteam', Myteam::class)->name('myteam.list');
     
-    // Director Billing (only for directors)
-    Route::middleware(['role:director'])->group(function () {
+    // Billing (for directors and basecamp users)
+    Route::middleware(['role:director|basecamp'])->group(function () {
         Route::get('/billing', Billing::class)->name('billing');
         
         // Stripe Checkout Routes

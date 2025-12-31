@@ -10,6 +10,7 @@ class Payment extends Model
     protected $fillable = [
         'invoice_id',
         'organisation_id',
+        'user_id', // For basecamp users
         'paid_by_user_id',
         'approved_by',
         'payment_method',

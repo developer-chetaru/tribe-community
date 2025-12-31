@@ -50,14 +50,34 @@ class Billing extends Component
     {
         $user = auth()->user();
         
-        // Check if user is director
-        if (!$user->hasRole('director')) {
-            abort(403, 'Only directors can access billing.');
+        // Check if user is director or basecamp user
+        if (!$user->hasRole('director') && !$user->hasRole('basecamp')) {
+            abort(403, 'Only directors and basecamp users can access billing.');
         }
 
-        // Check if user's organisation has a subscription
-        if (!$user->orgId) {
+        // For directors, check if user's organisation has a subscription
+        if ($user->hasRole('director') && !$user->orgId) {
             abort(403, 'You must be associated with an organisation.');
+        }
+        
+        // For basecamp users, check if they have completed payment
+        if ($user->hasRole('basecamp')) {
+            // Check if user has active subscription or paid invoice
+            $hasActiveSubscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->where('status', 'active')
+                ->exists();
+                
+            $hasPaidInvoice = \App\Models\Invoice::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->where('status', 'paid')
+                ->exists();
+                
+            if (!$hasActiveSubscription && !$hasPaidInvoice) {
+                // Redirect to basecamp billing for payment
+                return redirect()->route('basecamp.billing', ['user_id' => $user->id])
+                    ->with('error', 'Please complete your payment to access billing.');
+            }
         }
 
         // Check subscription status
@@ -83,8 +103,22 @@ class Billing extends Component
     
     public function openInvoiceModal($invoiceId)
     {
-        $invoice = Invoice::with(['subscription', 'payments.paidBy', 'organisation'])
-            ->findOrFail($invoiceId);
+        $user = auth()->user();
+        
+        // For basecamp users, load user relationship instead of organisation
+        if ($user->hasRole('basecamp')) {
+            $invoice = Invoice::with(['subscription', 'payments.paidBy'])
+                ->findOrFail($invoiceId);
+            
+            // Check if invoice belongs to this user
+            if ($invoice->user_id !== $user->id) {
+                session()->flash('error', 'You can only view your own invoices.');
+                return;
+            }
+        } else {
+            $invoice = Invoice::with(['subscription', 'payments.paidBy', 'organisation'])
+                ->findOrFail($invoiceId);
+        }
         
         // Load Stripe payment method details for each payment
         foreach ($invoice->payments as $payment) {
@@ -122,13 +156,18 @@ class Billing extends Component
         
         // Check permissions
         $user = auth()->user();
-        if (!$user->hasRole('super_admin') && !$user->hasRole('director')) {
+        if (!$user->hasRole('super_admin') && !$user->hasRole('director') && !$user->hasRole('basecamp')) {
             session()->flash('error', 'You do not have permission to share invoices.');
             return;
         }
         
         if ($user->hasRole('director') && $invoice->organisation_id !== $user->orgId) {
             session()->flash('error', 'You can only share invoices from your organisation.');
+            return;
+        }
+        
+        if ($user->hasRole('basecamp') && $invoice->user_id !== $user->id) {
+            session()->flash('error', 'You can only share your own invoices.');
             return;
         }
         
@@ -172,9 +211,40 @@ class Billing extends Component
 
     public function checkSubscriptionStatus()
     {
+        $user = auth()->user();
         $subscriptionService = new SubscriptionService();
-        $this->subscriptionStatus = $subscriptionService->getSubscriptionStatus(auth()->user()->orgId);
-        $this->daysRemaining = $this->subscriptionStatus['days_remaining'] ?? 0;
+        
+        // For basecamp users, check user-based subscription
+        if ($user->hasRole('basecamp')) {
+            $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->orderBy('created_at', 'desc')
+                ->first();
+                
+            if ($subscription) {
+                $endDate = $subscription->current_period_end ?? now()->addMonth();
+                $daysRemaining = max(0, now()->diffInDays($endDate, false));
+                
+                $this->subscriptionStatus = [
+                    'active' => $subscription->status === 'active',
+                    'status' => $subscription->status,
+                    'days_remaining' => $daysRemaining,
+                    'end_date' => $endDate,
+                ];
+                $this->daysRemaining = $daysRemaining;
+            } else {
+                $this->subscriptionStatus = [
+                    'active' => false,
+                    'status' => 'none',
+                    'days_remaining' => 0,
+                ];
+                $this->daysRemaining = 0;
+            }
+        } else {
+            // For directors, use organisation-based subscription
+            $this->subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId);
+            $this->daysRemaining = $this->subscriptionStatus['days_remaining'] ?? 0;
+        }
 
         // Show expired modal only if subscription is expired (not if it's just paused)
         // Directors should be able to access billing page even if paused
@@ -197,34 +267,48 @@ class Billing extends Component
         // Close the subscription expired modal if it's open
         $this->showSubscriptionExpiredModal = false;
         
-        // Get current user count
-        $this->renewalUserCount = \App\Models\User::where('orgId', $user->orgId)
-            ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
-            ->count();
-        
-        // Default price per user is $10
-        $this->renewalPricePerUser = 10.00;
-        $this->renewalPrice = $this->renewalUserCount * $this->renewalPricePerUser;
-        $this->renewalExpiryDate = now()->addMonth()->format('M d, Y');
-        
-        // Ensure subscription exists - create default if not
-        $subscription = \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
-            ->orderBy('created_at', 'desc')
-            ->first();
-        
-        if (!$subscription) {
-            // Auto-create subscription if it doesn't exist
-            $subscription = \App\Models\SubscriptionRecord::create([
-                'organisation_id' => $user->orgId,
-                'tier' => 'spark',
-                'user_count' => $this->renewalUserCount,
-                'status' => 'active',
-                'next_billing_date' => now()->addMonth(),
-                'current_period_start' => now(),
-                'current_period_end' => now()->addMonth(),
-                'activated_at' => now(),
-            ]);
-            \Log::info('Auto-created subscription for organisation: ' . $user->orgId);
+        // For basecamp users, renewal is always $10/month for 1 user
+        if ($user->hasRole('basecamp')) {
+            $this->renewalUserCount = 1;
+            $this->renewalPricePerUser = 10.00;
+            $this->renewalPrice = 10.00;
+            $this->renewalExpiryDate = now()->addMonth()->format('M d, Y');
+            
+            // Get or create subscription
+            $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->orderBy('created_at', 'desc')
+                ->first();
+        } else {
+            // For directors, get current user count
+            $this->renewalUserCount = \App\Models\User::where('orgId', $user->orgId)
+                ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+                ->count();
+            
+            // Default price per user is $10
+            $this->renewalPricePerUser = 10.00;
+            $this->renewalPrice = $this->renewalUserCount * $this->renewalPricePerUser;
+            $this->renewalExpiryDate = now()->addMonth()->format('M d, Y');
+            
+            // Ensure subscription exists - create default if not
+            $subscription = \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
+                ->orderBy('created_at', 'desc')
+                ->first();
+            
+            if (!$subscription) {
+                // Auto-create subscription if it doesn't exist
+                $subscription = \App\Models\SubscriptionRecord::create([
+                    'organisation_id' => $user->orgId,
+                    'tier' => 'spark',
+                    'user_count' => $this->renewalUserCount,
+                    'status' => 'active',
+                    'next_billing_date' => now()->addMonth(),
+                    'current_period_start' => now(),
+                    'current_period_end' => now()->addMonth(),
+                    'activated_at' => now(),
+                ]);
+                \Log::info('Auto-created subscription for organisation: ' . $user->orgId);
+            }
         }
         
         $this->showRenewModal = true;
@@ -258,38 +342,79 @@ class Billing extends Component
             return;
         }
         
-        // Get or create subscription
-        $subscription = \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
-            ->orderBy('created_at', 'desc')
-            ->first();
-        
-        // If no subscription exists, create one
-        if (!$subscription) {
-            $subscription = \App\Models\SubscriptionRecord::create([
+        // For basecamp users
+        if ($user->hasRole('basecamp')) {
+            // Get or create subscription
+            $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->orderBy('created_at', 'desc')
+                ->first();
+            
+            // If no subscription exists, create one
+            if (!$subscription) {
+                $subscription = \App\Models\SubscriptionRecord::create([
+                    'user_id' => $user->id,
+                    'organisation_id' => null,
+                    'tier' => 'basecamp',
+                    'user_count' => 1,
+                    'status' => 'suspended',
+                    'current_period_start' => now(),
+                    'current_period_end' => now()->subDay(),
+                    'next_billing_date' => now(),
+                ]);
+            }
+
+            // Create invoice for renewal
+            $invoice = Invoice::create([
+                'subscription_id' => $subscription->id,
+                'user_id' => $user->id,
+                'organisation_id' => null,
+                'tier' => 'basecamp',
+                'invoice_number' => Invoice::generateInvoiceNumber(),
+                'invoice_date' => now()->toDateString(),
+                'due_date' => now()->addDays(7)->toDateString(), // Due date is 7 days from invoice date
+                'user_count' => 1,
+                'price_per_user' => $this->renewalPricePerUser,
+                'subtotal' => $this->renewalPrice,
+                'tax_amount' => 0.00,
+                'total_amount' => $this->renewalPrice,
+                'status' => 'pending',
+            ]);
+        } else {
+            // For directors
+            // Get or create subscription
+            $subscription = \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
+                ->orderBy('created_at', 'desc')
+                ->first();
+            
+            // If no subscription exists, create one
+            if (!$subscription) {
+                $subscription = \App\Models\SubscriptionRecord::create([
+                    'organisation_id' => $user->orgId,
+                    'tier' => 'spark',
+                    'user_count' => $this->renewalUserCount,
+                    'status' => 'suspended',
+                    'current_period_start' => now(),
+                    'current_period_end' => now()->subDay(),
+                    'next_billing_date' => now(),
+                ]);
+            }
+
+            // Create invoice for renewal
+            $invoice = Invoice::create([
+                'subscription_id' => $subscription->id,
                 'organisation_id' => $user->orgId,
-                'tier' => 'spark',
+                'invoice_number' => Invoice::generateInvoiceNumber(),
+                'invoice_date' => now()->toDateString(),
+                'due_date' => now()->addDays(7)->toDateString(), // Due date is 7 days from invoice date
                 'user_count' => $this->renewalUserCount,
-                'status' => 'suspended',
-                'current_period_start' => now(),
-                'current_period_end' => now()->subDay(),
-                'next_billing_date' => now(),
+                'price_per_user' => $this->renewalPricePerUser,
+                'subtotal' => $this->renewalPrice,
+                'tax_amount' => 0.00,
+                'total_amount' => $this->renewalPrice,
+                'status' => 'pending',
             ]);
         }
-
-        // Create invoice for renewal
-        $invoice = Invoice::create([
-            'subscription_id' => $subscription->id,
-            'organisation_id' => $user->orgId,
-            'invoice_number' => Invoice::generateInvoiceNumber(),
-            'invoice_date' => now()->toDateString(),
-            'due_date' => now()->addDays(30)->toDateString(),
-            'user_count' => $this->renewalUserCount,
-            'price_per_user' => $this->renewalPricePerUser,
-            'subtotal' => $this->renewalPrice,
-            'tax_amount' => 0.00,
-            'total_amount' => $this->renewalPrice,
-            'status' => 'pending',
-        ]);
 
         // Open payment modal for this invoice
         $this->selectedInvoice = $invoice;
@@ -350,6 +475,47 @@ class Billing extends Component
             \Log::info('Creating Stripe Checkout Session for invoice: ' . $invoice->id);
             
             $user = \Illuminate\Support\Facades\Auth::user();
+            
+            // For basecamp users, handle differently
+            if ($user->hasRole('basecamp')) {
+                // Create Checkout Session for basecamp user
+                $checkoutParams = [
+                    'payment_method_types' => ['card'],
+                    'line_items' => [[
+                        'price_data' => [
+                            'currency' => 'usd',
+                            'product_data' => [
+                                'name' => 'Basecamp Subscription',
+                                'description' => 'Monthly subscription for Basecamp tier - $10/month',
+                            ],
+                            'unit_amount' => $invoice->total_amount * 100, // Convert to cents
+                        ],
+                        'quantity' => 1,
+                    ]],
+                    'mode' => 'payment',
+                    'success_url' => route('billing.payment.success') . '?session_id={CHECKOUT_SESSION_ID}&invoice_id=' . $invoice->id,
+                    'cancel_url' => route('billing') . '?canceled=true',
+                    'customer_email' => $user->email,
+                    'metadata' => [
+                        'invoice_id' => $invoice->id,
+                        'user_id' => $user->id,
+                        'tier' => 'basecamp',
+                    ],
+                ];
+                
+                \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+                $checkoutSession = \Stripe\Checkout\Session::create($checkoutParams);
+                
+                \Log::info('Stripe Checkout Session created for basecamp', [
+                    'session_id' => $checkoutSession->id,
+                    'url' => $checkoutSession->url,
+                    'invoice_id' => $invoice->id,
+                ]);
+                
+                return $checkoutSession->url;
+            }
+            
+            // For directors, use organisation-based flow
             $organisation = Organisation::findOrFail($invoice->organisation_id);
             $stripeService = new StripeService();
             
@@ -637,7 +803,16 @@ class Billing extends Component
     public function getSubscriptionProperty()
     {
         $user = auth()->user();
-        // Get the most recent subscription regardless of status
+        
+        // For basecamp users, get user-based subscription
+        if ($user->hasRole('basecamp')) {
+            return \App\Models\SubscriptionRecord::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->orderBy('created_at', 'desc')
+                ->first();
+        }
+        
+        // For directors, get organisation-based subscription
         return \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
             ->with('organisation')
             ->orderBy('created_at', 'desc')

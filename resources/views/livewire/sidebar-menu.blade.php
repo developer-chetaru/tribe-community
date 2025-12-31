@@ -96,7 +96,7 @@
     </a>
  @endhasanyrole
 
-@hasanyrole('director')
+@hasanyrole('director|basecamp')
     <a href="{{ route('billing') }}"
        class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
       :class="[
