@@ -1422,15 +1422,15 @@ private function generateAIText(string $prompt, $userId = null): string
             $endOfMonthIST   = $targetDate->copy()->endOfMonth();
             Log::info("MonthlySummary generation started for {$targetDate->format('F Y')} (manual override)");
         } else {
-            // Check if it's last day of month (cron runs on last day at 22:00)
-            // Also allow day 28 for manual testing/backup
-            if (!$today->isLastOfMonth() && $today->day !== 28) {
-                Log::info("MonthlySummary: Not last day of month or 28th, skipping. Current date: {$today->format('Y-m-d')}");
+            // For automatic cron: only run on last day of month at 22:00
+            // The cron in routes/console.php runs daily but only executes when isLastOfMonth() is true
+            if (!$today->isLastOfMonth()) {
+                Log::info("MonthlySummary: Not last day of month, skipping. Current date: {$today->format('Y-m-d')}");
                 return;
             }
             $startOfMonthIST = $today->copy()->startOfMonth();
             $endOfMonthIST   = $today->copy()->endOfMonth();
-            Log::info("MonthlySummary generation started at {$today}");
+            Log::info("MonthlySummary generation started automatically at {$today} (last day of month)");
         }
         $startOfMonthUTC = $startOfMonthIST->clone()->setTimezone('UTC');
         $endOfMonthUTC   = $endOfMonthIST->clone()->setTimezone('UTC');

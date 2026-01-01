@@ -29,13 +29,15 @@ Schedule::command('notification:send --only=report')
 //         ->dailyAt('18:00')
 //         ->timezone('Asia/Kolkata');
 
-// Monthly summary - runs on last day of month at 22:00
+// Monthly summary - automatically runs on last day of each month at 22:00 IST
+// This will generate summaries for the current month and send emails to all users
 Schedule::command('notification:send --only=monthly-summary')
         ->dailyAt('22:00')
         ->timezone('Asia/Kolkata')
         ->when(function () {
             return now('Asia/Kolkata')->isLastOfMonth();
-        });
+        })
+        ->appendOutputTo(storage_path('logs/monthly_summary.log'));
 
 Schedule::command('notification:send --only=weeklySummary')
         ->weeklyOn(0, '23:00')
