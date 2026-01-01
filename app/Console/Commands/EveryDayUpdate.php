@@ -40,9 +40,9 @@ class EveryDayUpdate extends Command
         } elseif ($only === 'sentiment') {
             $this->sendSentimentReminderEmail();
         } elseif ($only === 'monthly-summary') {
-            if (now('Asia/Kolkata')->isLastOfMonth()) {
-                $this->generateMonthlySummary();
-            }
+            // Remove the isLastOfMonth check here - let generateMonthlySummary() handle the date validation
+            // Cron runs on 28th, but generateMonthlySummary() accepts both 28th and last day of month
+            $this->generateMonthlySummary();
         } elseif ($only === 'weeklySummary') {
             $this->generateWeeklySummary();
         } else {
@@ -1414,8 +1414,8 @@ private function generateAIText(string $prompt, $userId = null): string
         $today = now('Asia/Kolkata');
 		Log::info("MonthlySummary generation started at {$today}");
         
-        // Remove strict time check - let cron handle scheduling
-        // Only check if it's last day of month (cron runs on 28th at 22:00)
+        // Check if it's last day of month (cron runs on last day at 22:00)
+        // Also allow day 28 for manual testing/backup
         if (!$today->isLastOfMonth() && $today->day !== 28) {
             Log::info("MonthlySummary: Not last day of month or 28th, skipping. Current date: {$today->format('Y-m-d')}");
             return;

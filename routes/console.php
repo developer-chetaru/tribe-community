@@ -29,9 +29,13 @@ Schedule::command('notification:send --only=report')
 //         ->dailyAt('18:00')
 //         ->timezone('Asia/Kolkata');
 
+// Monthly summary - runs on last day of month at 22:00
 Schedule::command('notification:send --only=monthly-summary')
-        ->monthlyOn(28, '22:00')
-        ->timezone('Asia/Kolkata');
+        ->dailyAt('22:00')
+        ->timezone('Asia/Kolkata')
+        ->when(function () {
+            return now('Asia/Kolkata')->isLastOfMonth();
+        });
 
 Schedule::command('notification:send --only=weeklySummary')
         ->weeklyOn(0, '23:00')
