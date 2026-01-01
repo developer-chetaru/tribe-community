@@ -247,27 +247,72 @@ class ManageSubscriptions extends Component
         
         // Get organisation subscriptions (only if tab is organisation)
         if ($this->activeTab === 'organisation') {
+            // Fix N+1: Eager load user count and subscription
             $orgQuery = Organisation::with('subscriptionRecord')
+                ->withCount(['users' => function($q) {
+                    $q->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'));
+                }])
                 ->when($this->search, function($q) {
                     $q->where('name', 'like', '%' . $this->search . '%');
                 })
                 ->orderBy('name', 'asc')
                 ->get();
             
+            // Get all subscription IDs and organisation IDs for batch invoice query
+            $subscriptionIds = $orgQuery->pluck('subscriptionRecord.id')->filter()->toArray();
+            $organisationIds = $orgQuery->pluck('id')->toArray();
+            
+            // Fix N+1: Optimized batch fetch - get only latest invoice per subscription/organisation
+            // Order by created_at desc, then group to get latest per subscription/organisation
+            $latestInvoices = Invoice::where(function($q) use ($subscriptionIds, $organisationIds) {
+                if (!empty($subscriptionIds)) {
+                    $q->whereIn('subscription_id', $subscriptionIds);
+                }
+                if (!empty($organisationIds)) {
+                    if (!empty($subscriptionIds)) {
+                        $q->orWhereIn('organisation_id', $organisationIds);
+                    } else {
+                        $q->whereIn('organisation_id', $organisationIds);
+                    }
+                }
+            })
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->groupBy(function($invoice) {
+                // Group by subscription_id first, then fallback to organisation_id
+                return $invoice->subscription_id ?? 'org_' . $invoice->organisation_id;
+            })
+            ->map(function($invoices) {
+                return $invoices->first(); // Get the latest invoice for each group
+            });
+            
+            // Create a map for quick lookup: subscription_id => invoice, organisation_id => invoice
+            $invoiceMap = [];
+            foreach ($latestInvoices as $invoice) {
+                if ($invoice->subscription_id) {
+                    $invoiceMap['sub_' . $invoice->subscription_id] = $invoice;
+                }
+                if ($invoice->organisation_id) {
+                    $invoiceMap['org_' . $invoice->organisation_id] = $invoice;
+                }
+            }
+            
             // Add organisation subscriptions
             foreach ($orgQuery as $org) {
                 $subscription = $org->subscriptionRecord;
                 
-                // Get latest invoice payment status
+                // Get latest invoice payment status from map
                 $paymentStatus = 'unpaid';
                 if ($subscription) {
-                    $latestInvoice = Invoice::where('subscription_id', $subscription->id)
-                        ->orWhere('organisation_id', $org->id)
-                        ->orderBy('created_at', 'desc')
-                        ->first();
-                    
-                    if ($latestInvoice) {
-                        $paymentStatus = $latestInvoice->status === 'paid' ? 'paid' : 'unpaid';
+                    $invoice = $invoiceMap['sub_' . $subscription->id] ?? $invoiceMap['org_' . $org->id] ?? null;
+                    if ($invoice) {
+                        $paymentStatus = $invoice->status === 'paid' ? 'paid' : 'unpaid';
+                    }
+                } else {
+                    // Check organisation-level invoice if no subscription
+                    $invoice = $invoiceMap['org_' . $org->id] ?? null;
+                    if ($invoice) {
+                        $paymentStatus = $invoice->status === 'paid' ? 'paid' : 'unpaid';
                     }
                 }
                 
@@ -276,7 +321,7 @@ class ManageSubscriptions extends Component
                     'id' => $org->id,
                     'name' => $org->name,
                     'subscription' => $subscription,
-                    'user_count' => $org->users()->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))->count(),
+                    'user_count' => $org->users_count ?? 0, // Use eager-loaded count
                     'payment_status' => $paymentStatus,
                 ]);
             }
@@ -297,22 +342,63 @@ class ManageSubscriptions extends Component
                 ->orderBy('created_at', 'desc')
                 ->get();
             
+            // Fix N+1: Batch fetch latest invoices for all basecamp subscriptions
+            $subscriptionIds = $basecampSubscriptions->pluck('id')->toArray();
+            $userIds = $basecampSubscriptions->pluck('user_id')->filter()->toArray();
+            
+            // Initialize invoice map
+            $invoiceMap = [];
+            
+            // Only query if we have IDs to search for
+            if (!empty($subscriptionIds) || !empty($userIds)) {
+                $latestInvoices = Invoice::where(function($q) use ($subscriptionIds, $userIds) {
+                    if (!empty($subscriptionIds)) {
+                        $q->whereIn('subscription_id', $subscriptionIds);
+                    }
+                    if (!empty($userIds)) {
+                        if (!empty($subscriptionIds)) {
+                            $q->orWhere(function($q2) use ($userIds) {
+                                $q2->whereIn('user_id', $userIds)
+                                   ->where('tier', 'basecamp');
+                            });
+                        } else {
+                            $q->where(function($q2) use ($userIds) {
+                                $q2->whereIn('user_id', $userIds)
+                                   ->where('tier', 'basecamp');
+                            });
+                        }
+                    }
+                })
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->groupBy(function($invoice) {
+                    // Group by subscription_id first, then user_id
+                    return $invoice->subscription_id ?? 'user_' . $invoice->user_id;
+                })
+                ->map(function($invoices) {
+                    return $invoices->first(); // Get the latest invoice for each group
+                });
+                
+                // Create a map for quick lookup
+                foreach ($latestInvoices as $invoice) {
+                    if ($invoice->subscription_id) {
+                        $invoiceMap['sub_' . $invoice->subscription_id] = $invoice;
+                    }
+                    if ($invoice->user_id) {
+                        $invoiceMap['user_' . $invoice->user_id] = $invoice;
+                    }
+                }
+            }
+            
             // Add basecamp user subscriptions
             foreach ($basecampSubscriptions as $subscription) {
                 $user = $subscription->user;
                 
-                // Get latest invoice payment status
-                $latestInvoice = Invoice::where('subscription_id', $subscription->id)
-                    ->orWhere(function($q) use ($subscription) {
-                        $q->where('user_id', $subscription->user_id)
-                          ->where('tier', 'basecamp');
-                    })
-                    ->orderBy('created_at', 'desc')
-                    ->first();
-                
+                // Get latest invoice payment status from map
+                $invoice = $invoiceMap['sub_' . $subscription->id] ?? $invoiceMap['user_' . $subscription->user_id] ?? null;
                 $paymentStatus = 'unpaid';
-                if ($latestInvoice) {
-                    $paymentStatus = $latestInvoice->status === 'paid' ? 'paid' : 'unpaid';
+                if ($invoice) {
+                    $paymentStatus = $invoice->status === 'paid' ? 'paid' : 'unpaid';
                 }
                 
                 $combined->push([
