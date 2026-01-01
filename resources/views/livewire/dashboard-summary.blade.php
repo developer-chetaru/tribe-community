@@ -1,3 +1,4 @@
+<div>
 @if($showSubscriptionExpiredModal)
     <!-- Subscription Expired Modal - Show first, block everything -->
     <div x-data="{ show: @entangle('showSubscriptionExpiredModal') }" x-show="show" x-cloak style="display: block;" class="fixed inset-0 bg-black bg-opacity-50 z-[10000] flex items-center justify-center">
@@ -369,4 +370,5 @@ document.addEventListener('DOMContentLoaded', function () {
 @livewire('summary')
 @endif
 
+</div>
 
