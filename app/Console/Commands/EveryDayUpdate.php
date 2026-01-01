@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
 
 class EveryDayUpdate extends Command
 {
-	protected $signature = 'notification:send {--only=} {--date=} {--month=} {--year=}';
+	protected $signature = 'notification:send {--only=} {--date=} {--month=} {--year=} {--force}';
     protected $description = 'Send daily reports, push notifications, weekly and monthly email';
 
     public function handle(OneSignalService $oneSignal)
@@ -43,7 +43,8 @@ class EveryDayUpdate extends Command
             // Allow manual month/year override for generating past months
             $month = $this->option('month');
             $year = $this->option('year');
-            $this->generateMonthlySummary($month, $year);
+            $force = $this->option('force');
+            $this->generateMonthlySummary($month, $year, $force);
         } elseif ($only === 'weeklySummary') {
             $this->generateWeeklySummary();
         } else {
@@ -1410,7 +1411,7 @@ private function generateAIText(string $prompt, $userId = null): string
 
 
 
-    public function generateMonthlySummary($month = null, $year = null)
+    public function generateMonthlySummary($month = null, $year = null, $force = false)
     {
         $today = now('Asia/Kolkata');
         
@@ -1526,32 +1527,104 @@ Writing Guidelines:
                 ]
             );
 
-			// ✅ Check if monthly summary email already sent for this month to prevent duplicates
-            $monthStartDate = $startOfMonthIST->toDateString();
-            $monthEndDate = $endOfMonthIST->toDateString();
+			// ✅ Check if monthly summary email already sent for this specific month/year to prevent duplicates
+            // Check by summary month/year, not by notification creation date
+            $summaryExists = \App\Models\MonthlySummary::where('user_id', $user->id)
+                ->where('year', $startOfMonthIST->year)
+                ->where('month', $startOfMonthIST->month)
+                ->exists();
+            
+            // Also check if notification was already sent for this specific month/year
             $emailAlreadySent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
                 ->where('notificationType', 'monthly-summary')
-                ->whereBetween('created_at', [$monthStartDate . ' 00:00:00', $monthEndDate . ' 23:59:59'])
+                ->where('title', 'LIKE', "%{$monthName}%")
                 ->exists();
 
-            if ($emailAlreadySent) {
-                Log::warning("⛔ Email NOT sent — monthly summary already sent this month for user {$user->id}");
+            // Skip if already sent, unless force flag is set
+            if ($emailAlreadySent && $summaryExists && !$force) {
+                Log::warning("⛔ Email NOT sent — monthly summary already sent for {$monthName} for user {$user->id} (use --force to resend)");
                 continue;
+            }
+            
+            // If summary exists but email wasn't sent, we'll send it now
+            if ($summaryExists && !$emailAlreadySent) {
+                Log::info("📧 Summary exists but email not sent yet for {$monthName}, sending now for user {$user->id}");
+            }
+            
+            // If force flag is set, log that we're resending
+            if ($force && $emailAlreadySent) {
+                Log::info("🔄 Force flag set - resending email for {$monthName} for user {$user->id}");
             }
 
             try {
                 $oneSignal = new OneSignalService();
 
-                $emailBody = view('emails.monthly-summary', [
-                    'user'       => $user,
-                    'summaryText'=> $summaryText,
-                    'monthName'  => $monthName,
-                ])->render();
+                // Build email HTML directly to avoid OneSignal Liquid template conflicts
+                // OneSignal interprets {{ }} as Liquid templates, so we build HTML manually
+                $logoUrl = asset('images/logo-tribe.png');
+                $userFirstName = htmlspecialchars($user->first_name, ENT_QUOTES, 'UTF-8');
+                $monthNameEscaped = htmlspecialchars($monthName, ENT_QUOTES, 'UTF-8');
+                $summaryTextEscaped = nl2br(htmlspecialchars($summaryText, ENT_QUOTES, 'UTF-8'));
+                $currentYear = date('Y');
+                
+                // Build HTML email body directly (no Blade templates to avoid OneSignal conflicts)
+                $emailBody = <<<HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Monthly Sentiment Summary</title>
+</head>
+<body style="margin:0; padding:0; background:#f5f5f5; font-family: Arial, Helvetica, sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5; padding:20px 0;">
+    <tr>
+        <td align="center">
+            <table width="550" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:10px; overflow:hidden;">
+                <tr>
+                    <td style="background:#EB1C24; height:6px;"></td>
+                </tr>
+                <tr>
+                    <td align="center" style="padding:25px 20px 10px;">
+                        <img src="{$logoUrl}" width="140" alt="Tribe365 Logo">
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:25px 35px; color:#333; font-size:15px; line-height:1.7;">
+                        <p>Hello {$userFirstName},</p>
+                        <p>Here's your emotional summary for <strong style="color:#EB1C24;">{$monthNameEscaped}</strong>:</p>
+                        <div style="background:#fafafa; border:1px solid #eee; padding:18px; margin:20px 0; border-radius:8px; font-size:14px;">
+                            {$summaryTextEscaped}
+                        </div>
+                        <p style="margin-top:10px;">Keep reflecting on your progress and stay inspired!</p>
+                        <p style="margin-top:25px;">Thanks,<br><strong>The Tribe365 Team</strong></p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:15px; text-align:center; font-size:12px; color:#888; border-top:1px solid #e0e0e0;">
+                        © {$currentYear} <strong style="color:#EB1C24;">Tribe365</strong> — All Rights Reserved
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>
+HTML;
 
-                $oneSignal->registerEmailUserFallback($user->email, $user->id, [
+                Log::info("📧 Attempting to send monthly summary email for user {$user->id} ({$user->email}) for {$monthName}");
+
+                $emailResult = $oneSignal->registerEmailUserFallback($user->email, $user->id, [
                     'subject' => "Tribe365 Monthly Summary ({$monthName})",
                     'body'    => $emailBody,
                 ]);
+
+                if ($emailResult === false) {
+                    Log::error("❌ OneSignal email returned false for user {$user->id} - email may not have been sent");
+                    // Continue anyway to store notification
+                } else {
+                    Log::info("✅ OneSignal email API call successful for user {$user->id}");
+                }
 
                 // Store notification in database
                 $this->storeNotification(
@@ -1563,9 +1636,13 @@ Writing Guidelines:
                     $today
                 );
 
-                Log::info("✅ OneSignal monthly email sent and notification stored for user {$user->id}");
+                Log::info("✅ Notification stored in database for user {$user->id}");
+
+                Log::info("✅ Monthly summary email process completed for user {$user->id} ({$monthName})");
             } catch (\Throwable $e) {
-                Log::error("❌ OneSignal monthly email failed for user {$user->id}: {$e->getMessage()}");
+                Log::error("❌ OneSignal monthly email failed for user {$user->id}: {$e->getMessage()}", [
+                    'trace' => $e->getTraceAsString()
+                ]);
             }
 
             \Log::info("MonthlySummary: Generated successfully for user {$user->id} ({$monthName}).");

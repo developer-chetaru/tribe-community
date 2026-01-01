@@ -21,7 +21,7 @@
                 <!-- Logo -->
                 <tr>
                     <td align="center" style="padding:25px 20px 10px;">
-                        <img src="{{ asset('images/logo-tribe.png') }}" width="140" alt="Tribe365 Logo">
+                        <img src="{!! $logoUrl !!}" width="140" alt="Tribe365 Logo">
                     </td>
                 </tr>
 
@@ -31,10 +31,10 @@
 
             
 
-                        <p>Hello {{ $user->first_name }},</p>
+                        <p>Hello {{ $userFirstName }},</p>
 
                         <p>
-                            Here’s your emotional summary for
+                            Here's your emotional summary for
                             <strong style="color:#EB1C24;">{{ $monthName }}</strong>:
                         </p>
 
@@ -64,7 +64,7 @@
                 <!-- Footer -->
                 <tr>
                     <td style="padding:15px; text-align:center; font-size:12px; color:#888; border-top:1px solid #e0e0e0;">
-                        © {{ date('Y') }} <strong style="color:#EB1C24;">Tribe365</strong> — All Rights Reserved
+                        © {{ $currentYear }} <strong style="color:#EB1C24;">Tribe365</strong> — All Rights Reserved
                     </td>
                 </tr>
 
