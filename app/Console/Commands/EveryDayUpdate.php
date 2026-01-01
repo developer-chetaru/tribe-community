@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
 
 class EveryDayUpdate extends Command
 {
-	protected $signature = 'notification:send {--only=} {--date=}';
+	protected $signature = 'notification:send {--only=} {--date=} {--month=} {--year=}';
     protected $description = 'Send daily reports, push notifications, weekly and monthly email';
 
     public function handle(OneSignalService $oneSignal)
@@ -40,9 +40,10 @@ class EveryDayUpdate extends Command
         } elseif ($only === 'sentiment') {
             $this->sendSentimentReminderEmail();
         } elseif ($only === 'monthly-summary') {
-            // Remove the isLastOfMonth check here - let generateMonthlySummary() handle the date validation
-            // Cron runs on 28th, but generateMonthlySummary() accepts both 28th and last day of month
-            $this->generateMonthlySummary();
+            // Allow manual month/year override for generating past months
+            $month = $this->option('month');
+            $year = $this->option('year');
+            $this->generateMonthlySummary($month, $year);
         } elseif ($only === 'weeklySummary') {
             $this->generateWeeklySummary();
         } else {
@@ -1409,20 +1410,27 @@ private function generateAIText(string $prompt, $userId = null): string
 
 
 
-    public function generateMonthlySummary()
+    public function generateMonthlySummary($month = null, $year = null)
     {
         $today = now('Asia/Kolkata');
-		Log::info("MonthlySummary generation started at {$today}");
         
-        // Check if it's last day of month (cron runs on last day at 22:00)
-        // Also allow day 28 for manual testing/backup
-        if (!$today->isLastOfMonth() && $today->day !== 28) {
-            Log::info("MonthlySummary: Not last day of month or 28th, skipping. Current date: {$today->format('Y-m-d')}");
-            return;
+        // If month/year provided, use that; otherwise use current month
+        if ($month && $year) {
+            $targetDate = Carbon::create($year, $month, 1, 0, 0, 0, 'Asia/Kolkata');
+            $startOfMonthIST = $targetDate->copy()->startOfMonth();
+            $endOfMonthIST   = $targetDate->copy()->endOfMonth();
+            Log::info("MonthlySummary generation started for {$targetDate->format('F Y')} (manual override)");
+        } else {
+            // Check if it's last day of month (cron runs on last day at 22:00)
+            // Also allow day 28 for manual testing/backup
+            if (!$today->isLastOfMonth() && $today->day !== 28) {
+                Log::info("MonthlySummary: Not last day of month or 28th, skipping. Current date: {$today->format('Y-m-d')}");
+                return;
+            }
+            $startOfMonthIST = $today->copy()->startOfMonth();
+            $endOfMonthIST   = $today->copy()->endOfMonth();
+            Log::info("MonthlySummary generation started at {$today}");
         }
-
-        $startOfMonthIST = $today->copy()->startOfMonth();
-        $endOfMonthIST   = $today->copy()->endOfMonth();
         $startOfMonthUTC = $startOfMonthIST->clone()->setTimezone('UTC');
         $endOfMonthUTC   = $endOfMonthIST->clone()->setTimezone('UTC');
 
@@ -1431,7 +1439,7 @@ private function generateAIText(string $prompt, $userId = null): string
             ->pluck('user_id');
 
         if ($userIds->isEmpty()) {
-            \Log::info("MonthlySummary: No users found with mood data for {$today->format('F Y')}.");
+            \Log::info("MonthlySummary: No users found with mood data for {$startOfMonthIST->format('F Y')}.");
             return;
         }
 
@@ -1509,8 +1517,8 @@ Writing Guidelines:
             \App\Models\MonthlySummary::updateOrCreate(
                 [
                     'user_id' => $user->id,
-                    'year'    => $today->year,
-                    'month'   => $today->month,
+                    'year'    => $startOfMonthIST->year,
+                    'month'   => $startOfMonthIST->month,
                 ],
                 [
                     'month_label' => $monthName,
