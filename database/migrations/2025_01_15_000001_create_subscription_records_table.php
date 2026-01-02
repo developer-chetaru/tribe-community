@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Check if table already exists (in case it was created manually or migration was partially run)
+        if (Schema::hasTable('subscription_records')) {
+            return;
+        }
+
         Schema::create('subscription_records', function (Blueprint $table) {
             $table->id();
             $table->foreignId('organisation_id')->constrained()->onDelete('cascade');

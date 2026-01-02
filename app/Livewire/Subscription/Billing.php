@@ -40,6 +40,7 @@ class Billing extends Component
     public $renewalUserCount = 0;
     public $renewalExpiryDate;
     public $renewalPricePerUser = 0;
+    public $renewalInvoice = null;
     
     // Stripe payment properties
     public $stripeClientSecret = null;
@@ -342,91 +343,104 @@ class Billing extends Component
             return;
         }
         
-        // For basecamp users
-        if ($user->hasRole('basecamp')) {
-            // Get or create subscription
-            $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
-                ->where('tier', 'basecamp')
-                ->orderBy('created_at', 'desc')
-                ->first();
-            
-            // If no subscription exists, create one
-            if (!$subscription) {
-                $subscription = \App\Models\SubscriptionRecord::create([
-                    'user_id' => $user->id,
-                    'organisation_id' => null,
-                    'tier' => 'basecamp',
-                    'user_count' => 1,
-                    'status' => 'suspended',
-                    'current_period_start' => now(),
-                    'current_period_end' => now()->subDay(),
-                    'next_billing_date' => now(),
-                ]);
-            }
+        // Wrap all operations in transaction to ensure data consistency
+        try {
+            \DB::transaction(function() use ($user) {
+                // For basecamp users
+                if ($user->hasRole('basecamp')) {
+                    // Get or create subscription
+                    $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
+                        ->where('tier', 'basecamp')
+                        ->orderBy('created_at', 'desc')
+                        ->first();
+                    
+                    // If no subscription exists, create one
+                    if (!$subscription) {
+                        $subscription = \App\Models\SubscriptionRecord::create([
+                            'user_id' => $user->id,
+                            'organisation_id' => null,
+                            'tier' => 'basecamp',
+                            'user_count' => 1,
+                            'status' => 'suspended',
+                            'current_period_start' => now(),
+                            'current_period_end' => now()->subDay(),
+                            'next_billing_date' => now(),
+                        ]);
+                    }
 
-            // Create invoice for renewal
-            $invoice = Invoice::create([
-                'subscription_id' => $subscription->id,
-                'user_id' => $user->id,
-                'organisation_id' => null,
-                'tier' => 'basecamp',
-                'invoice_number' => Invoice::generateInvoiceNumber(),
-                'invoice_date' => now()->toDateString(),
-                'due_date' => now()->addDays(7)->toDateString(), // Due date is 7 days from invoice date
-                'user_count' => 1,
-                'price_per_user' => $this->renewalPricePerUser,
-                'subtotal' => $this->renewalPrice,
-                'tax_amount' => 0.00,
-                'total_amount' => $this->renewalPrice,
-                'status' => 'pending',
-            ]);
-        } else {
-            // For directors
-            // Get or create subscription
-            $subscription = \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
-                ->orderBy('created_at', 'desc')
-                ->first();
-            
-            // If no subscription exists, create one
-            if (!$subscription) {
-                $subscription = \App\Models\SubscriptionRecord::create([
-                    'organisation_id' => $user->orgId,
-                    'tier' => 'spark',
-                    'user_count' => $this->renewalUserCount,
-                    'status' => 'suspended',
-                    'current_period_start' => now(),
-                    'current_period_end' => now()->subDay(),
-                    'next_billing_date' => now(),
-                ]);
-            }
+                    // Create invoice for renewal
+                    $invoice = Invoice::create([
+                        'subscription_id' => $subscription->id,
+                        'user_id' => $user->id,
+                        'organisation_id' => null,
+                        'tier' => 'basecamp',
+                        'invoice_number' => Invoice::generateInvoiceNumber(),
+                        'invoice_date' => now()->toDateString(),
+                        'due_date' => now()->addDays(7)->toDateString(), // Due date is 7 days from invoice date
+                        'user_count' => 1,
+                        'price_per_user' => $this->renewalPricePerUser,
+                        'subtotal' => $this->renewalPrice,
+                        'tax_amount' => 0.00,
+                        'total_amount' => $this->renewalPrice,
+                        'status' => 'pending',
+                    ]);
+                } else {
+                    // For directors
+                    // Get or create subscription
+                    $subscription = \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
+                        ->orderBy('created_at', 'desc')
+                        ->first();
+                    
+                    // If no subscription exists, create one
+                    if (!$subscription) {
+                        $subscription = \App\Models\SubscriptionRecord::create([
+                            'organisation_id' => $user->orgId,
+                            'tier' => 'spark',
+                            'user_count' => $this->renewalUserCount,
+                            'status' => 'suspended',
+                            'current_period_start' => now(),
+                            'current_period_end' => now()->subDay(),
+                            'next_billing_date' => now(),
+                        ]);
+                    }
 
-            // Create invoice for renewal
-            $invoice = Invoice::create([
-                'subscription_id' => $subscription->id,
-                'organisation_id' => $user->orgId,
-                'invoice_number' => Invoice::generateInvoiceNumber(),
-                'invoice_date' => now()->toDateString(),
-                'due_date' => now()->addDays(7)->toDateString(), // Due date is 7 days from invoice date
-                'user_count' => $this->renewalUserCount,
-                'price_per_user' => $this->renewalPricePerUser,
-                'subtotal' => $this->renewalPrice,
-                'tax_amount' => 0.00,
-                'total_amount' => $this->renewalPrice,
-                'status' => 'pending',
-            ]);
+                    // Create invoice for renewal
+                    $invoice = Invoice::create([
+                        'subscription_id' => $subscription->id,
+                        'organisation_id' => $user->orgId,
+                        'invoice_number' => Invoice::generateInvoiceNumber(),
+                        'invoice_date' => now()->toDateString(),
+                        'due_date' => now()->addDays(7)->toDateString(), // Due date is 7 days from invoice date
+                        'user_count' => $this->renewalUserCount,
+                        'price_per_user' => $this->renewalPricePerUser,
+                        'subtotal' => $this->renewalPrice,
+                        'tax_amount' => 0.00,
+                        'total_amount' => $this->renewalPrice,
+                        'status' => 'pending',
+                    ]);
+                }
+                
+                // Store invoice for use outside transaction
+                $this->renewalInvoice = $invoice;
+                
+                \Log::info('Renewal invoice created', [
+                    'invoice_id' => $invoice->id,
+                    'amount' => $this->renewalPrice,
+                    'users' => $this->renewalUserCount
+                ]);
+            });
+            
+            // Open payment modal for this invoice (after transaction commits)
+            $this->selectedInvoice = $this->renewalInvoice;
+            $this->payment_amount = $this->renewalPrice;
+            $this->showRenewModal = false;
+            $this->showPaymentModal = true;
+            
+        } catch (\Exception $e) {
+            \Log::error('Error creating renewal invoice: ' . $e->getMessage());
+            session()->flash('error', 'Failed to create renewal invoice. Please try again.');
+            $this->closeRenewModal();
         }
-
-        // Open payment modal for this invoice
-        $this->selectedInvoice = $invoice;
-        $this->payment_amount = $this->renewalPrice;
-        $this->showRenewModal = false;
-        $this->showPaymentModal = true;
-        
-        \Log::info('Renewal invoice created', [
-            'invoice_id' => $invoice->id,
-            'amount' => $this->renewalPrice,
-            'users' => $this->renewalUserCount
-        ]);
     }
 
     public function openPaymentModal($invoiceId)
@@ -709,28 +723,39 @@ class Billing extends Component
                 return;
             }
 
-            // Check if payment already exists
-            $existingPayment = Payment::where('invoice_id', $this->selectedInvoice->id)
-                ->where('status', 'completed')
-                ->first();
-            
-            if ($existingPayment) {
-                session()->flash('error', 'Payment already exists for this invoice.');
-                $this->isProcessingStripePayment = false;
-                return;
-            }
-
-            // Use database transaction
-            \DB::beginTransaction();
-            
-            try {
+            // Use database transaction with lock to prevent race conditions
+            \DB::transaction(function() use ($paymentIntent, $paymentIntentId) {
+                // Lock invoice row to prevent concurrent payments
+                $invoice = Invoice::lockForUpdate()->find($this->selectedInvoice->id);
+                
+                if (!$invoice) {
+                    throw new \Exception('Invoice not found.');
+                }
+                
+                // Check if payment already exists (with lock)
+                $existingPayment = Payment::lockForUpdate()
+                    ->where('invoice_id', $invoice->id)
+                    ->where('status', 'completed')
+                    ->first();
+                
+                if ($existingPayment) {
+                    throw new \Exception('Payment already exists for this invoice.');
+                }
+                
+                // Validate payment amount matches invoice amount
+                $paymentAmount = $paymentIntent->amount / 100; // Convert from cents
+                if (abs($paymentAmount - $invoice->total_amount) > 0.01) {
+                    throw new \Exception('Payment amount does not match invoice amount.');
+                }
+                
                 // Create payment record
                 $payment = Payment::create([
-                    'invoice_id' => $this->selectedInvoice->id,
-                    'organisation_id' => $this->selectedInvoice->organisation_id,
+                    'invoice_id' => $invoice->id,
+                    'organisation_id' => $invoice->organisation_id,
+                    'user_id' => $invoice->user_id,
                     'paid_by_user_id' => auth()->id(),
                     'payment_method' => 'card',
-                    'amount' => $paymentIntent->amount / 100, // Convert from cents
+                    'amount' => $paymentAmount,
                     'transaction_id' => $paymentIntent->id,
                     'status' => 'completed',
                     'payment_date' => now()->toDateString(),
@@ -741,10 +766,10 @@ class Billing extends Component
 
                 // Create payment record for Stripe tracking
                 \App\Models\PaymentRecord::create([
-                    'organisation_id' => $this->selectedInvoice->organisation_id,
+                    'organisation_id' => $invoice->organisation_id,
                     'stripe_payment_intent_id' => $paymentIntent->id,
                     'stripe_customer_id' => $paymentIntent->customer,
-                    'amount' => $paymentIntent->amount / 100,
+                    'amount' => $paymentAmount,
                     'currency' => $paymentIntent->currency,
                     'status' => $paymentIntent->status,
                     'type' => 'payment',
@@ -752,34 +777,32 @@ class Billing extends Component
                 ]);
 
                 // Update invoice status
-                $this->selectedInvoice->update([
+                $invoice->update([
                     'status' => 'paid',
                     'paid_date' => now(),
                 ]);
 
                 // Activate/renew subscription
                 $subscriptionService = new SubscriptionService();
-                if ($this->selectedInvoice->subscription) {
-                    $userCount = $this->selectedInvoice->user_count;
-                    $pricePerUser = $this->selectedInvoice->price_per_user;
-                    $subscriptionService->renewSubscription($this->selectedInvoice->subscription, $userCount, $pricePerUser);
+                if ($invoice->subscription) {
+                    $userCount = $invoice->user_count;
+                    $pricePerUser = $invoice->price_per_user;
+                    $subscriptionService->renewSubscription($invoice->subscription, $userCount, $pricePerUser);
                 } else {
                     $subscriptionService->activateSubscription($payment->id);
                 }
-
-                \DB::commit();
                 
-                \Log::info("Stripe payment confirmed for invoice {$this->selectedInvoice->id}: {$paymentIntent->id}");
-
-                session()->flash('success', 'Payment processed successfully. Your subscription has been activated.');
-                $this->closePaymentPage();
-                $this->checkSubscriptionStatus();
-                $this->dispatch('payment-successful');
+                \Log::info("Stripe payment confirmed for invoice {$invoice->id}: {$paymentIntent->id}");
                 
-            } catch (\Exception $e) {
-                \DB::rollBack();
-                throw $e;
-            }
+                // Update component state after successful transaction
+                $this->selectedInvoice = $invoice->fresh();
+            });
+            
+            // Success - transaction committed
+            session()->flash('success', 'Payment processed successfully. Your subscription has been activated.');
+            $this->closePaymentPage();
+            $this->checkSubscriptionStatus();
+            $this->dispatch('payment-successful');
             
         } catch (\Exception $e) {
             \Log::error('Failed to confirm Stripe payment: ' . $e->getMessage());

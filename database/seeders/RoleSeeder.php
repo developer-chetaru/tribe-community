@@ -12,11 +12,21 @@ class RoleSeeder extends Seeder
      */
     public function run()
     {
-        Role::firstOrCreate(['name' => 'super_admin', 'guard_name' => 'web']);
-        Role::firstOrCreate(['name' => 'organisation_super_admin', 'guard_name' => 'web']);
-        Role::firstOrCreate(['name' => 'organisation_admin', 'guard_name' => 'web']);
-        Role::firstOrCreate(['name' => 'organisation_user', 'guard_name' => 'web']);
-        Role::firstOrCreate(['name' => 'basecamp', 'guard_name' => 'web']);
-        Role::firstOrCreate(['name' => 'director', 'guard_name' => 'web']);
+        // Create roles for both 'web' and 'api' guards
+        $roles = [
+            'super_admin',
+            'organisation_super_admin',
+            'organisation_admin',
+            'organisation_user',
+            'basecamp',
+            'director',
+        ];
+
+        foreach ($roles as $roleName) {
+            // Create for web guard
+            Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+            // Create for api guard
+            Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'api']);
+        }
     }
 }

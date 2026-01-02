@@ -15,6 +15,7 @@ class MonthlySummary extends Model
         'user_id',
         'year',
         'month',
+        'month_label',
         'summary',
     ];
 

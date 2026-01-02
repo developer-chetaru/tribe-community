@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Check if table exists before trying to alter it
+        if (!Schema::hasTable('organisations')) {
+            return;
+        }
+
         Schema::table('organisations', function (Blueprint $table) {
             // Billing contact information
             $table->string('admin_email')->nullable()->after('name');
