@@ -11,6 +11,7 @@ use App\Services\SubscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class InvoiceController extends Controller
 {
@@ -41,25 +42,8 @@ class InvoiceController extends Controller
             abort(403, 'Only directors, basecamp users, and administrators can download invoices.');
         }
 
-        // Load Stripe payment method details for each payment
-        foreach ($invoice->payments as $payment) {
-            if ($payment->transaction_id && $payment->payment_method === 'stripe') {
-                try {
-                    \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
-                    $paymentIntent = \Stripe\PaymentIntent::retrieve($payment->transaction_id);
-                    
-                    if ($paymentIntent->payment_method) {
-                        $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentIntent->payment_method);
-                        $payment->stripe_card_brand = $paymentMethod->card->brand ?? null;
-                        $payment->stripe_card_last4 = $paymentMethod->card->last4 ?? null;
-                        $payment->stripe_card_exp_month = $paymentMethod->card->exp_month ?? null;
-                        $payment->stripe_card_exp_year = $paymentMethod->card->exp_year ?? null;
-                    }
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::warning('Failed to retrieve Stripe payment method: ' . $e->getMessage());
-                }
-            }
-        }
+        // Load Stripe payment method details - batch retrieve with caching to avoid multiple API calls
+        $this->loadStripePaymentMethods($invoice->payments);
 
         // For basecamp users, get user instead of organisation
         $invoiceUser = $invoice->user_id ? \App\Models\User::find($invoice->user_id) : null;
@@ -105,25 +89,8 @@ class InvoiceController extends Controller
             abort(403, 'Only directors, basecamp users, and administrators can view invoices.');
         }
 
-        // Load Stripe payment method details for each payment
-        foreach ($invoice->payments as $payment) {
-            if ($payment->transaction_id && $payment->payment_method === 'stripe') {
-                try {
-                    \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
-                    $paymentIntent = \Stripe\PaymentIntent::retrieve($payment->transaction_id);
-                    
-                    if ($paymentIntent->payment_method) {
-                        $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentIntent->payment_method);
-                        $payment->stripe_card_brand = $paymentMethod->card->brand ?? null;
-                        $payment->stripe_card_last4 = $paymentMethod->card->last4 ?? null;
-                        $payment->stripe_card_exp_month = $paymentMethod->card->exp_month ?? null;
-                        $payment->stripe_card_exp_year = $paymentMethod->card->exp_year ?? null;
-                    }
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::warning('Failed to retrieve Stripe payment method: ' . $e->getMessage());
-                }
-            }
-        }
+        // Load Stripe payment method details - batch retrieve to avoid multiple API calls
+        $this->loadStripePaymentMethods($invoice->payments);
 
         // For basecamp users, get user instead of organisation
         $invoiceUser = $invoice->user_id ? \App\Models\User::find($invoice->user_id) : null;
@@ -145,25 +112,8 @@ class InvoiceController extends Controller
     {
         $invoice = Invoice::where('share_token', $token)->firstOrFail();
 
-        // Load Stripe payment method details for each payment
-        foreach ($invoice->payments as $payment) {
-            if ($payment->transaction_id && $payment->payment_method === 'stripe') {
-                try {
-                    \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
-                    $paymentIntent = \Stripe\PaymentIntent::retrieve($payment->transaction_id);
-                    
-                    if ($paymentIntent->payment_method) {
-                        $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentIntent->payment_method);
-                        $payment->stripe_card_brand = $paymentMethod->card->brand ?? null;
-                        $payment->stripe_card_last4 = $paymentMethod->card->last4 ?? null;
-                        $payment->stripe_card_exp_month = $paymentMethod->card->exp_month ?? null;
-                        $payment->stripe_card_exp_year = $paymentMethod->card->exp_year ?? null;
-                    }
-                } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::warning('Failed to retrieve Stripe payment method: ' . $e->getMessage());
-                }
-            }
-        }
+        // Load Stripe payment method details - batch retrieve to avoid multiple API calls
+        $this->loadStripePaymentMethods($invoice->payments);
 
         // For basecamp users, get user instead of organisation
         $invoiceUser = $invoice->user_id ? \App\Models\User::find($invoice->user_id) : null;
@@ -457,6 +407,56 @@ class InvoiceController extends Controller
             ]);
             return redirect()->route('invoices.shared', ['token' => $token])
                 ->with('error', 'Failed to process payment: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Batch load Stripe payment methods to avoid multiple API calls
+     * Uses caching to reduce API calls for same payment intents (1 hour cache)
+     */
+    private function loadStripePaymentMethods($payments)
+    {
+        if (!$payments || $payments->isEmpty()) {
+            return;
+        }
+
+        $stripeSecretKey = config('services.stripe.secret');
+        if (!$stripeSecretKey) {
+            return; // Stripe not configured, skip
+        }
+
+        \Stripe\Stripe::setApiKey($stripeSecretKey);
+
+        foreach ($payments as $payment) {
+            if (!$payment->transaction_id || $payment->payment_method !== 'stripe') {
+                continue;
+            }
+
+            try {
+                // Use cache to avoid repeated API calls for same payment intent (1 hour cache)
+                $cacheKey = 'stripe_payment_intent_' . $payment->transaction_id;
+                $paymentIntent = Cache::remember($cacheKey, 3600, function() use ($payment) {
+                    return \Stripe\PaymentIntent::retrieve($payment->transaction_id);
+                });
+
+                if ($paymentIntent->payment_method) {
+                    // Cache payment method details as well (1 hour cache)
+                    $methodCacheKey = 'stripe_payment_method_' . $paymentIntent->payment_method;
+                    $paymentMethod = Cache::remember($methodCacheKey, 3600, function() use ($paymentIntent) {
+                        return \Stripe\PaymentMethod::retrieve($paymentIntent->payment_method);
+                    });
+
+                    $payment->stripe_card_brand = $paymentMethod->card->brand ?? null;
+                    $payment->stripe_card_last4 = $paymentMethod->card->last4 ?? null;
+                    $payment->stripe_card_exp_month = $paymentMethod->card->exp_month ?? null;
+                    $payment->stripe_card_exp_year = $paymentMethod->card->exp_year ?? null;
+                }
+            } catch (\Exception $e) {
+                Log::warning('Failed to retrieve Stripe payment method: ' . $e->getMessage(), [
+                    'payment_id' => $payment->id,
+                    'transaction_id' => $payment->transaction_id
+                ]);
+            }
         }
     }
 }

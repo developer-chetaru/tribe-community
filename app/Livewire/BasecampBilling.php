@@ -337,6 +337,14 @@ class BasecampBilling extends Component
                 return;
             }
             
+            // Validate payment amount matches invoice amount
+            $paymentAmount = $paymentIntent->amount / 100; // Convert from cents
+            if (abs($paymentAmount - $this->selectedInvoice->total_amount) > 0.01) {
+                session()->flash('error', 'Payment amount does not match invoice amount.');
+                $this->isProcessingStripePayment = false;
+                return;
+            }
+            
             // Check if payment already exists
             $existingPayment = Payment::where('invoice_id', $this->selectedInvoice->id)
                 ->where('transaction_id', $paymentIntentId)
@@ -357,12 +365,12 @@ class BasecampBilling extends Component
                 return;
             }
             
-            // Create payment record
+            // Create payment record - use validated payment amount from Stripe
             $payment = Payment::create([
                 'invoice_id' => $this->selectedInvoice->id,
                 'user_id' => $this->userId,
                 'payment_method' => 'card',
-                'amount' => $this->monthlyPrice,
+                'amount' => $paymentAmount, // Use validated amount from Stripe
                 'transaction_id' => $paymentIntentId,
                 'payment_date' => now()->toDateString(),
                 'payment_notes' => 'Basecamp subscription payment via Stripe',

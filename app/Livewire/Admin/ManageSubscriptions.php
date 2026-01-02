@@ -44,6 +44,20 @@ class ManageSubscriptions extends Component
         }
     }
 
+    /**
+     * Validate and sanitize search input to prevent SQL injection
+     */
+    public function updatedSearch()
+    {
+        // Validate search input
+        $this->validate(['search' => 'nullable|string|max:255']);
+        
+        // Escape special characters for LIKE queries to prevent SQL injection
+        if ($this->search) {
+            $this->search = addcslashes($this->search, '%_\\');
+        }
+    }
+
     public function updatedOrganisationId()
     {
         if ($this->organisation_id) {
@@ -333,6 +347,7 @@ class ManageSubscriptions extends Component
                 ->whereNotNull('user_id')
                 ->with('user')
                 ->when($this->search, function($q) {
+                    // Search is already sanitized in updatedSearch() method
                     $q->whereHas('user', function($userQuery) {
                         $userQuery->where('first_name', 'like', '%' . $this->search . '%')
                             ->orWhere('last_name', 'like', '%' . $this->search . '%')

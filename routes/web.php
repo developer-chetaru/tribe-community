@@ -75,10 +75,12 @@ Route::get('/test-email', [TestEmailController::class, 'sendTestEmail']);
 Route::get('/app-redirect', [AppRedirectController::class, 'redirect']);
 Route::get('/open', [AppRedirectController::class, 'redirect']); // optional alias
 
-// Public invoice sharing route (no authentication required)
-Route::get('/invoices/shared/{token}', [InvoiceController::class, 'shared'])->name('invoices.shared');
-Route::get('/invoices/shared/{token}/pay', [InvoiceController::class, 'initiateSharedPayment'])->name('invoices.shared.pay');
-Route::get('/invoices/shared/{token}/payment/success', [InvoiceController::class, 'handleSharedPaymentSuccess'])->name('invoices.shared.payment.success');
+// Public invoice sharing route (no authentication required) with rate limiting
+Route::middleware(['throttle:10,1'])->group(function () {
+    Route::get('/invoices/shared/{token}', [InvoiceController::class, 'shared'])->name('invoices.shared');
+    Route::get('/invoices/shared/{token}/pay', [InvoiceController::class, 'initiateSharedPayment'])->name('invoices.shared.pay');
+    Route::get('/invoices/shared/{token}/payment/success', [InvoiceController::class, 'handleSharedPaymentSuccess'])->name('invoices.shared.payment.success');
+});
 
  Route::post('/forgot-password', [ForgotResetPasswordController::class, 'sendResetLinkEmail'])
     ->name('password.email');
@@ -110,8 +112,11 @@ Route::get('/refresh-csrf-token', function () {
 // Basecamp Billing - Allow access without login (payment first, then activation)
 // User ID will be passed via session or query parameter
 Route::get('/basecamp/billing', \App\Livewire\BasecampBilling::class)->name('basecamp.billing');
-Route::get('/basecamp/billing/payment/success', [\App\Http\Controllers\Billing\BasecampStripeCheckoutController::class, 'handleSuccess'])
-    ->name('basecamp.billing.payment.success');
+// Basecamp payment success with rate limiting (10 requests per minute)
+Route::middleware(['throttle:10,1'])->group(function () {
+    Route::get('/basecamp/billing/payment/success', [\App\Http\Controllers\Billing\BasecampStripeCheckoutController::class, 'handleSuccess'])
+        ->name('basecamp.billing.payment.success');
+});
 
 Route::middleware([
     'auth:sanctum',
@@ -141,19 +146,25 @@ Route::middleware([
     Route::middleware(['role:director|basecamp'])->group(function () {
         Route::get('/billing', Billing::class)->name('billing');
         
-        // Stripe Checkout Routes
-        Route::get('/billing/payment/success', [\App\Http\Controllers\Billing\StripeCheckoutController::class, 'handleSuccess'])
-            ->name('billing.payment.success');
+        // Stripe Checkout Routes with rate limiting (10 requests per minute)
+        Route::middleware(['throttle:10,1'])->group(function () {
+            Route::get('/billing/payment/success', [\App\Http\Controllers\Billing\StripeCheckoutController::class, 'handleSuccess'])
+                ->name('billing.payment.success');
+        });
+        
         Route::get('/invoices/{id}/download', [InvoiceController::class, 'download'])->name('invoices.download');
         Route::get('/invoices/{id}/view', [InvoiceController::class, 'view'])->name('invoices.view');
         
-        // Payment Gateway Routes
-        Route::post('/payment/process', [PaymentGatewayController::class, 'processPayment'])->name('payment.process');
+        // Payment Gateway Routes with rate limiting (10 requests per minute)
+        Route::middleware(['throttle:10,1'])->group(function () {
+            Route::post('/payment/process', [PaymentGatewayController::class, 'processPayment'])->name('payment.process');
+        });
+        
         Route::get('/payment/config', [PaymentGatewayController::class, 'getPaymentConfig'])->name('payment.config');
     });
 
-    // Stripe Billing Routes
-    Route::prefix('billing/stripe')->name('billing.stripe.')->group(function () {
+    // Stripe Billing Routes with rate limiting (10 requests per minute)
+    Route::prefix('billing/stripe')->name('billing.stripe.')->middleware(['throttle:10,1'])->group(function () {
         Route::post('/subscription/create', [StripeSubscriptionController::class, 'createSubscription'])
             ->name('subscription.create');
         Route::post('/subscription/add-user', [StripeSubscriptionController::class, 'addUser'])
