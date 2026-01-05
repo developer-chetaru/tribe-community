@@ -2,10 +2,327 @@
     "openapi": "3.0.0",
     "info": {
         "title": "Tribe Community API",
-        "description": "Auto-generated API documentation for Tribe Community.",
+        "description": "Auto-generated API documentation for Tribe Community Platform. Includes billing, payments, subscriptions, and user management endpoints.",
         "version": "1.0.0"
     },
+    "servers": [
+        {
+            "url": "http://my-default-host.com",
+            "description": "API Server"
+        }
+    ],
     "paths": {
+        "/api/submit-payment": {
+            "post": {
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Submit payment for an invoice",
+                "description": "Submit a payment for an invoice. Directors can submit payments for invoices from their organisation.",
+                "operationId": "2cce795897f811f0d988e9906b354752",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "invoice_id",
+                                    "payment_method",
+                                    "amount"
+                                ],
+                                "properties": {
+                                    "invoice_id": {
+                                        "description": "ID of the invoice to pay",
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "payment_method": {
+                                        "description": "Payment method used",
+                                        "type": "string",
+                                        "enum": [
+                                            "bank_transfer",
+                                            "credit_card",
+                                            "paypal",
+                                            "other"
+                                        ],
+                                        "example": "bank_transfer"
+                                    },
+                                    "amount": {
+                                        "description": "Payment amount",
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 90
+                                    },
+                                    "transaction_id": {
+                                        "description": "Transaction ID from payment provider",
+                                        "type": "string",
+                                        "example": "TXN-123456",
+                                        "nullable": true
+                                    },
+                                    "payment_notes": {
+                                        "description": "Additional payment notes",
+                                        "type": "string",
+                                        "example": "Payment made via bank transfer",
+                                        "nullable": true
+                                    },
+                                    "payment_proof": {
+                                        "description": "Payment proof document/image (max 2MB)",
+                                        "type": "string",
+                                        "format": "binary",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "invoice_id",
+                                    "payment_method",
+                                    "amount"
+                                ],
+                                "properties": {
+                                    "invoice_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "payment_method": {
+                                        "type": "string",
+                                        "enum": [
+                                            "bank_transfer",
+                                            "credit_card",
+                                            "paypal",
+                                            "other"
+                                        ],
+                                        "example": "bank_transfer"
+                                    },
+                                    "amount": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 90
+                                    },
+                                    "transaction_id": {
+                                        "type": "string",
+                                        "example": "TXN-123456",
+                                        "nullable": true
+                                    },
+                                    "payment_notes": {
+                                        "type": "string",
+                                        "example": "Payment made via bank transfer",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Payment submitted successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Payment submitted successfully. It will be reviewed by admin."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "payment_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "invoice_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "amount": {
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "example": 90
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "pending"
+                                                },
+                                                "payment_date": {
+                                                    "type": "string",
+                                                    "format": "date",
+                                                    "example": "2025-12-24"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden - User does not have permission"
+                    },
+                    "404": {
+                        "description": "Invoice not found"
+                    },
+                    "422": {
+                        "description": "Validation error"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/payments": {
+            "get": {
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Get payment history",
+                "description": "Retrieve payment history for the authenticated user's organisation. Directors can view payments for their organisation.",
+                "operationId": "a8de634f39060a36c0ca7210aa25f679",
+                "parameters": [
+                    {
+                        "name": "invoice_id",
+                        "in": "query",
+                        "description": "Filter payments by invoice ID",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "description": "Filter payments by status",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "pending",
+                                "completed",
+                                "failed"
+                            ],
+                            "example": "pending"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Page number for pagination",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Payments retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Payments retrieved successfully"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "integer",
+                                                        "example": 1
+                                                    },
+                                                    "invoice_id": {
+                                                        "type": "integer",
+                                                        "example": 1
+                                                    },
+                                                    "invoice_number": {
+                                                        "type": "string",
+                                                        "example": "INV-202512-0001"
+                                                    },
+                                                    "amount": {
+                                                        "type": "number",
+                                                        "format": "float",
+                                                        "example": 90
+                                                    },
+                                                    "payment_method": {
+                                                        "type": "string",
+                                                        "example": "bank_transfer"
+                                                    },
+                                                    "status": {
+                                                        "type": "string",
+                                                        "example": "pending"
+                                                    },
+                                                    "payment_date": {
+                                                        "type": "string",
+                                                        "format": "date",
+                                                        "example": "2025-12-24"
+                                                    },
+                                                    "transaction_id": {
+                                                        "type": "string",
+                                                        "example": "TXN-123456",
+                                                        "nullable": true
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "current_page": {
+                                            "type": "integer",
+                                            "example": 1
+                                        },
+                                        "total": {
+                                            "type": "integer",
+                                            "example": 10
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/login-admin": {
             "post": {
                 "tags": [
@@ -177,6 +494,783 @@
                         "description": "Validation error"
                     }
                 }
+            }
+        },
+        "/billing/refunds/process": {
+            "post": {
+                "tags": [
+                    "Billing - Refunds"
+                ],
+                "summary": "Process a refund request",
+                "description": "Processes a refund for a Stripe payment. Supports full or partial refunds. Requires director or super_admin role.",
+                "operationId": "b7160417acca99dcbcbccf02a4fe6262",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "payment_id",
+                                    "reason"
+                                ],
+                                "properties": {
+                                    "payment_id": {
+                                        "description": "ID of the payment record to refund",
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "reason": {
+                                        "description": "Reason for refund",
+                                        "type": "string",
+                                        "enum": [
+                                            "overcharge",
+                                            "duplicate_payment",
+                                            "service_cancellation",
+                                            "module_removal",
+                                            "other"
+                                        ],
+                                        "example": "overcharge"
+                                    },
+                                    "amount": {
+                                        "description": "Partial refund amount (optional, defaults to full refund)",
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 50,
+                                        "nullable": true
+                                    },
+                                    "description": {
+                                        "description": "Additional refund description",
+                                        "type": "string",
+                                        "maxLength": 500,
+                                        "example": "Customer requested refund due to billing error",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Refund processed successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Refund processed successfully"
+                                        },
+                                        "refund": {
+                                            "description": "Stripe refund object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string",
+                                                    "example": "re_1234567890"
+                                                },
+                                                "amount": {
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "example": 50
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "succeeded"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - Invalid refund request or payment already refunded"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Payment not found"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/billing/refunds/history": {
+            "get": {
+                "tags": [
+                    "Billing - Refunds"
+                ],
+                "summary": "Get refund history",
+                "description": "Retrieves refund history with optional filtering by organisation or subscription. Requires director or super_admin role.",
+                "operationId": "35d975efe9d6ef80b7fd9c2879b9ca1f",
+                "parameters": [
+                    {
+                        "name": "organisation_id",
+                        "in": "query",
+                        "description": "Filter refunds by organisation ID",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    },
+                    {
+                        "name": "subscription_id",
+                        "in": "query",
+                        "description": "Filter refunds by subscription ID",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Page number for pagination",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Refund history retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "refunds": {
+                                            "properties": {
+                                                "data": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "integer",
+                                                                "example": 1
+                                                            },
+                                                            "stripe_refund_id": {
+                                                                "type": "string",
+                                                                "example": "re_1234567890"
+                                                            },
+                                                            "amount": {
+                                                                "type": "number",
+                                                                "format": "float",
+                                                                "example": 50
+                                                            },
+                                                            "currency": {
+                                                                "type": "string",
+                                                                "example": "usd"
+                                                            },
+                                                            "status": {
+                                                                "type": "string",
+                                                                "example": "succeeded"
+                                                            },
+                                                            "refunded_at": {
+                                                                "type": "string",
+                                                                "format": "date-time",
+                                                                "example": "2025-12-24T10:00:00Z"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "current_page": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "total": {
+                                                    "type": "integer",
+                                                    "example": 10
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/billing/stripe/payment-intent/create": {
+            "post": {
+                "tags": [
+                    "Billing - Stripe Payments"
+                ],
+                "summary": "Create Stripe payment intent for invoice",
+                "description": "Creates a Stripe payment intent for paying an invoice. Requires director or super_admin role.",
+                "operationId": "a3cffc27bb50d873ce84fea0fcf9e68e",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "invoice_id"
+                                ],
+                                "properties": {
+                                    "invoice_id": {
+                                        "description": "ID of the invoice to pay",
+                                        "type": "integer",
+                                        "example": 1
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Payment intent created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "client_secret": {
+                                            "description": "Stripe payment intent client secret for frontend",
+                                            "type": "string",
+                                            "example": "pi_1234567890_secret_abc123"
+                                        },
+                                        "payment_intent_id": {
+                                            "description": "Stripe payment intent ID",
+                                            "type": "string",
+                                            "example": "pi_1234567890"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - Failed to create payment intent"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden - User does not have permission"
+                    },
+                    "404": {
+                        "description": "Invoice not found"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/billing/stripe/payment/confirm": {
+            "post": {
+                "tags": [
+                    "Billing - Stripe Payments"
+                ],
+                "summary": "Confirm Stripe payment after successful transaction",
+                "description": "Confirms a Stripe payment after the payment intent has been successfully processed. Updates invoice status and activates subscription. Requires director or super_admin role.",
+                "operationId": "a39f4109071705bb6dfb8b55a3bd150b",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "payment_intent_id",
+                                    "invoice_id"
+                                ],
+                                "properties": {
+                                    "payment_intent_id": {
+                                        "description": "Stripe payment intent ID",
+                                        "type": "string",
+                                        "example": "pi_1234567890"
+                                    },
+                                    "invoice_id": {
+                                        "description": "ID of the invoice being paid",
+                                        "type": "integer",
+                                        "example": 1
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Payment confirmed and processed successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Payment processed successfully. Your subscription has been activated."
+                                        },
+                                        "payment": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "invoice_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "amount": {
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "example": 90
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "completed"
+                                                },
+                                                "payment_date": {
+                                                    "type": "string",
+                                                    "format": "date",
+                                                    "example": "2025-12-24"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - Payment not completed or already processed"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden - User does not have permission"
+                    },
+                    "404": {
+                        "description": "Invoice not found"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/billing/stripe/subscription/create": {
+            "post": {
+                "tags": [
+                    "Billing - Stripe Subscriptions"
+                ],
+                "summary": "Create new Stripe subscription",
+                "description": "Creates a new subscription for an organisation with the specified tier and user count. Requires director or super_admin role.",
+                "operationId": "95aaa431e9647d50c29eae0456cd3e73",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "organisation_id",
+                                    "tier",
+                                    "user_count",
+                                    "payment_method_id"
+                                ],
+                                "properties": {
+                                    "organisation_id": {
+                                        "description": "ID of the organisation",
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "tier": {
+                                        "description": "Subscription tier",
+                                        "type": "string",
+                                        "enum": [
+                                            "spark",
+                                            "momentum",
+                                            "vision"
+                                        ],
+                                        "example": "spark"
+                                    },
+                                    "user_count": {
+                                        "description": "Number of users in the subscription",
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "example": 5
+                                    },
+                                    "payment_method_id": {
+                                        "description": "Stripe payment method ID",
+                                        "type": "string",
+                                        "example": "pm_1234567890"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Subscription created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Subscription created successfully"
+                                        },
+                                        "subscription": {
+                                            "description": "Stripe subscription object",
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - Failed to create subscription"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Organisation not found"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/billing/stripe/subscription/add-user": {
+            "post": {
+                "tags": [
+                    "Billing - Stripe Subscriptions"
+                ],
+                "summary": "Add user to subscription (pro-rata charge)",
+                "description": "Adds a user to an existing subscription with pro-rata billing. Charges are calculated based on remaining days in the billing period. Requires director or super_admin role.",
+                "operationId": "3f5e77a7ae2d706b3d79f491763a27d9",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "subscription_id",
+                                    "organisation_id"
+                                ],
+                                "properties": {
+                                    "subscription_id": {
+                                        "description": "Stripe subscription ID",
+                                        "type": "string",
+                                        "example": "sub_1234567890"
+                                    },
+                                    "organisation_id": {
+                                        "description": "ID of the organisation",
+                                        "type": "integer",
+                                        "example": 1
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "User added successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "User added successfully"
+                                        },
+                                        "pro_rata_charge": {
+                                            "description": "Pro-rata charge amount for the remaining days",
+                                            "type": "number",
+                                            "format": "float",
+                                            "example": 3.33
+                                        },
+                                        "new_user_count": {
+                                            "description": "Updated user count",
+                                            "type": "integer",
+                                            "example": 6
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - Failed to add user"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Subscription not found"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/billing/stripe/subscription/remove-user": {
+            "post": {
+                "tags": [
+                    "Billing - Stripe Subscriptions"
+                ],
+                "summary": "Remove user from subscription (pro-rata credit)",
+                "description": "Removes a user from an existing subscription with pro-rata credit. Credits are calculated based on active days in the billing period. Minimum 1 user must remain. Requires director or super_admin role.",
+                "operationId": "ba110987a95d0f6e7e10d598ed64ba2c",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "subscription_id",
+                                    "organisation_id"
+                                ],
+                                "properties": {
+                                    "subscription_id": {
+                                        "description": "Stripe subscription ID",
+                                        "type": "string",
+                                        "example": "sub_1234567890"
+                                    },
+                                    "organisation_id": {
+                                        "description": "ID of the organisation",
+                                        "type": "integer",
+                                        "example": 1
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "User removed successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "User removed successfully"
+                                        },
+                                        "pro_rata_credit": {
+                                            "description": "Pro-rata credit amount for the active days",
+                                            "type": "number",
+                                            "format": "float",
+                                            "example": 6.67
+                                        },
+                                        "new_user_count": {
+                                            "description": "Updated user count (minimum 1)",
+                                            "type": "integer",
+                                            "example": 4
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - Failed to remove user or minimum user count reached"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Subscription not found"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/billing/stripe/subscription/cancel": {
+            "post": {
+                "tags": [
+                    "Billing - Stripe Subscriptions"
+                ],
+                "summary": "Cancel subscription",
+                "description": "Cancels a Stripe subscription. By default, cancellation occurs at the end of the current billing period. Requires director or super_admin role.",
+                "operationId": "d3756d5c9f999b45990819b8d4046a48",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "subscription_id"
+                                ],
+                                "properties": {
+                                    "subscription_id": {
+                                        "description": "Stripe subscription ID",
+                                        "type": "string",
+                                        "example": "sub_1234567890"
+                                    },
+                                    "cancel_at_period_end": {
+                                        "description": "Cancel at end of billing period (default: true). If false, cancels immediately.",
+                                        "type": "boolean",
+                                        "example": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Subscription canceled successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Subscription canceled successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - Failed to cancel subscription"
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Forbidden"
+                    },
+                    "404": {
+                        "description": "Subscription not found"
+                    },
+                    "500": {
+                        "description": "Server error"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
             }
         },
         "/api/user-profile": {
@@ -921,16 +2015,28 @@
         "securitySchemes": {
             "bearerAuth": {
                 "type": "http",
-                "description": "Enter JWT token in format: Bearer {token}",
+                "scheme": "bearer",
                 "bearerFormat": "JWT",
-                "scheme": "bearer"
+                "description": "Enter JWT token in format: Bearer {token}"
             }
         }
     },
     "tags": [
         {
             "name": "Authentication",
-            "description": "User authentication endpoints"
+            "description": "User authentication and registration endpoints"
+        },
+        {
+            "name": "Billing - Refunds",
+            "description": "Refund processing and history endpoints for Stripe payments"
+        },
+        {
+            "name": "Billing - Stripe Payments",
+            "description": "Stripe payment processing endpoints for invoices and subscriptions"
+        },
+        {
+            "name": "Billing - Stripe Subscriptions",
+            "description": "Stripe subscription management endpoints for creating, updating, and canceling subscriptions"
         },
         {
             "name": "User Profile",
@@ -943,6 +2049,10 @@
         {
             "name": "Summary",
             "description": "User summary endpoints for Happy Index and leave data"
+        },
+        {
+            "name": "Payments",
+            "description": "Payment processing endpoints for invoices"
         }
     ]
 }

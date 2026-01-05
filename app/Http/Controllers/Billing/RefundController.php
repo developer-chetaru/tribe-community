@@ -9,6 +9,12 @@ use App\Models\SubscriptionRecord;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * @OA\Tag(
+ *     name="Billing - Refunds",
+ *     description="Refund processing and history endpoints for Stripe payments"
+ * )
+ */
 class RefundController extends Controller
 {
     protected $stripeService;
@@ -19,6 +25,44 @@ class RefundController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/billing/refunds/process",
+     *     tags={"Billing - Refunds"},
+     *     summary="Process a refund request",
+     *     description="Processes a refund for a Stripe payment. Supports full or partial refunds. Requires director or super_admin role.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"payment_id", "reason"},
+     *             @OA\Property(property="payment_id", type="integer", example=1, description="ID of the payment record to refund"),
+     *             @OA\Property(property="reason", type="string", enum={"overcharge", "duplicate_payment", "service_cancellation", "module_removal", "other"}, example="overcharge", description="Reason for refund"),
+     *             @OA\Property(property="amount", type="number", format="float", example=50.00, description="Partial refund amount (optional, defaults to full refund)", nullable=true),
+     *             @OA\Property(property="description", type="string", maxLength=500, example="Customer requested refund due to billing error", description="Additional refund description", nullable=true)
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Refund processed successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Refund processed successfully"),
+     *             @OA\Property(
+     *                 property="refund",
+     *                 type="object",
+     *                 description="Stripe refund object",
+     *                 @OA\Property(property="id", type="string", example="re_1234567890"),
+     *                 @OA\Property(property="amount", type="number", format="float", example=50.00),
+     *                 @OA\Property(property="status", type="string", example="succeeded")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=400, description="Bad request - Invalid refund request or payment already refunded"),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=403, description="Forbidden"),
+     *     @OA\Response(response=404, description="Payment not found"),
+     *     @OA\Response(response=500, description="Server error")
+     * )
      * Process a refund request
      */
     public function processRefund(Request $request)
@@ -140,6 +184,62 @@ class RefundController extends Controller
     }
 
     /**
+     * @OA\Get(
+     *     path="/billing/refunds/history",
+     *     tags={"Billing - Refunds"},
+     *     summary="Get refund history",
+     *     description="Retrieves refund history with optional filtering by organisation or subscription. Requires director or super_admin role.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="organisation_id",
+     *         in="query",
+     *         description="Filter refunds by organisation ID",
+     *         required=false,
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="subscription_id",
+     *         in="query",
+     *         description="Filter refunds by subscription ID",
+     *         required=false,
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="page",
+     *         in="query",
+     *         description="Page number for pagination",
+     *         required=false,
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Refund history retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(
+     *                 property="refunds",
+     *                 type="object",
+     *                 @OA\Property(
+     *                     property="data",
+     *                     type="array",
+     *                     @OA\Items(
+     *                         @OA\Property(property="id", type="integer", example=1),
+     *                         @OA\Property(property="stripe_refund_id", type="string", example="re_1234567890"),
+     *                         @OA\Property(property="amount", type="number", format="float", example=50.00),
+     *                         @OA\Property(property="currency", type="string", example="usd"),
+     *                         @OA\Property(property="status", type="string", example="succeeded"),
+     *                         @OA\Property(property="refunded_at", type="string", format="date-time", example="2025-12-24T10:00:00Z")
+     *                     )
+     *                 ),
+     *                 @OA\Property(property="current_page", type="integer", example=1),
+     *                 @OA\Property(property="total", type="integer", example=10)
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=403, description="Forbidden"),
+     *     @OA\Response(response=500, description="Server error")
+     * )
      * Get refund history
      */
     public function getRefundHistory(Request $request)

@@ -14,6 +14,12 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * @OA\Tag(
+ *     name="Billing - Stripe Payments",
+ *     description="Stripe payment processing endpoints for invoices and subscriptions"
+ * )
+ */
 class StripePaymentController extends Controller
 {
     protected $stripeService;
@@ -24,6 +30,34 @@ class StripePaymentController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/billing/stripe/payment-intent/create",
+     *     tags={"Billing - Stripe Payments"},
+     *     summary="Create Stripe payment intent for invoice",
+     *     description="Creates a Stripe payment intent for paying an invoice. Requires director or super_admin role.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"invoice_id"},
+     *             @OA\Property(property="invoice_id", type="integer", example=1, description="ID of the invoice to pay")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Payment intent created successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="client_secret", type="string", example="pi_1234567890_secret_abc123", description="Stripe payment intent client secret for frontend"),
+     *             @OA\Property(property="payment_intent_id", type="string", example="pi_1234567890", description="Stripe payment intent ID")
+     *         )
+     *     ),
+     *     @OA\Response(response=400, description="Bad request - Failed to create payment intent"),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=403, description="Forbidden - User does not have permission"),
+     *     @OA\Response(response=404, description="Invoice not found"),
+     *     @OA\Response(response=500, description="Server error")
+     * )
      * Create payment intent for invoice payment
      */
     public function createPaymentIntent(Request $request)
@@ -89,6 +123,43 @@ class StripePaymentController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/billing/stripe/payment/confirm",
+     *     tags={"Billing - Stripe Payments"},
+     *     summary="Confirm Stripe payment after successful transaction",
+     *     description="Confirms a Stripe payment after the payment intent has been successfully processed. Updates invoice status and activates subscription. Requires director or super_admin role.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"payment_intent_id", "invoice_id"},
+     *             @OA\Property(property="payment_intent_id", type="string", example="pi_1234567890", description="Stripe payment intent ID"),
+     *             @OA\Property(property="invoice_id", type="integer", example=1, description="ID of the invoice being paid")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Payment confirmed and processed successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Payment processed successfully. Your subscription has been activated."),
+     *             @OA\Property(
+     *                 property="payment",
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="invoice_id", type="integer", example=1),
+     *                 @OA\Property(property="amount", type="number", format="float", example=90.00),
+     *                 @OA\Property(property="status", type="string", example="completed"),
+     *                 @OA\Property(property="payment_date", type="string", format="date", example="2025-12-24")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(response=400, description="Bad request - Payment not completed or already processed"),
+     *     @OA\Response(response=401, description="Unauthorized"),
+     *     @OA\Response(response=403, description="Forbidden - User does not have permission"),
+     *     @OA\Response(response=404, description="Invoice not found"),
+     *     @OA\Response(response=500, description="Server error")
+     * )
      * Confirm payment after Stripe payment is successful
      */
     public function confirmPayment(Request $request)

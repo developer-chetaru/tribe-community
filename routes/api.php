@@ -58,6 +58,12 @@ Route::get('/reflections/{reflection}/chats', [ReflectionApiController::class, '
 Route::post('/reflections/{reflection}/chats', [ReflectionApiController::class, 'sendChat']);
 
 Route::get('/view-notification-list', [NotificationController::class, 'viewNotificationList']);
+
+// API Documentation Route (Swagger UI)
+// Note: This requires l5-swagger package to be installed
+// If package is not installed, you can access documentation via:
+// php artisan l5-swagger:generate (to generate docs)
+// Then access at: /api/documentation
 Route::post('/notification-archive', [NotificationController::class, 'notificationArchive']);
 Route::post('/notification/archive-single', [NotificationController::class, 'archiveSingleNotification']);
 Route::get('/view-archive-list', [NotificationController::class, 'getArchivedNotifications']);

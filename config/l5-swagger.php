@@ -194,7 +194,14 @@ return [
                 ],
                 */
 
-                /* Open API 3.0 support
+                /* Open API 3.0 support */
+                'bearerAuth' => [ // JWT Bearer token authentication
+                    'type' => 'http', // The type of the security scheme
+                    'scheme' => 'bearer', // HTTP authentication scheme
+                    'bearerFormat' => 'JWT', // JWT token format
+                    'description' => 'Enter JWT token in format: Bearer {token}',
+                ],
+                /*
                 'passport' => [ // Unique name of security
                     'type' => 'oauth2', // The type of the security scheme. Valid values are "basic", "apiKey" or "oauth2".
                     'description' => 'Laravel passport oauth2 security.',
