@@ -48,6 +48,9 @@ Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
 
 });
 
+// Public endpoint - no authentication required
+Route::get('/basecamp/stripe-config', [BasecampBillingController::class, 'getStripeConfig']);
+
 Route::post('/change-password', [ForgotController::class, 'changePassword']);
 Route::post('/forgot-password', [ForgotController::class, 'sendResetLink']);
 Route::post('/reset-password', [ForgotController::class, 'reset']);

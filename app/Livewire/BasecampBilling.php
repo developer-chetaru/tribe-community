@@ -32,22 +32,25 @@ class BasecampBilling extends Component
     {
         Log::info('=== BasecampBilling MOUNT START ===');
         
-        // Get user_id from parameter, session, or auth
-        $this->userId = $user_id ?? session('basecamp_user_id') ?? auth()->id();
+        // Get user_id from parameter, request query, session, or auth
+        $this->userId = $user_id ?? request()->query('user_id') ?? session('basecamp_user_id') ?? auth()->id();
         
         Log::info('BasecampBilling - User ID: ' . ($this->userId ?? 'NULL'));
+        Log::info('BasecampBilling - Request user_id: ' . (request()->query('user_id') ?? 'NULL'));
         
         if (!$this->userId) {
-            Log::info('BasecampBilling - No user ID, redirecting to login');
-            return $this->redirect(route('login'));
+            Log::info('BasecampBilling - No user ID, showing empty page');
+            // Don't redirect, just show empty billing page
+            return;
         }
         
-        // Get user by ID (no auth required)
+        // Get user by ID
         $user = \App\Models\User::find($this->userId);
         
         if (!$user) {
-            Log::info('BasecampBilling - User not found, redirecting to login');
-            return $this->redirect(route('login'));
+            Log::info('BasecampBilling - User not found, showing empty page');
+            // Don't redirect, just show empty billing page
+            return;
         }
         
         // Refresh user to ensure role is loaded
@@ -63,32 +66,22 @@ class BasecampBilling extends Component
             abort(403, 'Only basecamp users can access this billing page.');
         }
         
-        Log::info('BasecampBilling - User is basecamp, loading subscription');
+        Log::info('BasecampBilling - User is basecamp, loading data');
         
-        // Get invoice ID from session or find unpaid invoice
-        $this->invoiceId = session('basecamp_invoice_id');
-        if (!$this->invoiceId) {
-            $unpaidInvoice = Invoice::where('user_id', $this->userId)
-                ->where('tier', 'basecamp')
-                ->where('status', 'unpaid')
-                ->latest()
-                ->first();
-            if ($unpaidInvoice) {
-                $this->invoiceId = $unpaidInvoice->id;
-                $this->selectedInvoice = $unpaidInvoice;
-                // Auto-open payment modal if unpaid invoice exists
-                $this->showPaymentPage = true;
-            }
-        } else {
-            $this->selectedInvoice = Invoice::find($this->invoiceId);
-            // Don't auto-open payment - user will click "Pay Now" button
-        }
-        
-        // Don't auto-open payment modal - user will click "Pay Now" button
-        // This allows them to see the invoice first
-        
-        // Load or create subscription
+        // Load subscription
         $this->loadSubscriptionForUser($user);
+        
+        // Get existing invoice
+        $existingInvoice = Invoice::where('user_id', $user->id)
+            ->where('tier', 'basecamp')
+            ->where('status', 'unpaid')
+            ->latest()
+            ->first();
+            
+        if ($existingInvoice) {
+            $this->invoiceId = $existingInvoice->id;
+            $this->selectedInvoice = $existingInvoice;
+        }
         
         Log::info('=== BasecampBilling MOUNT END ===');
     }
@@ -469,18 +462,20 @@ class BasecampBilling extends Component
     
     public function render()
     {
+        // Get user - if no user, show empty billing page
         $user = $this->userId ? \App\Models\User::find($this->userId) : null;
         
         if (!$user) {
             return view('livewire.basecamp-billing', [
                 'invoices' => collect(),
                 'isActive' => false,
+                'user' => null,
             ])->layout('layouts.app', [
                 'title' => 'Basecamp Billing',
             ]);
         }
         
-        // Load subscription first
+        // Load subscription if not loaded
         if (!$this->subscription) {
             $this->loadSubscriptionForUser($user);
         }
@@ -498,6 +493,7 @@ class BasecampBilling extends Component
         return view('livewire.basecamp-billing', [
             'invoices' => $invoices,
             'isActive' => $isActive,
+            'user' => $user,
         ])->layout('layouts.app', [
             'title' => 'Basecamp Billing',
         ]);

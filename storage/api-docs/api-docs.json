@@ -7,11 +7,95 @@
     },
     "servers": [
         {
-            "url": "http://my-default-host.com",
-            "description": "API Server"
+            "url": "{server}",
+            "description": "API Server",
+            "variables": {
+                "server": {
+                    "enum": [
+                        "http://localhost",
+                        "http://127.0.0.1:8000",
+                        "https://community.tribe365.co"
+                    ],
+                    "default": "https://community.tribe365.co"
+                }
+            }
         }
     ],
     "paths": {
+        "/api/basecamp/stripe-config": {
+            "get": {
+                "tags": [
+                    "Basecamp Billing",
+                    "Basecamp Users"
+                ],
+                "summary": "Get Stripe configuration for mobile app",
+                "description": "Retrieve Stripe publishable key and payment configuration for initializing Stripe SDK in mobile applications. This endpoint does not require authentication as it only returns public configuration.",
+                "operationId": "a9bfe397f7a7f693c14a7874b22a7ce8",
+                "responses": {
+                    "200": {
+                        "description": "Stripe configuration retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Stripe configuration retrieved successfully"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "publishable_key": {
+                                                    "description": "Stripe publishable key for client-side SDK",
+                                                    "type": "string",
+                                                    "example": "pk_test_51..."
+                                                },
+                                                "currency": {
+                                                    "description": "Payment currency",
+                                                    "type": "string",
+                                                    "example": "usd"
+                                                },
+                                                "monthly_price": {
+                                                    "description": "Monthly subscription price in USD",
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "example": 10
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Failed to retrieve Stripe configuration."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/basecamp/invoices": {
             "get": {
                 "tags": [

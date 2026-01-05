@@ -60,7 +60,7 @@ class VerificationController extends Controller
             
             // Check if this is a basecamp user who needs to set up billing
             $isBasecamp = $user->hasRole('basecamp');
-            $redirectUrl = $isBasecamp ? url('/basecamp/billing') : url('/login');
+            $redirectUrl = url('/login'); // Always redirect to login after verification
             // --------------------------------------
             // Create HTML email body from your template
             // --------------------------------------
@@ -116,8 +116,8 @@ class VerificationController extends Controller
             <body>
                 <div class="message">
                     <h2 class="success">Your account has been activated successfully!</h2>
-                    <p>We\'re setting things up for you.' . ($isBasecamp ? ' Please proceed to set up your billing.' : ' Please proceed to login.') . '</p>
-                    <a href="' . $redirectUrl . '" class="btn btn-login">' . ($isBasecamp ? 'Set Up Billing' : 'Go to Login') . '</a>
+                    <p>We\'re setting things up for you. Please proceed to login to complete your account setup.</p>
+                    <a href="' . $redirectUrl . '" class="btn btn-login">Go to Login</a>
                 </div>
                 <script>
                     setTimeout(function() {
@@ -157,7 +157,7 @@ class VerificationController extends Controller
                 ]);
             }
             // Return success page
-            $redirectUrl = $isBasecamp ? url('/basecamp/billing') : url('/login');
+            $redirectUrl = url('/login');
             return response('
                 <html>
                 <head>

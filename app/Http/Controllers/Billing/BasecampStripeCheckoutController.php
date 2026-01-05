@@ -8,13 +8,94 @@ use App\Models\Payment;
 use App\Models\SubscriptionRecord;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use Carbon\Carbon;
 use App\Services\OneSignalService;
+use Stripe\Stripe;
+use Stripe\Checkout\Session;
 
 class BasecampStripeCheckoutController extends Controller
 {
+    public function createCheckoutSession(Request $request)
+    {
+        try {
+            $userId = $request->input('user_id');
+            $amount = $request->input('amount', 1000); // Default $10.00
+            
+            $user = User::findOrFail($userId);
+            
+            // Create invoice
+            $subscription = SubscriptionRecord::firstOrCreate(
+                [
+                    'user_id' => $user->id,
+                    'tier' => 'basecamp',
+                ],
+                [
+                    'organisation_id' => null,
+                    'status' => 'inactive',
+                    'user_count' => 1,
+                ]
+            );
+            
+            $invoice = Invoice::create([
+                'user_id' => $user->id,
+                'organisation_id' => null,
+                'subscription_id' => $subscription->id,
+                'invoice_number' => Invoice::generateInvoiceNumber(),
+                'tier' => 'basecamp',
+                'user_count' => 1,
+                'price_per_user' => 10,
+                'subtotal' => 10,
+                'tax_amount' => 0,
+                'total_amount' => 10,
+                'status' => 'unpaid',
+                'due_date' => now()->addDays(7),
+                'invoice_date' => now(),
+            ]);
+            
+            // Set Stripe key
+            Stripe::setApiKey(config('services.stripe.secret'));
+            
+            // Create checkout session
+            $session = Session::create([
+                'payment_method_types' => ['card'],
+                'customer_email' => $user->email, // Auto-fill customer email
+                'line_items' => [[
+                    'price_data' => [
+                        'currency' => 'usd',
+                        'product_data' => [
+                            'name' => 'Basecamp Subscription',
+                            'description' => 'Monthly subscription for Tribe365 Basecamp',
+                        ],
+                        'unit_amount' => $amount,
+                    ],
+                    'quantity' => 1,
+                ]],
+                'mode' => 'payment',
+                'success_url' => route('basecamp.billing.payment.success') . '?session_id={CHECKOUT_SESSION_ID}&invoice_id=' . $invoice->id . '&user_id=' . $user->id,
+                'cancel_url' => route('basecamp.billing') . '?user_id=' . $user->id,
+            ]);
+            
+            Log::info('Basecamp checkout session created', [
+                'session_id' => $session->id,
+                'invoice_id' => $invoice->id,
+                'user_id' => $user->id,
+                'amount' => $amount,
+            ]);
+            
+            return redirect($session->url);
+            
+        } catch (\Exception $e) {
+            Log::error('Failed to create basecamp checkout session: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            return back()->with('error', 'Failed to create payment session. Please try again.');
+        }
+    }
+    
     public function handleSuccess(Request $request)
     {
         try {
@@ -110,6 +191,9 @@ class BasecampStripeCheckoutController extends Controller
             // Send activation email after payment is completed
             $this->sendActivationEmail($user);
             
+            // Log the user in after successful payment
+            Auth::login($user);
+            
             Log::info('Basecamp payment processed successfully', [
                 'invoice_id' => $invoiceId,
                 'user_id' => $userId,
@@ -120,8 +204,8 @@ class BasecampStripeCheckoutController extends Controller
             session()->forget('basecamp_user_id');
             session()->forget('basecamp_invoice_id');
             
-            return redirect()->route('login')
-                ->with('status', 'Payment processed successfully! Please check your email to activate your account. You can now login.');
+            return redirect()->route('dashboard')
+                ->with('status', 'Payment processed successfully! Please check your email to activate your account.');
                 
         } catch (\Exception $e) {
             Log::error('Failed to process basecamp payment success: ' . $e->getMessage(), [

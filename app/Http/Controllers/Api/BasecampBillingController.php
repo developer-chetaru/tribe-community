@@ -24,6 +24,69 @@ class BasecampBillingController extends Controller
 {
     /**
      * @OA\Get(
+     *     path="/api/basecamp/stripe-config",
+     *     tags={"Basecamp Billing", "Basecamp Users"},
+     *     summary="Get Stripe configuration for mobile app",
+     *     description="Retrieve Stripe publishable key and payment configuration for initializing Stripe SDK in mobile applications. This endpoint does not require authentication as it only returns public configuration.",
+     *     @OA\Response(
+     *         response=200,
+     *         description="Stripe configuration retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Stripe configuration retrieved successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="publishable_key", type="string", example="pk_test_51...", description="Stripe publishable key for client-side SDK"),
+     *                 @OA\Property(property="currency", type="string", example="usd", description="Payment currency"),
+     *                 @OA\Property(property="monthly_price", type="number", format="float", example=10.00, description="Monthly subscription price in USD")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Server error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Failed to retrieve Stripe configuration.")
+     *         )
+     *     )
+     * )
+     */
+    public function getStripeConfig(Request $request)
+    {
+        try {
+            $publishableKey = config('services.stripe.public');
+            
+            if (!$publishableKey) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Stripe configuration not available.',
+                ], 500);
+            }
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Stripe configuration retrieved successfully',
+                'data' => [
+                    'publishable_key' => $publishableKey,
+                    'currency' => 'usd',
+                    'monthly_price' => 10.00,
+                ],
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to retrieve Stripe config: ' . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to retrieve Stripe configuration.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * @OA\Get(
      *     path="/api/basecamp/invoices",
      *     tags={"Basecamp Billing", "Basecamp Users"},
      *     summary="Get basecamp user invoices",
@@ -120,6 +183,7 @@ class BasecampBillingController extends Controller
                 'status' => true,
                 'message' => 'Invoices retrieved successfully',
                 'data' => $invoices->items(),
+                'user_id' => $user->id, // Include user_id for mobile apps
                 'current_page' => $invoices->currentPage(),
                 'last_page' => $invoices->lastPage(),
                 'per_page' => $invoices->perPage(),
@@ -225,6 +289,7 @@ class BasecampBillingController extends Controller
                 'message' => 'Subscription details retrieved successfully',
                 'data' => [
                     'id' => $subscription->id,
+                    'user_id' => $user->id, // Include user_id for mobile apps
                     'tier' => $subscription->tier,
                     'status' => $subscription->status,
                     'user_count' => $subscription->user_count,
@@ -389,6 +454,8 @@ class BasecampBillingController extends Controller
                 'data' => [
                     'client_secret' => $paymentIntent->client_secret,
                     'payment_intent_id' => $paymentIntent->id,
+                    'invoice_id' => $invoice->id,
+                    'user_id' => $user->id, // Include user_id for mobile apps
                     'amount' => $invoice->total_amount,
                     'currency' => 'usd',
                 ],
@@ -543,7 +610,7 @@ class BasecampBillingController extends Controller
             }
 
             // Process payment in transaction
-            DB::transaction(function () use ($invoice, $user, $request, $paymentIntent) {
+            $payment = DB::transaction(function () use ($invoice, $user, $request, $paymentIntent) {
                 // Create payment record
                 $payment = Payment::create([
                     'invoice_id' => $invoice->id,
@@ -583,15 +650,32 @@ class BasecampBillingController extends Controller
                     'invoice_id' => $invoice->id,
                     'user_id' => $user->id,
                 ]);
+
+                return $payment;
             });
+
+            // Get updated subscription status after transaction
+            $subscription = SubscriptionRecord::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->first();
+
+            // Get updated subscription status
+            $subscription = SubscriptionRecord::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->first();
 
             return response()->json([
                 'status' => true,
                 'message' => 'Payment confirmed successfully. Your subscription is now active.',
                 'data' => [
+                    'payment_id' => $payment->id,
                     'invoice_id' => $invoice->id,
+                    'user_id' => $user->id, // Include user_id for mobile apps
                     'invoice_status' => 'paid',
-                    'subscription_status' => 'active',
+                    'subscription_status' => $subscription->status ?? 'active',
+                    'subscription_id' => $subscription->id ?? null,
+                    'amount' => $payment->amount,
+                    'transaction_id' => $payment->transaction_id,
                 ],
             ], 200);
 

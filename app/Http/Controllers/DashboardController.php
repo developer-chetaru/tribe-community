@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Organisation;
+use App\Models\Invoice;
+use App\Models\SubscriptionRecord;
 use App\Services\DashboardService;
 use App\Services\OneSignalService;
 use Illuminate\Support\Facades\Log;
@@ -21,6 +23,37 @@ class DashboardController extends Controller
     */
 	public function index(Request $request, DashboardService $service)
 	{
+    	$user = Auth::user();
+    	$needsPayment = false;
+    	$paymentMessage = '';
+    	
+    	// Check if basecamp user needs to complete payment or email verification
+    	if ($user && $user->hasRole('basecamp')) {
+    	    // Check if user has active subscription or paid invoice
+            $hasActiveSubscription = SubscriptionRecord::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->where('status', 'active')
+                ->where('current_period_end', '>', now())
+                ->exists();
+                
+            $hasPaidInvoice = Invoice::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->where('status', 'paid')
+                ->exists();
+            
+            // If no payment completed, show payment popup
+            if (!$hasActiveSubscription && !$hasPaidInvoice) {
+                $needsPayment = true;
+                $paymentMessage = 'Please complete your payment of $10 to activate your account.';
+            }
+            
+            // If payment completed but account not activated, show verification message
+            if (!$user->status) {
+                $needsPayment = true;
+                $paymentMessage = 'Payment completed! Please check your email to activate your account.';
+            }
+    	}
+    	
     	$organisations = Organisation::with(['users.department', 'users.office'])->get();
 		$cards = $organisations->map(function ($org) {
         return [
@@ -34,7 +67,6 @@ class DashboardController extends Controller
     	});
 
     	// ✅ Update OneSignal tags when user accesses dashboard
-    	$user = Auth::user();
     	if ($user) {
     	    try {
     	        $oneSignal = new OneSignalService();
@@ -52,6 +84,9 @@ class DashboardController extends Controller
 
     	return view('dashboard', [
         	'cards'             => $cards,
+        	'needsPayment'      => $needsPayment,
+        	'paymentMessage'    => $paymentMessage,
+        	'user'              => $user ?? null,
     	]);
 	}
 }
