@@ -54,22 +54,38 @@ class RegisteredUserController extends Controller
                 
                 Log::info('SubscriptionRecord created/retrieved - ID: ' . $subscription->id);
                 
-                // Create invoice for basecamp user
-                $invoice = Invoice::create([
-                    'user_id' => $user->id,
-                    'organisation_id' => null, // Basecamp users don't have organisation
-                    'subscription_id' => $subscription->id,
-                    'invoice_number' => Invoice::generateInvoiceNumber(),
-                    'tier' => 'basecamp',
-                    'user_count' => 1,
-                    'price_per_user' => 10,
-                    'subtotal' => 10,
-                    'tax_amount' => 0,
-                    'total_amount' => 10,
-                    'status' => 'unpaid',
-                    'due_date' => now()->addDays(7),
-                    'invoice_date' => now(),
-                ]);
+                // Check if invoice already exists to prevent duplicates
+                // Check for invoices created today (same date) regardless of status
+                $today = now()->toDateString();
+                $existingInvoice = Invoice::where('user_id', $user->id)
+                    ->where('tier', 'basecamp')
+                    ->whereDate('invoice_date', $today)
+                    ->where('subscription_id', $subscription->id)
+                    ->first();
+                
+                if ($existingInvoice) {
+                    Log::info('Invoice already exists - ID: ' . $existingInvoice->id . ', Invoice Number: ' . $existingInvoice->invoice_number);
+                    $invoice = $existingInvoice;
+                } else {
+                    // Create invoice for basecamp user
+                    $invoice = Invoice::create([
+                        'user_id' => $user->id,
+                        'organisation_id' => null, // Basecamp users don't have organisation
+                        'subscription_id' => $subscription->id,
+                        'invoice_number' => Invoice::generateInvoiceNumber(),
+                        'tier' => 'basecamp',
+                        'user_count' => 1,
+                        'price_per_user' => 10,
+                        'subtotal' => 10,
+                        'tax_amount' => 0,
+                        'total_amount' => 10,
+                        'status' => 'unpaid',
+                        'due_date' => now()->addDays(7),
+                        'invoice_date' => now(),
+                    ]);
+                    
+                    Log::info('Invoice created - ID: ' . $invoice->id . ', Invoice Number: ' . $invoice->invoice_number);
+                }
                 
                 Log::info('Invoice created - ID: ' . $invoice->id . ', Invoice Number: ' . $invoice->invoice_number);
                 

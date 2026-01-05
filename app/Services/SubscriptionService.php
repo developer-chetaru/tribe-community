@@ -97,6 +97,18 @@ class SubscriptionService
         $taxAmount = $subtotal * 0.20; // UK VAT 20%
         $totalAmount = $subtotal + $taxAmount;
 
+        // Check if invoice already exists for this billing period to prevent duplicates
+        $existingInvoice = Invoice::where('subscription_id', $subscription->id)
+            ->where('invoice_date', '>=', $invoiceDate->copy()->startOfMonth())
+            ->where('invoice_date', '<=', $invoiceDate->copy()->endOfMonth())
+            ->where('status', '!=', 'cancelled')
+            ->first();
+            
+        if ($existingInvoice) {
+            Log::info("Invoice already exists for subscription {$subscription->id} this month - Invoice ID: {$existingInvoice->id}");
+            return $existingInvoice;
+        }
+
         $invoice = Invoice::create([
             'subscription_id' => $subscription->id,
             'organisation_id' => $subscription->organisation_id,

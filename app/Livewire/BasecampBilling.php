@@ -11,6 +11,7 @@ use App\Services\Billing\StripeService;
 use App\Services\OneSignalService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class BasecampBilling extends Component
@@ -136,16 +137,52 @@ class BasecampBilling extends Component
             $this->loadSubscriptionForUser($user);
         }
         
-        // Check if there's already an unpaid invoice
-        $existingInvoice = Invoice::where('user_id', $this->userId)
-            ->where('status', 'unpaid')
-            ->where('tier', 'basecamp')
-            ->first();
+        // Use database transaction with lock to prevent race conditions
+        // Check for ANY invoice (paid or unpaid) created today for this user to prevent duplicates
+        $today = now()->toDateString();
+        $existingInvoice = DB::transaction(function () use ($today) {
+            // Lock the row to prevent concurrent invoice creation
+            // Check for invoices created today (same date) regardless of status
+            return Invoice::where('user_id', $this->userId)
+                ->where('tier', 'basecamp')
+                ->whereDate('invoice_date', $today)
+                ->where('subscription_id', $this->subscription->id)
+                ->lockForUpdate()
+                ->first();
+        });
             
         if ($existingInvoice) {
-            $this->selectedInvoice = $existingInvoice;
-            $this->invoiceId = $existingInvoice->id;
-            $this->openPaymentModal();
+            Log::info('Existing invoice found for today - ID: ' . $existingInvoice->id . ', Status: ' . $existingInvoice->status);
+            // If unpaid, use it for payment
+            if ($existingInvoice->status === 'unpaid') {
+                $this->selectedInvoice = $existingInvoice;
+                $this->invoiceId = $existingInvoice->id;
+                session()->put('basecamp_invoice_id', $existingInvoice->id);
+                $this->openPaymentModal();
+            } else {
+                // If already paid, show message
+                session()->flash('info', 'Invoice for today already exists and is paid.');
+            }
+            return;
+        }
+        
+        // Double-check again to prevent duplicates (extra safety)
+        $finalCheck = Invoice::where('user_id', $this->userId)
+            ->where('tier', 'basecamp')
+            ->whereDate('invoice_date', $today)
+            ->where('subscription_id', $this->subscription->id)
+            ->first();
+            
+        if ($finalCheck) {
+            Log::info('Invoice already exists for today (double-check) - ID: ' . $finalCheck->id);
+            if ($finalCheck->status === 'unpaid') {
+                $this->selectedInvoice = $finalCheck;
+                $this->invoiceId = $finalCheck->id;
+                session()->put('basecamp_invoice_id', $finalCheck->id);
+                $this->openPaymentModal();
+            } else {
+                session()->flash('info', 'Invoice for today already exists and is paid.');
+            }
             return;
         }
         
@@ -159,8 +196,9 @@ class BasecampBilling extends Component
             $dueDate = min($dueDate, $subscriptionEndDate);
         }
         
-        // Create new invoice
-        $invoice = Invoice::create([
+        // Create new invoice within transaction
+        $invoice = DB::transaction(function () use ($dueDate) {
+            return Invoice::create([
             'user_id' => $this->userId,
             'organisation_id' => null, // Null for basecamp users
             'subscription_id' => $this->subscription->id,
@@ -174,7 +212,10 @@ class BasecampBilling extends Component
             'status' => 'unpaid',
             'due_date' => $dueDate,
             'invoice_date' => now(),
-        ]);
+            ]);
+        });
+        
+        Log::info('New invoice created - ID: ' . $invoice->id . ', Invoice Number: ' . $invoice->invoice_number);
         
         $this->selectedInvoice = $invoice;
         $this->invoiceId = $invoice->id;

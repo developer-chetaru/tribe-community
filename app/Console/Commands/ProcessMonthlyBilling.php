@@ -60,6 +60,19 @@ class ProcessMonthlyBilling extends Command
         // $credits = $this->getCreditsForSubscription($subscription);
         // $finalAmount = $totalAmount - $credits;
 
+        // Check if invoice already exists for this billing period to prevent duplicates
+        $existingInvoice = Invoice::where('subscription_id', $subscription->id)
+            ->where('invoice_date', '>=', now()->startOfMonth())
+            ->where('invoice_date', '<=', now()->endOfMonth())
+            ->where('status', '!=', 'cancelled')
+            ->first();
+            
+        if ($existingInvoice) {
+            Log::info("Invoice already exists for subscription {$subscription->id} this month - Invoice ID: {$existingInvoice->id}");
+            $this->info("Invoice already exists for subscription {$subscription->id} this month");
+            return;
+        }
+
         // Generate invoice
         $invoice = Invoice::create([
             'subscription_id' => $subscription->id,

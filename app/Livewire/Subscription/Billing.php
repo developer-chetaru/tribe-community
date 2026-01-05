@@ -368,22 +368,35 @@ class Billing extends Component
                         ]);
                     }
 
-                    // Create invoice for renewal
-                    $invoice = Invoice::create([
-                        'subscription_id' => $subscription->id,
-                        'user_id' => $user->id,
-                        'organisation_id' => null,
-                        'tier' => 'basecamp',
-                        'invoice_number' => Invoice::generateInvoiceNumber(),
-                        'invoice_date' => now()->toDateString(),
-                        'due_date' => now()->addDays(7)->toDateString(), // Due date is 7 days from invoice date
-                        'user_count' => 1,
-                        'price_per_user' => $this->renewalPricePerUser,
-                        'subtotal' => $this->renewalPrice,
-                        'tax_amount' => 0.00,
-                        'total_amount' => $this->renewalPrice,
-                        'status' => 'pending',
-                    ]);
+                    // Check if invoice already exists for this renewal period to prevent duplicates
+                    $existingInvoice = Invoice::where('subscription_id', $subscription->id)
+                        ->where('user_id', $user->id)
+                        ->where('tier', 'basecamp')
+                        ->where('status', 'pending')
+                        ->where('invoice_date', '>=', now()->startOfMonth())
+                        ->where('invoice_date', '<=', now()->endOfMonth())
+                        ->first();
+                    
+                    if ($existingInvoice) {
+                        $invoice = $existingInvoice;
+                    } else {
+                        // Create invoice for renewal
+                        $invoice = Invoice::create([
+                            'subscription_id' => $subscription->id,
+                            'user_id' => $user->id,
+                            'organisation_id' => null,
+                            'tier' => 'basecamp',
+                            'invoice_number' => Invoice::generateInvoiceNumber(),
+                            'invoice_date' => now()->toDateString(),
+                            'due_date' => now()->addDays(7)->toDateString(), // Due date is 7 days from invoice date
+                            'user_count' => 1,
+                            'price_per_user' => $this->renewalPricePerUser,
+                            'subtotal' => $this->renewalPrice,
+                            'tax_amount' => 0.00,
+                            'total_amount' => $this->renewalPrice,
+                            'status' => 'pending',
+                        ]);
+                    }
                 } else {
                     // For directors
                     // Get or create subscription
@@ -404,20 +417,32 @@ class Billing extends Component
                         ]);
                     }
 
-                    // Create invoice for renewal
-                    $invoice = Invoice::create([
-                        'subscription_id' => $subscription->id,
-                        'organisation_id' => $user->orgId,
-                        'invoice_number' => Invoice::generateInvoiceNumber(),
-                        'invoice_date' => now()->toDateString(),
-                        'due_date' => now()->addDays(7)->toDateString(), // Due date is 7 days from invoice date
-                        'user_count' => $this->renewalUserCount,
-                        'price_per_user' => $this->renewalPricePerUser,
-                        'subtotal' => $this->renewalPrice,
-                        'tax_amount' => 0.00,
-                        'total_amount' => $this->renewalPrice,
-                        'status' => 'pending',
-                    ]);
+                    // Check if invoice already exists for this renewal period to prevent duplicates
+                    $existingInvoice = Invoice::where('subscription_id', $subscription->id)
+                        ->where('organisation_id', $user->orgId)
+                        ->where('status', 'pending')
+                        ->where('invoice_date', '>=', now()->startOfMonth())
+                        ->where('invoice_date', '<=', now()->endOfMonth())
+                        ->first();
+                    
+                    if ($existingInvoice) {
+                        $invoice = $existingInvoice;
+                    } else {
+                        // Create invoice for renewal
+                        $invoice = Invoice::create([
+                            'subscription_id' => $subscription->id,
+                            'organisation_id' => $user->orgId,
+                            'invoice_number' => Invoice::generateInvoiceNumber(),
+                            'invoice_date' => now()->toDateString(),
+                            'due_date' => now()->addDays(7)->toDateString(), // Due date is 7 days from invoice date
+                            'user_count' => $this->renewalUserCount,
+                            'price_per_user' => $this->renewalPricePerUser,
+                            'subtotal' => $this->renewalPrice,
+                            'tax_amount' => 0.00,
+                            'total_amount' => $this->renewalPrice,
+                            'status' => 'pending',
+                        ]);
+                    }
                 }
                 
                 // Store invoice for use outside transaction
@@ -449,6 +474,20 @@ class Billing extends Component
         
         try {
             $invoice = Invoice::with('subscription')->findOrFail($invoiceId);
+            
+            // Check permissions - user can only pay their own invoices
+            $user = auth()->user();
+            if ($user->hasRole('basecamp')) {
+                if ($invoice->user_id !== $user->id) {
+                    session()->flash('error', 'You can only pay your own invoices.');
+                    return;
+                }
+            } elseif ($user->hasRole('director')) {
+                if ($invoice->organisation_id !== $user->orgId) {
+                    session()->flash('error', 'You can only pay invoices from your organisation.');
+                    return;
+                }
+            }
             
             // Check if invoice is already paid
             if ($invoice->status === 'paid') {
@@ -845,6 +884,17 @@ class Billing extends Component
     public function getInvoicesProperty()
     {
         $user = auth()->user();
+        
+        // For basecamp users, filter by user_id
+        if ($user->hasRole('basecamp')) {
+            return Invoice::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->with(['subscription', 'payments'])
+                ->orderBy('created_at', 'desc')
+                ->paginate(10);
+        }
+        
+        // For directors, filter by organisation_id
         return Invoice::where('organisation_id', $user->orgId)
             ->with(['subscription', 'payments'])
             ->orderBy('created_at', 'desc')
