@@ -168,31 +168,44 @@ class AuthController extends Controller
   /**
    * @OA\Post(
    *     path="/api/register",
-   *     tags={"Authentication"},
-   *     summary="Register a new user",
-   *     description="Register a new user account and assign default role",
+   *     tags={"Authentication", "Basecamp Users"},
+   *     summary="Register a new basecamp user",
+   *     description="Register a new basecamp user account. Basecamp users are individual users who pay $10/month subscription. The user is automatically assigned the 'basecamp' role and receives a verification email. Returns JWT token for immediate authentication.",
    *     @OA\RequestBody(
    *         required=true,
    *         @OA\JsonContent(
    *             required={"first_name", "last_name", "email", "password", "password_confirmation"},
-   *             @OA\Property(property="first_name", type="string", example="John"),
-   *             @OA\Property(property="last_name", type="string", example="Doe"),
-   *             @OA\Property(property="email", type="string", format="email", example="john@example.com"),
-   *             @OA\Property(property="password", type="string", format="password", example="Password123!@#"),
-   *             @OA\Property(property="password_confirmation", type="string", format="password", example="Password123!@#")
+   *             @OA\Property(property="first_name", type="string", example="John", description="User's first name"),
+   *             @OA\Property(property="last_name", type="string", example="Doe", description="User's last name"),
+   *             @OA\Property(property="email", type="string", format="email", example="john@example.com", description="User's email address (must be unique)"),
+   *             @OA\Property(property="password", type="string", format="password", example="Password123!@#", description="Password must contain uppercase, lowercase, number and special character, minimum 8 characters"),
+   *             @OA\Property(property="password_confirmation", type="string", format="password", example="Password123!@#", description="Password confirmation (must match password)")
    *         )
    *     ),
    *     @OA\Response(
-   *         response=200,
+   *         response=201,
    *         description="Registration successful",
    *         @OA\JsonContent(
-   *             @OA\Property(property="status", type="boolean", example=true),
-   *             @OA\Property(property="message", type="string", example="User registered successfully")
+   *             @OA\Property(property="message", type="string", example="User registered successfully"),
+   *             @OA\Property(property="user", type="object", description="Created user object"),
+   *             @OA\Property(property="token", type="string", example="eyJ0eXAiOiJKV1QiLCJhbGc...", description="JWT token for authentication")
    *         )
    *     ),
    *     @OA\Response(
    *         response=422,
-   *         description="Validation error"
+   *         description="Validation error",
+   *         @OA\JsonContent(
+   *             @OA\Property(property="error", type="string", example="Validation failed"),
+   *             @OA\Property(property="details", type="string", example="The email has already been taken.")
+   *         )
+   *     ),
+   *     @OA\Response(
+   *         response=500,
+   *         description="Server error",
+   *         @OA\JsonContent(
+   *             @OA\Property(property="error", type="string", example="Registration failed"),
+   *             @OA\Property(property="details", type="string", example="Error message")
+   *         )
    *     )
    * )
    */
@@ -366,6 +379,48 @@ class AuthController extends Controller
         }
     }
 
+    /**
+     * @OA\Post(
+     *     path="/api/user-set-password",
+     *     tags={"Authentication", "Basecamp Users"},
+     *     summary="Set password for basecamp or organisation user",
+     *     description="Set or change password for a user by email. For organisation users, this also activates the account (sets status to true). Returns JWT token for authentication. All previous sessions are invalidated for security.",
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"email", "password"},
+     *             @OA\Property(property="email", type="string", format="email", example="user@example.com", description="User's email address"),
+     *             @OA\Property(property="password", type="string", format="password", example="NewPassword123!@#", description="New password (must contain uppercase, lowercase, number and special character, minimum 8 characters)")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Password set successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Password set successfully"),
+     *             @OA\Property(property="token", type="string", example="eyJ0eXAiOiJKV1QiLCJhbGc...", description="JWT token for authentication"),
+     *             @OA\Property(property="user", type="object", description="User object")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="User not found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="User not found")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Validation error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Password must include uppercase, lowercase, number & special character.")
+     *         )
+     *     )
+     * )
+     */
      /**
      * Set/Change password for user by email.
      *

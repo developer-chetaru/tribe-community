@@ -316,6 +316,68 @@ class HPTMController extends Controller
 
 
     /**
+     * @OA\Post(
+     *     path="/api/get-free-version-home-details",
+     *     tags={"Basecamp Users", "User Profile"},
+     *     summary="Get basecamp user dashboard details",
+     *     description="Get comprehensive dashboard details for basecamp (free version) users. Returns happy index monthly data, user feedback status, year list, notification count, and other dashboard metrics. For basecamp users, returns only their personal data. For organisation users, returns aggregated team data based on filters.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=false,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="orgId", type="integer", nullable=true, example=1, description="Organisation ID (for organisation users only)"),
+     *             @OA\Property(property="officeId", type="integer", nullable=true, example=1, description="Office ID (for organisation users only)"),
+     *             @OA\Property(property="departmentId", type="integer", nullable=true, example=1, description="Department ID (for organisation users only)"),
+     *             @OA\Property(property="deviceType", type="string", nullable=true, example="ios", description="Device type (ios/android)"),
+     *             @OA\Property(property="year", type="integer", nullable=true, example=2024, description="Year for data (defaults to current year)"),
+     *             @OA\Property(property="month", type="integer", nullable=true, example=1, description="Month for data (1-12, defaults to current month)")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Dashboard details retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="code", type="integer", example=200),
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="service_name", type="string", example="free-version-home-detail"),
+     *             @OA\Property(property="message", type="string", example=""),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="userGivenfeedback", type="boolean", example=false, description="Whether user has given happy index feedback today"),
+     *                 @OA\Property(
+     *                     property="happyIndexMonthly",
+     *                     type="array",
+     *                     description="Monthly happy index data with daily scores",
+     *                     @OA\Items(
+     *                         type="object",
+     *                         @OA\Property(property="date", type="string", example="01", description="Day of month (DD)"),
+     *                         @OA\Property(property="score", type="integer", nullable=true, example=100, description="Happy index score (0-100)"),
+     *                         @OA\Property(property="mood_value", type="integer", nullable=true, example=3, description="Mood value (1=low, 2=medium, 3=high)"),
+     *                         @OA\Property(property="description", type="string", nullable=true, example="Feeling great today!", description="User's description for the day")
+     *                     )
+     *                 ),
+     *                 @OA\Property(property="firstDayOfMonth", type="string", example="Monday", description="Day of week for first day of month"),
+     *                 @OA\Property(property="orgYearList", type="array", @OA\Items(type="integer"), example={2024, 2025}, description="List of available years from account creation to current year"),
+     *                 @OA\Property(property="notWorkingDays", type="array", @OA\Items(type="string"), example={"saturday", "sunday"}, description="Days excluded from happy index (saturday/sunday)"),
+     *                 @OA\Property(property="appPaymentVersion", type="string", example="1", description="App payment version"),
+     *                 @OA\Property(property="leaveStatus", type="integer", example=0, description="User's leave status (0=not on leave, 1=on leave)"),
+     *                 @OA\Property(property="notificationCount", type="integer", example=5, description="Count of unread active notifications")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="code", type="integer", example=401),
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthorized")
+     *         )
+     *     )
+     * )
+     */
+    /**
      * Get free version home dashboard details
      * including HI values, graphs, feedback, year list, etc.
      *

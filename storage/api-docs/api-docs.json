@@ -12,6 +12,649 @@
         }
     ],
     "paths": {
+        "/api/basecamp/invoices": {
+            "get": {
+                "tags": [
+                    "Basecamp Billing",
+                    "Basecamp Users"
+                ],
+                "summary": "Get basecamp user invoices",
+                "description": "Retrieve all invoices for the authenticated basecamp user. Returns invoices with status, amounts, and payment information.",
+                "operationId": "4006b21b58b6f34af189db853093d9b5",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "description": "Filter invoices by status",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "unpaid",
+                                "paid",
+                                "pending",
+                                "overdue"
+                            ],
+                            "example": "unpaid"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Page number for pagination",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Invoices retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Invoices retrieved successfully"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "integer",
+                                                        "example": 1
+                                                    },
+                                                    "invoice_number": {
+                                                        "type": "string",
+                                                        "example": "INV-202512-0001"
+                                                    },
+                                                    "tier": {
+                                                        "type": "string",
+                                                        "example": "basecamp"
+                                                    },
+                                                    "total_amount": {
+                                                        "type": "number",
+                                                        "format": "float",
+                                                        "example": 10
+                                                    },
+                                                    "status": {
+                                                        "type": "string",
+                                                        "example": "unpaid"
+                                                    },
+                                                    "invoice_date": {
+                                                        "type": "string",
+                                                        "format": "date",
+                                                        "example": "2025-01-05"
+                                                    },
+                                                    "due_date": {
+                                                        "type": "string",
+                                                        "format": "date",
+                                                        "example": "2025-01-12"
+                                                    },
+                                                    "paid_at": {
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "example": "2025-01-05T10:30:00.000000Z",
+                                                        "nullable": true
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "current_page": {
+                                            "type": "integer",
+                                            "example": 1
+                                        },
+                                        "total": {
+                                            "type": "integer",
+                                            "example": 5
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthorized. Please login."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - User is not a basecamp user",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Only basecamp users can access this endpoint."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/basecamp/subscription": {
+            "get": {
+                "tags": [
+                    "Basecamp Billing",
+                    "Basecamp Users"
+                ],
+                "summary": "Get basecamp user subscription details",
+                "description": "Retrieve subscription details for the authenticated basecamp user including status, billing dates, and tier information.",
+                "operationId": "4cd585de887c3f76d45d67c1b68446fd",
+                "responses": {
+                    "200": {
+                        "description": "Subscription details retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Subscription details retrieved successfully"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "tier": {
+                                                    "type": "string",
+                                                    "example": "basecamp"
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "active",
+                                                        "inactive",
+                                                        "cancelled"
+                                                    ],
+                                                    "example": "active"
+                                                },
+                                                "user_count": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "current_period_start": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "example": "2025-01-05T00:00:00.000000Z",
+                                                    "nullable": true
+                                                },
+                                                "current_period_end": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "example": "2025-02-05T00:00:00.000000Z",
+                                                    "nullable": true
+                                                },
+                                                "next_billing_date": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "example": "2025-02-05T00:00:00.000000Z",
+                                                    "nullable": true
+                                                },
+                                                "monthly_price": {
+                                                    "description": "Monthly subscription price in USD",
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "example": 10
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthorized. Please login."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - User is not a basecamp user",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Only basecamp users can access this endpoint."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Subscription not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Subscription not found."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/basecamp/payment-intent": {
+            "post": {
+                "tags": [
+                    "Basecamp Billing",
+                    "Basecamp Users"
+                ],
+                "summary": "Create Stripe payment intent for basecamp invoice",
+                "description": "Create a Stripe payment intent for a basecamp user's invoice. Returns client_secret for Stripe.js integration. Requires an unpaid invoice.",
+                "operationId": "6f964971f30037ec26bfb56b20343756",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "invoice_id"
+                                ],
+                                "properties": {
+                                    "invoice_id": {
+                                        "description": "ID of the invoice to pay",
+                                        "type": "integer",
+                                        "example": 1
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Payment intent created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Payment intent created successfully"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "client_secret": {
+                                                    "description": "Stripe payment intent client secret for frontend integration",
+                                                    "type": "string",
+                                                    "example": "pi_1234567890_secret_..."
+                                                },
+                                                "payment_intent_id": {
+                                                    "description": "Stripe payment intent ID",
+                                                    "type": "string",
+                                                    "example": "pi_1234567890"
+                                                },
+                                                "amount": {
+                                                    "description": "Payment amount in USD",
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "example": 10
+                                                },
+                                                "currency": {
+                                                    "type": "string",
+                                                    "example": "usd"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - Invoice not found or already paid",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Invoice not found or already paid."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthorized. Please login."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - User is not a basecamp user or invoice doesn't belong to user",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "You can only pay your own invoices."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Failed to create payment intent."
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Error message"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/basecamp/confirm-payment": {
+            "post": {
+                "tags": [
+                    "Basecamp Billing",
+                    "Basecamp Users"
+                ],
+                "summary": "Confirm payment for basecamp invoice",
+                "description": "Confirm and process payment for a basecamp invoice after successful Stripe payment. Updates invoice status, creates payment record, and activates subscription.",
+                "operationId": "d59ee2700e9365ec1f625a1db88fbb04",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "invoice_id",
+                                    "payment_intent_id"
+                                ],
+                                "properties": {
+                                    "invoice_id": {
+                                        "description": "ID of the invoice being paid",
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "payment_intent_id": {
+                                        "description": "Stripe payment intent ID",
+                                        "type": "string",
+                                        "example": "pi_1234567890"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Payment confirmed successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Payment confirmed successfully. Your subscription is now active."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "payment_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "invoice_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "invoice_status": {
+                                                    "type": "string",
+                                                    "example": "paid"
+                                                },
+                                                "subscription_status": {
+                                                    "type": "string",
+                                                    "example": "active"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - Payment already processed or invalid payment intent",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Payment already processed or invalid payment intent."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthorized. Please login."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "You can only confirm payments for your own invoices."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Failed to confirm payment."
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Error message"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/submit-payment": {
             "post": {
                 "tags": [
@@ -422,10 +1065,11 @@
         "/api/register": {
             "post": {
                 "tags": [
-                    "Authentication"
+                    "Authentication",
+                    "Basecamp Users"
                 ],
-                "summary": "Register a new user",
-                "description": "Register a new user account and assign default role",
+                "summary": "Register a new basecamp user",
+                "description": "Register a new basecamp user account. Basecamp users are individual users who pay $10/month subscription. The user is automatically assigned the 'basecamp' role and receives a verification email. Returns JWT token for immediate authentication.",
                 "operationId": "8a56853624e025573120a09a4c75d468",
                 "requestBody": {
                     "required": true,
@@ -441,24 +1085,29 @@
                                 ],
                                 "properties": {
                                     "first_name": {
+                                        "description": "User's first name",
                                         "type": "string",
                                         "example": "John"
                                     },
                                     "last_name": {
+                                        "description": "User's last name",
                                         "type": "string",
                                         "example": "Doe"
                                     },
                                     "email": {
+                                        "description": "User's email address (must be unique)",
                                         "type": "string",
                                         "format": "email",
                                         "example": "john@example.com"
                                     },
                                     "password": {
+                                        "description": "Password must contain uppercase, lowercase, number and special character, minimum 8 characters",
                                         "type": "string",
                                         "format": "password",
                                         "example": "Password123!@#"
                                     },
                                     "password_confirmation": {
+                                        "description": "Password confirmation (must match password)",
                                         "type": "string",
                                         "format": "password",
                                         "example": "Password123!@#"
@@ -470,19 +1119,24 @@
                     }
                 },
                 "responses": {
-                    "200": {
+                    "201": {
                         "description": "Registration successful",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "properties": {
-                                        "status": {
-                                            "type": "boolean",
-                                            "example": true
-                                        },
                                         "message": {
                                             "type": "string",
                                             "example": "User registered successfully"
+                                        },
+                                        "user": {
+                                            "description": "Created user object",
+                                            "type": "object"
+                                        },
+                                        "token": {
+                                            "description": "JWT token for authentication",
+                                            "type": "string",
+                                            "example": "eyJ0eXAiOiJKV1QiLCJhbGc..."
                                         }
                                     },
                                     "type": "object"
@@ -491,7 +1145,44 @@
                         }
                     },
                     "422": {
-                        "description": "Validation error"
+                        "description": "Validation error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Validation failed"
+                                        },
+                                        "details": {
+                                            "type": "string",
+                                            "example": "The email has already been taken."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Registration failed"
+                                        },
+                                        "details": {
+                                            "type": "string",
+                                            "example": "Error message"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -2023,6 +2714,10 @@
     },
     "tags": [
         {
+            "name": "Basecamp Billing",
+            "description": "Billing API endpoints for basecamp users ($10/month subscription)"
+        },
+        {
             "name": "Authentication",
             "description": "User authentication and registration endpoints"
         },
@@ -2053,6 +2748,10 @@
         {
             "name": "Payments",
             "description": "Payment processing endpoints for invoices"
+        },
+        {
+            "name": "Basecamp Users",
+            "description": "API endpoints specifically for basecamp users (individual $10/month subscription users)"
         }
     ]
 }

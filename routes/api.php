@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\ReflectionApiController;
 
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\BasecampBillingController;
 
 use App\Http\Controllers\ForgotController;
 
@@ -38,6 +39,12 @@ Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     // Payment APIs
     Route::post('/submit-payment', [PaymentController::class, 'submitPayment']);
     Route::get('/payments', [PaymentController::class, 'getPayments']);
+
+    // Basecamp Billing APIs
+    Route::get('/basecamp/invoices', [BasecampBillingController::class, 'getInvoices']);
+    Route::get('/basecamp/subscription', [BasecampBillingController::class, 'getSubscription']);
+    Route::post('/basecamp/payment-intent', [BasecampBillingController::class, 'createPaymentIntent']);
+    Route::post('/basecamp/confirm-payment', [BasecampBillingController::class, 'confirmPayment']);
 
 });
 

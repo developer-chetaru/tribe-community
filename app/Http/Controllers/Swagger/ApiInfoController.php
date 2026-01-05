@@ -46,6 +46,11 @@ namespace App\Http\Controllers\Swagger;
  *     name="Billing - Refunds",
  *     description="Refund processing and history endpoints for Stripe payments"
  * )
+ * 
+ * @OA\Tag(
+ *     name="Basecamp Users",
+ *     description="API endpoints specifically for basecamp users (individual $10/month subscription users)"
+ * )
  */
 class ApiInfoController
 {
