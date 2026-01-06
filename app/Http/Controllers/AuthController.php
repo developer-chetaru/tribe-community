@@ -580,14 +580,13 @@ class AuthController extends Controller
                 ]);
             }
 
-            // Send welcome email on login
-            try {
-                $oneSignal = new OneSignalService();
-                $oneSignal->registerEmailUser($user->email, $user->id);
-                Log::info('✅ Welcome email sent on login', ['email' => $user->email]);
-            } catch (\Throwable $e) {
-                Log::error('❌ Welcome email failed', ['email' => $user->email, 'error' => $e->getMessage()]);
-            }
+            // DO NOT send any email for existing users logging in
+            // Email should only be sent during registration, not on login
+            Log::info('Existing user login - no email sent', [
+                'email' => $user->email,
+                'user_id' => $user->id,
+                'email_verified_at' => $user->email_verified_at,
+            ]);
             
             $roleName = $user->getRoleNames()->first() ?? 'No role assigned';
 
@@ -685,41 +684,79 @@ class AuthController extends Controller
         ]);
     }
     
-    // Send verification email - DO NOT generate token
-    $expires = Carbon::now()->addMinutes(1440); 
-    $verificationUrl = URL::temporarySignedRoute(
-        'user.verify', $expires, ['id' => $user->id]
-    );
+    // Only send verification email for NEW users (not existing users who are just setting password)
+    // Check if user already has verified email - if yes, this is an existing user login, don't send verification email
+    if (!$user->email_verified_at) {
+        // This is a NEW user registration - send verification email
+        $expires = Carbon::now()->addMinutes(1440); 
+        $verificationUrl = URL::temporarySignedRoute(
+            'user.verify', $expires, ['id' => $user->id]
+        );
 
-   // Mail::to($user->email)->send(new VerifyUserEmail($user, $verificationUrl));
-
-    try {
-        $oneSignal = new OneSignalService();
+        try {
+            $oneSignal = new OneSignalService();
+            
+            $htmlBody = (new VerifyUserEmail($user, $verificationUrl))->render();
+            
+            $oneSignal->registerEmailUserFallback($user->email, $user->id, [
+                'subject' => 'Activate Your Tribe365 Account',
+                'body'    => $htmlBody,
+            ]);
+            
+            Log::info('✅ OneSignal verification email sent for NEW user', [
+                'email' => $user->email,
+                'user_id' => $user->id,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('❌ OneSignal verification email failed', [
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+            ]);
+        }
         
-        $htmlBody = (new VerifyUserEmail($user, $verificationUrl))->render();
-        
-        $oneSignal->registerEmailUserFallback($user->email, $user->id, [
-            'subject' => 'Activate Your Tribe365 Account',
-            'body'    => $htmlBody,
+        // DO NOT return token - user must verify email first
+        // Return success message asking user to verify email
+        return response()->json([
+            'success' => true,
+            'message' => 'Password set successfully! Please check your email to verify your account. After verification, you can login.',
+            'data'    => [
+                'email' => $user->email,
+                'email_verified' => false,
+            ],
+        ]);
+    } else {
+        // This should not happen - new user created but email_verified_at is already set
+        // This is a rare edge case, but handle it by just logging in without sending email
+        Log::warning('New user created but email_verified_at already set', [
+            'email' => $user->email,
+            'user_id' => $user->id,
         ]);
         
-        Log::info('✅ OneSignal verification email sent', ['email' => $user->email]);
-    } catch (\Throwable $e) {
-        Log::error('❌ OneSignal verification email failed', [
-            'email' => $user->email,
-            'error' => $e->getMessage(),
+        // Generate token since email is already verified
+        $token = JWTAuth::fromUser($user);
+        
+        // Load relationships
+        $user->load(['organisation', 'office', 'department', 'roles']);
+        
+        $roleName = $user->getRoleNames()->first() ?? 'No role assigned';
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Password set successfully! You are now logged in.',
+            'data'    => [
+                'token' => $token,
+                'user' => [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'email' => $user->email,
+                    'role' => $roleName,
+                    'orgId' => optional($user->organisation)->id,
+                    'officeId' => optional($user->office)->id,
+                    'departmentId' => optional($user->department)->id,
+                ],
+            ],
         ]);
     }
-
-    // DO NOT return token - user must verify email first
-    // Return success message asking user to verify email
-    return response()->json([
-        'success' => true,
-        'message' => 'Password set successfully! Please check your email to verify your account. After verification, you can login.',
-        'data'    => [
-            'email' => $user->email,
-            'email_verified' => false,
-        ],
-    ]);
 }
 }
