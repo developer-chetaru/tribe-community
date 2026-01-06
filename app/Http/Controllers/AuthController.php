@@ -83,8 +83,9 @@ class AuthController extends Controller
     $user = auth()->user()->load(['organisation', 'office', 'department']);
 
    
-    // Check if user status is not active (pending_payment, inactive, suspended, cancelled)
-    if (!in_array($user->status, ['active_verified', 'active_unverified'])) {
+    // Check if user status is not active
+    // Status is boolean: true = active, false = inactive
+    if (!$user->status) {
         return response()->json([
             'status'  => false,
             'message' => 'Check your email to verify your account. For using Tribe365, account need to be verified. Your account is not activated yet.',

@@ -101,17 +101,10 @@ class VerificationController extends Controller
         // Email not verified yet - verify now
         $user->email_verified_at = now();
         
-        // Update status based on current status
-        // If user is suspended or cancelled, don't change status
-        if (in_array($user->status, ['suspended', 'cancelled'])) {
-            // Keep current status, just mark email as verified
-            // Don't change status
-        } elseif (in_array($user->status, ['pending_payment', 'active_unverified', 'inactive', null])) {
-            // User is in normal flow - set to active_unverified now that email is verified
-            $user->status = 'active_unverified';
-        } else {
-            // Default to active_unverified for any other status
-            $user->status = 'active_unverified';
+        // Update status - activate user after email verification
+        // Status is boolean: true = active, false = inactive
+        if (!$user->status) {
+            $user->status = true;
         }
         $user->save();
         
