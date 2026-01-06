@@ -142,7 +142,7 @@ return [
              * @see \OpenApi\scan
              */
             'processors' => [
-                // new \App\SwaggerProcessors\SchemaQueryParameter(),
+                new \App\SwaggerProcessors\ServerUrlProcessor(),
             ],
 
             /**
@@ -320,7 +320,12 @@ return [
          * Constants which can be used in annotations
          */
         'constants' => [
-            'L5_SWAGGER_CONST_HOST' => env('L5_SWAGGER_CONST_HOST', env('APP_URL', 'http://localhost')),
+            // Server URL will be taken from APP_URL environment variable
+            // Set APP_URL in .env file:
+            // - Local: APP_URL=http://127.0.0.1:8000
+            // - Server: APP_URL=https://yourdomain.com
+            // After changing APP_URL, run: php artisan l5-swagger:generate
+            'L5_SWAGGER_CONST_HOST' => env('APP_URL', 'http://localhost'),
         ],
     ],
 ];

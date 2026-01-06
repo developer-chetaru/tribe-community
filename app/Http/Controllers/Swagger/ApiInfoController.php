@@ -49,7 +49,7 @@ namespace App\Http\Controllers\Swagger;
  * 
  * @OA\Tag(
  *     name="Basecamp Users",
- *     description="API endpoints specifically for basecamp users (individual $10/month subscription users)"
+ *     description="API endpoints specifically for basecamp users (individual £10/month subscription users)"
  * )
  */
 class ApiInfoController

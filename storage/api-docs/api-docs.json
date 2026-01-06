@@ -46,10 +46,10 @@
                                                 "currency": {
                                                     "description": "Payment currency",
                                                     "type": "string",
-                                                    "example": "usd"
+                                                    "example": "gbp"
                                                 },
                                                 "monthly_price": {
-                                                    "description": "Monthly subscription price in USD",
+                                                    "description": "Monthly subscription price in GBP",
                                                     "type": "number",
                                                     "format": "float",
                                                     "example": 10
@@ -311,7 +311,7 @@
                                                     "nullable": true
                                                 },
                                                 "monthly_price": {
-                                                    "description": "Monthly subscription price in USD",
+                                                    "description": "Monthly subscription price in GBP",
                                                     "type": "number",
                                                     "format": "float",
                                                     "example": 10
@@ -450,14 +450,14 @@
                                                     "example": "pi_1234567890"
                                                 },
                                                 "amount": {
-                                                    "description": "Payment amount in USD",
+                                                    "description": "Payment amount in GBP",
                                                     "type": "number",
                                                     "format": "float",
                                                     "example": 10
                                                 },
                                                 "currency": {
                                                     "type": "string",
-                                                    "example": "usd"
+                                                    "example": "gbp"
                                                 }
                                             },
                                             "type": "object"
@@ -1513,7 +1513,7 @@
                     "Basecamp Users"
                 ],
                 "summary": "Register a new basecamp user",
-                "description": "Register a new basecamp user account. Basecamp users are individual users who pay $10/month subscription. The user is automatically assigned the 'basecamp' role and receives a verification email. Returns JWT token for immediate authentication.",
+                "description": "Register a new basecamp user account. Basecamp users are individual users who pay \u00a310/month subscription. The user is automatically assigned the 'basecamp' role and receives a verification email. Returns JWT token for immediate authentication.",
                 "operationId": "8a56853624e025573120a09a4c75d468",
                 "requestBody": {
                     "required": true,
@@ -1821,7 +1821,7 @@
                                                             },
                                                             "currency": {
                                                                 "type": "string",
-                                                                "example": "usd"
+                                                                "example": "gbp"
                                                             },
                                                             "status": {
                                                                 "type": "string",
@@ -3159,7 +3159,7 @@
     "tags": [
         {
             "name": "Basecamp Billing",
-            "description": "Billing API endpoints for basecamp users ($10/month subscription)"
+            "description": "Billing API endpoints for basecamp users (\u00a310/month subscription)"
         },
         {
             "name": "Authentication",
@@ -3195,7 +3195,7 @@
         },
         {
             "name": "Basecamp Users",
-            "description": "API endpoints specifically for basecamp users (individual $10/month subscription users)"
+            "description": "API endpoints specifically for basecamp users (individual \u00a310/month subscription users)"
         }
     ]
 }
