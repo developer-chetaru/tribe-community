@@ -6,7 +6,7 @@
     <script>
         // Immediate redirect - multiple methods for compatibility
         (function() {
-            var url = @json($url);
+            var url = {!! json_encode($url) !!};
             
             // Method 1: window.location.replace (preferred - doesn't add to history)
             if (window.location.replace) {

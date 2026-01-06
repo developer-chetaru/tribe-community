@@ -48,24 +48,39 @@ class BasecampStripeCheckoutController extends Controller
                     ]
                 );
                 
-                // Create invoice
-                $invoice = Invoice::create([
-                    'user_id' => $user->id,
-                    'organisation_id' => null,
-                    'subscription_id' => $subscription->id,
-                    'invoice_number' => Invoice::generateInvoiceNumber(),
-                    'tier' => 'basecamp',
-                    'user_count' => 1,
-                    'price_per_user' => $amount / 100, // Convert from cents
-                    'subtotal' => $amount / 100,
-                    'tax_amount' => 0,
-                    'total_amount' => $amount / 100,
-                    'status' => 'unpaid',
-                    'due_date' => now()->addDays(7),
-                    'invoice_date' => now(),
-                ]);
+                // Check if invoice already exists for today (avoid duplicates)
+                $existingInvoice = Invoice::where('user_id', $user->id)
+                    ->where('subscription_id', $subscription->id)
+                    ->whereDate('invoice_date', today())
+                    ->where('status', 'unpaid')
+                    ->first();
                 
-                $invoiceId = $invoice->id;
+                if ($existingInvoice) {
+                    Log::info('Using existing unpaid invoice for today', [
+                        'invoice_id' => $existingInvoice->id,
+                        'user_id' => $user->id,
+                    ]);
+                    $invoiceId = $existingInvoice->id;
+                } else {
+                    // Create new invoice
+                    $invoice = Invoice::create([
+                        'user_id' => $user->id,
+                        'organisation_id' => null,
+                        'subscription_id' => $subscription->id,
+                        'invoice_number' => Invoice::generateInvoiceNumber(),
+                        'tier' => 'basecamp',
+                        'user_count' => 1,
+                        'price_per_user' => $amount / 100, // Convert from cents
+                        'subtotal' => $amount / 100,
+                        'tax_amount' => 0,
+                        'total_amount' => $amount / 100,
+                        'status' => 'unpaid',
+                        'due_date' => now()->addDays(7),
+                        'invoice_date' => now(),
+                    ]);
+                    
+                    $invoiceId = $invoice->id;
+                }
             }
             
             if (!$invoiceId || !$userId) {
@@ -73,6 +88,15 @@ class BasecampStripeCheckoutController extends Controller
                     'invoice_id' => $invoiceId,
                     'user_id' => $userId,
                 ]);
+                
+                // Return JSON for AJAX requests
+                if ($request->header('X-Requested-With') === 'XMLHttpRequest' || $request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'Missing required parameters.',
+                    ], 400);
+                }
+                
                 return back()->with('error', 'Missing required parameters.');
             }
             
@@ -85,6 +109,15 @@ class BasecampStripeCheckoutController extends Controller
                     'invoice_user_id' => $invoice->user_id,
                     'request_user_id' => $userId,
                 ]);
+                
+                // Return JSON for AJAX requests
+                if ($request->header('X-Requested-With') === 'XMLHttpRequest' || $request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'Invalid invoice.',
+                    ], 403);
+                }
+                
                 return back()->with('error', 'Invalid invoice.');
             }
             
@@ -125,8 +158,30 @@ class BasecampStripeCheckoutController extends Controller
             
             // Return view with JavaScript redirect - more reliable than redirect()->away()
             $redirectUrl = $session->url;
-            Log::info('Redirecting to Stripe via JavaScript', ['url' => $redirectUrl]);
+            Log::info('Redirecting to Stripe via JavaScript', [
+                'url' => $redirectUrl,
+                'is_ajax' => $request->ajax(),
+                'wants_json' => $request->wantsJson(),
+                'x_requested_with' => $request->header('X-Requested-With'),
+            ]);
             
+            // Check if request wants JSON (AJAX request) - ALWAYS return JSON for fetch requests
+            if ($request->header('X-Requested-With') === 'XMLHttpRequest' || 
+                $request->ajax() || 
+                $request->wantsJson() ||
+                $request->expectsJson()) {
+                // Return JSON with redirect URL for AJAX requests
+                Log::info('Returning JSON response with redirect URL', ['redirect_url' => $redirectUrl]);
+                return response()->json([
+                    'success' => true,
+                    'redirect_url' => $redirectUrl,
+                ], 200, [
+                    'X-Redirect-URL' => $redirectUrl, // Custom header for redirect
+                ]);
+            }
+            
+            // Return HTML view for regular requests
+            Log::info('Returning HTML view with redirect URL', ['redirect_url' => $redirectUrl]);
             return response()->view('stripe-redirect', ['url' => $redirectUrl]);
             
         } catch (\Exception $e) {
@@ -134,6 +189,15 @@ class BasecampStripeCheckoutController extends Controller
                 'trace' => $e->getTraceAsString(),
                 'input' => $request->all(),
             ]);
+            
+            // Return JSON for AJAX requests
+            if ($request->header('X-Requested-With') === 'XMLHttpRequest' || $request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Failed to create payment session. Please try again.',
+                    'message' => $e->getMessage(),
+                ], 500);
+            }
             
             return back()->with('error', 'Failed to create payment session. Please try again.');
         }

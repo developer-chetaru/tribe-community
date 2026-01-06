@@ -45,45 +45,156 @@
             function handleDashboardPayment(userId) {
                 if (!userId) {
                     alert('User ID is missing. Please refresh the page.');
-                    return;
+                    return false;
                 }
                 
                 console.log('Dashboard payment initiated', { userId });
                 
+                // Disable button to prevent multiple clicks
+                const btn = event.target;
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = 'Processing...';
+                }
+                
+                // Use FormData instead of JSON for better compatibility
+                const formData = new FormData();
+                formData.append('_token', '{{ csrf_token() }}');
+                formData.append('user_id', userId);
+                formData.append('tier', 'basecamp');
+                formData.append('amount', 1000);
+                
                 // First, get or create invoice
-                fetch('{{ route("basecamp.checkout.create") }}', {
+                const checkoutUrl = '{{ route("basecamp.checkout.create") }}';
+                console.log('Making request to:', checkoutUrl);
+                
+                fetch(checkoutUrl, {
                     method: 'POST',
+                    body: formData,
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
                         'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json', // Explicitly request JSON
                     },
-                    body: JSON.stringify({
-                        user_id: userId,
-                        tier: 'basecamp',
-                        amount: 1000
-                    })
+                    redirect: 'manual', // Don't follow redirects automatically - handle manually
+                    credentials: 'same-origin' // Include cookies for CSRF
                 })
                 .then(response => {
-                    console.log('Response status:', response.status);
-                    if (response.redirected) {
-                        window.location.href = response.url;
+                    console.log('Response received', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        redirected: response.redirected,
+                        url: response.url,
+                        type: response.type,
+                        ok: response.ok,
+                        headers: Object.fromEntries(response.headers.entries())
+                    });
+                    
+                    // Handle status 0 (network error, CORS issue, etc.)
+                    if (response.status === 0) {
+                        console.error('Status 0 - Network error or CORS issue');
+                        throw new Error('Network error: Request may have been blocked. Check CORS settings or try again.');
+                    }
+                    
+                    // Check for custom redirect header FIRST (before checking response.ok)
+                    const redirectHeader = response.headers.get('X-Redirect-URL');
+                    if (redirectHeader) {
+                        console.log('Found redirect header:', redirectHeader);
+                        window.location.replace(redirectHeader);
                         return;
                     }
-                    return response.text();
-                })
-                .then(html => {
-                    if (html) {
-                        // If HTML is returned (redirect page), replace current page
-                        document.open();
-                        document.write(html);
-                        document.close();
+                    
+                    // If response is a redirect (status 301, 302, etc.), don't follow it
+                    if (response.type === 'opaqueredirect' || response.redirected) {
+                        console.warn('Response is a redirect, but we want JSON. Checking if it redirected to dashboard...');
+                        if (response.url && response.url.includes('/dashboard')) {
+                            throw new Error('Server redirected to dashboard instead of returning Stripe URL. Check server logs.');
+                        }
                     }
+                    
+                    // IMPORTANT: Check response.ok AFTER checking headers
+                    if (!response.ok && response.status !== 200) {
+                        // Try to get error message - check if it's JSON first
+                        const contentType = response.headers.get('content-type') || '';
+                        if (contentType.includes('application/json')) {
+                            return response.json().then(data => {
+                                console.error('Response error (JSON):', data);
+                                throw new Error(data.error || data.message || 'Response not OK: ' + response.status);
+                            });
+                        } else {
+                            return response.text().then(text => {
+                                console.error('Response error (text):', text);
+                                throw new Error('Response not OK: ' + response.status + ' ' + response.statusText);
+                            });
+                        }
+                    }
+                    
+                    // Try to get JSON response
+                    const contentType = response.headers.get('content-type') || '';
+                    console.log('Content-Type:', contentType);
+                    
+                    if (contentType.includes('application/json')) {
+                        return response.json().then(data => {
+                            console.log('Received JSON:', data);
+                            if (data.redirect_url) {
+                                console.log('Redirecting to Stripe:', data.redirect_url);
+                                window.location.replace(data.redirect_url);
+                            } else {
+                                console.error('No redirect_url in JSON:', data);
+                                throw new Error('No redirect URL in JSON response');
+                            }
+                        });
+                    }
+                    
+                    // If HTML, return text
+                    return response.text().then(html => {
+                        console.log('Received HTML response, length:', html.length);
+                        // Try to extract redirect URL from HTML if it's the redirect page
+                        // Build regex pattern with literal @ symbol
+                        const atSymbol = '@';
+                        const jsonPattern = new RegExp('var url = ' + atSymbol + 'json\\([\'"]([^\'"]+)[\'"]\\)');
+                        const urlMatch = html.match(jsonPattern);
+                        if (urlMatch && urlMatch[1]) {
+                            console.log('Extracted URL from HTML:', urlMatch[1]);
+                            window.location.replace(urlMatch[1]);
+                        } else {
+                            // Try alternative patterns
+                            const patterns = [
+                                /var url = [^;]+['"](https?:\/\/[^'"]+)['"]/,
+                                /window\.location\.replace\(['"](https?:\/\/[^'"]+)['"]\)/,
+                                /window\.location\.href\s*=\s*['"](https?:\/\/[^'"]+)['"]/,
+                            ];
+                            
+                            let found = false;
+                            for (const pattern of patterns) {
+                                const match = html.match(pattern);
+                                if (match && match[1] && match[1].includes('checkout.stripe.com')) {
+                                    console.log('Extracted Stripe URL from HTML:', match[1]);
+                                    window.location.replace(match[1]);
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            
+                            if (!found) {
+                                // Replace page with HTML - it should redirect automatically
+                                document.open();
+                                document.write(html);
+                                document.close();
+                            }
+                        }
+                    });
                 })
                 .catch(error => {
                     console.error('Payment error:', error);
-                    alert('Failed to process payment. Please try again.');
+                    alert('Failed to process payment: ' + error.message);
+                    // Re-enable button on error
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = 'Pay Now';
+                    }
                 });
+                
+                return false; // Prevent any default behavior
             }
         </script>
         </div>
