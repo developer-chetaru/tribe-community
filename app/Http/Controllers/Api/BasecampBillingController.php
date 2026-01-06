@@ -72,7 +72,7 @@ class BasecampBillingController extends Controller
                     'publishable_key' => $publishableKey,
                     'currency' => 'gbp',
                     'monthly_price' => 10.00,
-                    'monthly_price_with_vat' => 12.00, // £10 + 20% VAT
+                    'monthly_price_with_vat' => 12.00, // £10 + 20% VAT (£2.00)
                     'vat_rate' => 20.00, // VAT percentage
                 ],
             ], 200);
@@ -301,7 +301,7 @@ class BasecampBillingController extends Controller
                     'current_period_end' => $subscription->current_period_end,
                     'next_billing_date' => $subscription->next_billing_date,
                     'monthly_price' => 10.00, // Basecamp subscription is £10/month (before VAT)
-                    'monthly_price_with_vat' => 12.00, // £10 + 20% VAT
+                    'monthly_price_with_vat' => 12.00, // £10 + 20% VAT (£2.00)
                     'vat_rate' => 20.00, // VAT percentage
                 ],
             ], 200);
@@ -341,7 +341,7 @@ class BasecampBillingController extends Controller
      *                 type="object",
      *                 @OA\Property(property="client_secret", type="string", example="pi_1234567890_secret_...", description="Stripe payment intent client secret for frontend integration"),
      *                 @OA\Property(property="payment_intent_id", type="string", example="pi_1234567890", description="Stripe payment intent ID"),
- *                 @OA\Property(property="amount", type="number", format="float", example=12.00, description="Payment amount in GBP (includes 20% VAT)"),
+     *                 @OA\Property(property="amount", type="number", format="float", example=12.00, description="Payment amount in GBP (includes 20% VAT)"),
  *                 @OA\Property(property="currency", type="string", example="gbp")
      *             )
      *         )

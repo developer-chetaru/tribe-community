@@ -213,20 +213,20 @@
                                     console.error('Payment error:', error);
                                     alert('Payment failed: ' + error.message);
                                     submitBtn.disabled = false;
-                                    submitBtn.innerHTML = '<span>Pay £{{ number_format($selectedInvoice->total_amount ?? 10, 2) }}</span>';
+                                    submitBtn.innerHTML = '<span>Pay £{{ number_format($selectedInvoice->total_amount ?? 12.00, 2) }}</span>';
                                 } else if (paymentIntent && paymentIntent.status === 'succeeded') {
                                     console.log('Payment succeeded:', paymentIntent.id);
                                     @this.confirmStripePayment(paymentIntent.id);
                                 } else {
                                     console.log('Payment status:', paymentIntent?.status);
                                     submitBtn.disabled = false;
-                                    submitBtn.innerHTML = '<span>Pay £{{ number_format($selectedInvoice->total_amount ?? 10, 2) }}</span>';
+                                    submitBtn.innerHTML = '<span>Pay £{{ number_format($selectedInvoice->total_amount ?? 12.00, 2) }}</span>';
                                 }
                             } catch (err) {
                                 console.error('Payment confirmation error:', err);
                                 alert('Payment error: ' + err.message);
                                 submitBtn.disabled = false;
-                                submitBtn.innerHTML = '<span>Pay ${{ number_format($selectedInvoice->total_amount ?? 10, 2) }}</span>';
+                                submitBtn.innerHTML = '<span>Pay £{{ number_format($selectedInvoice->total_amount ?? 14.40, 2) }}</span>';
                             }
                         };
                         

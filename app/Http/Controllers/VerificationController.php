@@ -307,9 +307,9 @@ class VerificationController extends Controller
         $dueDate = now()->addDays(7);
         
         // Calculate VAT (20% of subtotal)
-        $subtotal = $monthlyPrice;
-        $taxAmount = $subtotal * 0.20; // 20% VAT
-        $totalAmount = $subtotal + $taxAmount;
+        $subtotal = $monthlyPrice; // £10.00
+        $taxAmount = $subtotal * 0.20; // 20% VAT = £2.00
+        $totalAmount = $subtotal + $taxAmount; // £12.00
         
         $invoice = DB::transaction(function () use ($user, $subscription, $monthlyPrice, $dueDate, $subtotal, $taxAmount, $totalAmount) {
             return Invoice::create([

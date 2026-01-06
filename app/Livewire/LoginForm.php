@@ -66,7 +66,7 @@ class LoginForm extends Component
                 Auth::login($user);
                 session()->regenerate();
                 
-                return redirect()->route('basecamp.billing')->with('error', 'Please complete your payment of $10 to continue.');
+                return redirect()->route('basecamp.billing')->with('error', 'Please complete your payment of £12.00 to continue.');
             }
         }
         

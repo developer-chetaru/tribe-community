@@ -62,10 +62,12 @@ class BasecampStripeCheckoutController extends Controller
                     ]);
                     $invoiceId = $existingInvoice->id;
                 } else {
+                    // Use basecamp monthly price of £10 (not from amount parameter)
+                    $monthlyPrice = 10.00; // £10 per month for basecamp users
                     // Calculate VAT (20% of subtotal)
-                    $subtotal = $amount / 100; // Convert from cents
-                    $taxAmount = $subtotal * 0.20; // 20% VAT
-                    $totalAmount = $subtotal + $taxAmount;
+                    $subtotal = $monthlyPrice; // £10.00
+                    $taxAmount = $subtotal * 0.20; // 20% VAT = £2.00
+                    $totalAmount = $subtotal + $taxAmount; // £12.00
                     
                     // Create new invoice
                     $invoice = Invoice::create([
@@ -75,7 +77,7 @@ class BasecampStripeCheckoutController extends Controller
                         'invoice_number' => Invoice::generateInvoiceNumber(),
                         'tier' => 'basecamp',
                         'user_count' => 1,
-                        'price_per_user' => $subtotal, // Base price without VAT
+                        'price_per_user' => $monthlyPrice, // Base price without VAT
                         'subtotal' => $subtotal,
                         'tax_amount' => $taxAmount,
                         'total_amount' => $totalAmount,

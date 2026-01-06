@@ -191,9 +191,9 @@ class BasecampBilling extends Component
         }
         
         // Calculate VAT (20% of subtotal)
-        $subtotal = $this->monthlyPrice;
-        $taxAmount = $subtotal * 0.20; // 20% VAT
-        $totalAmount = $subtotal + $taxAmount;
+        $subtotal = $this->monthlyPrice; // £10.00
+        $taxAmount = $subtotal * 0.20; // 20% VAT = £2.00
+        $totalAmount = $subtotal + $taxAmount; // £12.00
         
         // Create new invoice within transaction
         $invoice = DB::transaction(function () use ($dueDate, $subtotal, $taxAmount, $totalAmount) {
@@ -289,7 +289,7 @@ class BasecampBilling extends Component
                             'name' => 'Basecamp Subscription',
                             'description' => 'Monthly subscription for Basecamp tier',
                         ],
-                        'unit_amount' => ($this->selectedInvoice->total_amount ?? $this->monthlyPrice) * 100, // Convert to cents
+                        'unit_amount' => ($this->selectedInvoice->total_amount ?? ($this->monthlyPrice * 1.20)) * 100, // Convert to cents (include VAT in fallback)
                     ],
                     'quantity' => 1,
                 ]],

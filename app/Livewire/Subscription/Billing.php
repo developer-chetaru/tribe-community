@@ -381,9 +381,9 @@ class Billing extends Component
                         $invoice = $existingInvoice;
                     } else {
                         // Calculate VAT (20% of subtotal) for basecamp renewal
-                        $subtotal = $this->renewalPrice;
-                        $taxAmount = $subtotal * 0.20; // 20% VAT
-                        $totalAmount = $subtotal + $taxAmount;
+                        $subtotal = $this->renewalPrice; // £10.00
+                        $taxAmount = $subtotal * 0.20; // 20% VAT = £2.00
+                        $totalAmount = $subtotal + $taxAmount; // £12.00
                         
                         // Create invoice for renewal
                         $invoice = Invoice::create([
