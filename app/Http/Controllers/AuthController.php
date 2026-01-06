@@ -221,7 +221,7 @@ class AuthController extends Controller
    *     path="/api/register",
    *     tags={"Authentication", "Basecamp Users"},
    *     summary="Register a new basecamp user",
-   *     description="Register a new basecamp user account. Basecamp users are individual users who pay $10/month subscription. The user is automatically assigned the 'basecamp' role and receives a verification email. Returns JWT token for immediate authentication.",
+   *     description="Register a new basecamp user account. Basecamp users are individual users who pay £10/month subscription. The user is automatically assigned the 'basecamp' role and receives a verification email. Returns JWT token for immediate authentication.",
    *     @OA\RequestBody(
    *         required=true,
    *         @OA\JsonContent(

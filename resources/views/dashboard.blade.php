@@ -30,7 +30,7 @@
 
         <div class="mb-4">
             <p class="text-sm text-gray-600">Amount to Pay</p>
-            <p class="text-2xl font-bold text-[#EB1C24]">$10.00</p>
+            <p class="text-2xl font-bold text-[#EB1C24]">£10.00</p>
         </div>
 
             <div class="flex gap-3">

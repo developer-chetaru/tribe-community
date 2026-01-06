@@ -130,7 +130,7 @@ class BasecampStripeCheckoutController extends Controller
                 'customer_email' => $user->email,
                 'line_items' => [[
                     'price_data' => [
-                        'currency' => 'usd',
+                        'currency' => 'gbp',
                         'product_data' => [
                             'name' => 'Basecamp Subscription',
                             'description' => 'Monthly subscription for Tribe365 Basecamp',

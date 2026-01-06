@@ -40,11 +40,11 @@
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Price per User</p>
-                            <p class="text-lg font-semibold">${{ number_format(($subscription->tier === 'basecamp' ? 10 : ($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30))), 2) }}</p>
+                            <p class="text-lg font-semibold">£{{ number_format(($subscription->tier === 'basecamp' ? 10 : ($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30))), 2) }}</p>
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Monthly Total</p>
-                            <p class="text-lg font-semibold">${{ number_format(($subscription->tier === 'basecamp' ? 10 : ($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30))) * ($subscription->tier === 'basecamp' ? 1 : $subscription->user_count), 2) }}</p>
+                            <p class="text-lg font-semibold">£{{ number_format(($subscription->tier === 'basecamp' ? 10 : ($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30))) * ($subscription->tier === 'basecamp' ? 1 : $subscription->user_count), 2) }}</p>
                         </div>
                         <div>
                             <p class="text-sm text-gray-600">Subscription End</p>
@@ -110,7 +110,7 @@
                                 <td class="px-6 py-4 whitespace-nowrap">{{ $invoice->invoice_number }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">{{ $invoice->invoice_date->format('M d, Y') }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">{{ $invoice->due_date->format('M d, Y') }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap">${{ number_format($invoice->total_amount, 2) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">£{{ number_format($invoice->total_amount, 2) }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <span class="px-2 py-1 text-xs rounded-full 
                                         {{ $invoice->status === 'paid' ? 'bg-green-100 text-green-800' : 
@@ -201,11 +201,11 @@
                             </div>
                             <div>
                                 <span class="text-sm text-gray-600">Price per User:</span>
-                                <p class="font-semibold text-gray-900">${{ number_format($selectedInvoice->price_per_user, 2) }}</p>
+                                <p class="font-semibold text-gray-900">£{{ number_format($selectedInvoice->price_per_user, 2) }}</p>
                             </div>
                             <div>
                                 <span class="text-sm text-gray-600">Total Amount:</span>
-                                <p class="font-bold text-xl text-[#EB1C24]">${{ number_format($selectedInvoice->total_amount, 2) }}</p>
+                                <p class="font-bold text-xl text-[#EB1C24]">£{{ number_format($selectedInvoice->total_amount, 2) }}</p>
                             </div>
                         </div>
                     </div>
@@ -676,11 +676,11 @@
                     </div>
                     <div class="flex justify-between mb-2">
                         <span class="text-gray-600">Price per User:</span>
-                        <span class="font-semibold">${{ number_format($selectedInvoice->price_per_user, 2) }}</span>
+                        <span class="font-semibold">£{{ number_format($selectedInvoice->price_per_user, 2) }}</span>
                     </div>
                     <div class="flex justify-between border-t pt-2">
                         <span class="text-gray-700 font-semibold">Total Amount:</span>
-                        <span class="font-bold text-lg text-[#EB1C24]">${{ number_format($selectedInvoice->total_amount, 2) }}</span>
+                        <span class="font-bold text-lg text-[#EB1C24]">£{{ number_format($selectedInvoice->total_amount, 2) }}</span>
                     </div>
                 </div>
             </div>
@@ -1128,7 +1128,7 @@
                         </div>
                         <div>
                             <span class="text-sm text-gray-600">Price per User:</span>
-                            <p class="font-semibold text-gray-900">${{ number_format($selectedInvoiceForView->price_per_user, 2) }}</p>
+                            <p class="font-semibold text-gray-900">£{{ number_format($selectedInvoiceForView->price_per_user, 2) }}</p>
                         </div>
                         <div>
                             <span class="text-sm text-gray-600">Subscription Status:</span>
@@ -1165,7 +1165,7 @@
                                 </div>
                                 <div>
                                     <span class="text-sm text-gray-600">Amount:</span>
-                                    <p class="font-semibold text-gray-900">${{ number_format($payment->amount, 2) }}</p>
+                                    <p class="font-semibold text-gray-900">£{{ number_format($payment->amount, 2) }}</p>
                                 </div>
                                 <div>
                                     <span class="text-sm text-gray-600">Transaction ID:</span>
@@ -1247,17 +1247,17 @@
                     <div class="space-y-3">
                         <div class="flex justify-between py-2 border-b border-gray-200">
                             <span class="text-gray-600">Subtotal:</span>
-                            <span class="font-semibold text-gray-900">${{ number_format($selectedInvoiceForView->subtotal ?? ($selectedInvoiceForView->total_amount - ($selectedInvoiceForView->tax_amount ?? 0)), 2) }}</span>
+                            <span class="font-semibold text-gray-900">£{{ number_format($selectedInvoiceForView->subtotal ?? ($selectedInvoiceForView->total_amount - ($selectedInvoiceForView->tax_amount ?? 0)), 2) }}</span>
                         </div>
                         @if($selectedInvoiceForView->tax_amount)
                         <div class="flex justify-between py-2 border-b border-gray-200">
                             <span class="text-gray-600">Tax (VAT):</span>
-                            <span class="font-semibold text-gray-900">${{ number_format($selectedInvoiceForView->tax_amount, 2) }}</span>
+                            <span class="font-semibold text-gray-900">£{{ number_format($selectedInvoiceForView->tax_amount, 2) }}</span>
                         </div>
                         @endif
                         <div class="flex justify-between py-2 border-t-2 border-gray-300 pt-3">
                             <span class="text-lg font-semibold text-gray-900">Total Amount:</span>
-                            <span class="text-xl font-bold text-[#EB1C24]">${{ number_format($selectedInvoiceForView->total_amount, 2) }}</span>
+                            <span class="text-xl font-bold text-[#EB1C24]">£{{ number_format($selectedInvoiceForView->total_amount, 2) }}</span>
                         </div>
                     </div>
                 </div>

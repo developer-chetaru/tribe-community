@@ -105,7 +105,7 @@
                                         $userCount = $item['type'] === 'basecamp' ? 1 : $item['subscription']->user_count;
                                         $total = $pricePerUser * $userCount;
                                     @endphp
-                                    ${{ number_format($total, 2) }}
+                                    £{{ number_format($total, 2) }}
                                 @else
                                     <span class="text-gray-400">-</span>
                                 @endif

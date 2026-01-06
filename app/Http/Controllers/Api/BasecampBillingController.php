@@ -17,7 +17,7 @@ use Stripe\Checkout\Session as StripeCheckoutSession;
 /**
  * @OA\Tag(
  *     name="Basecamp Billing",
- *     description="Billing API endpoints for basecamp users ($10/month subscription)"
+ *     description="Billing API endpoints for basecamp users (£10/month subscription)"
  * )
  */
 class BasecampBillingController extends Controller
@@ -38,8 +38,8 @@ class BasecampBillingController extends Controller
      *                 property="data",
      *                 type="object",
      *                 @OA\Property(property="publishable_key", type="string", example="pk_test_51...", description="Stripe publishable key for client-side SDK"),
-     *                 @OA\Property(property="currency", type="string", example="usd", description="Payment currency"),
-     *                 @OA\Property(property="monthly_price", type="number", format="float", example=10.00, description="Monthly subscription price in USD")
+ *                 @OA\Property(property="currency", type="string", example="gbp", description="Payment currency"),
+ *                 @OA\Property(property="monthly_price", type="number", format="float", example=10.00, description="Monthly subscription price in GBP")
      *             )
      *         )
      *     ),
@@ -70,7 +70,7 @@ class BasecampBillingController extends Controller
                 'message' => 'Stripe configuration retrieved successfully',
                 'data' => [
                     'publishable_key' => $publishableKey,
-                    'currency' => 'usd',
+                    'currency' => 'gbp',
                     'monthly_price' => 10.00,
                 ],
             ], 200);
@@ -223,7 +223,7 @@ class BasecampBillingController extends Controller
      *                 @OA\Property(property="current_period_start", type="string", format="date-time", nullable=true, example="2025-01-05T00:00:00.000000Z"),
      *                 @OA\Property(property="current_period_end", type="string", format="date-time", nullable=true, example="2025-02-05T00:00:00.000000Z"),
      *                 @OA\Property(property="next_billing_date", type="string", format="date-time", nullable=true, example="2025-02-05T00:00:00.000000Z"),
-     *                 @OA\Property(property="monthly_price", type="number", format="float", example=10.00, description="Monthly subscription price in USD")
+     *                 @OA\Property(property="monthly_price", type="number", format="float", example=10.00, description="Monthly subscription price in GBP")
      *             )
      *         )
      *     ),
@@ -296,7 +296,7 @@ class BasecampBillingController extends Controller
                     'current_period_start' => $subscription->current_period_start,
                     'current_period_end' => $subscription->current_period_end,
                     'next_billing_date' => $subscription->next_billing_date,
-                    'monthly_price' => 10.00, // Basecamp subscription is $10/month
+                    'monthly_price' => 10.00, // Basecamp subscription is £10/month
                 ],
             ], 200);
 
@@ -335,8 +335,8 @@ class BasecampBillingController extends Controller
      *                 type="object",
      *                 @OA\Property(property="client_secret", type="string", example="pi_1234567890_secret_...", description="Stripe payment intent client secret for frontend integration"),
      *                 @OA\Property(property="payment_intent_id", type="string", example="pi_1234567890", description="Stripe payment intent ID"),
-     *                 @OA\Property(property="amount", type="number", format="float", example=10.00, description="Payment amount in USD"),
-     *                 @OA\Property(property="currency", type="string", example="usd")
+ *                 @OA\Property(property="amount", type="number", format="float", example=10.00, description="Payment amount in GBP"),
+ *                 @OA\Property(property="currency", type="string", example="gbp")
      *             )
      *         )
      *     ),
@@ -431,13 +431,13 @@ class BasecampBillingController extends Controller
             // Create payment intent
             $paymentIntent = PaymentIntent::create([
                 'amount' => (int)($invoice->total_amount * 100), // Convert to cents
-                'currency' => 'usd',
+                'currency' => 'gbp',
                 'payment_method_types' => ['card'],
                 'metadata' => [
                     'invoice_id' => $invoice->id,
                     'user_id' => $user->id,
                     'tier' => 'basecamp',
-                    'description' => "Basecamp subscription - $10/month",
+                    'description' => "Basecamp subscription - £10/month",
                 ],
                 'description' => "Basecamp Subscription - {$user->first_name} {$user->last_name}",
             ]);
@@ -457,7 +457,7 @@ class BasecampBillingController extends Controller
                     'invoice_id' => $invoice->id,
                     'user_id' => $user->id, // Include user_id for mobile apps
                     'amount' => $invoice->total_amount,
-                    'currency' => 'usd',
+                    'currency' => 'gbp',
                 ],
             ], 200);
 

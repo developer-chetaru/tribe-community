@@ -23,7 +23,7 @@ class BasecampBilling extends Component
     public $stripePaymentIntentId = null;
     public $isProcessingStripePayment = false;
     public $subscription = null;
-    public $monthlyPrice = 10; // $10 per month for basecamp users
+    public $monthlyPrice = 10; // £10 per month for basecamp users
     
     public $userId = null;
     public $invoiceId = null;
@@ -279,7 +279,7 @@ class BasecampBilling extends Component
                 'payment_method_types' => ['card'],
                 'line_items' => [[
                     'price_data' => [
-                        'currency' => 'usd',
+                        'currency' => 'gbp',
                         'product_data' => [
                             'name' => 'Basecamp Subscription',
                             'description' => 'Monthly subscription for Basecamp tier',
@@ -341,13 +341,13 @@ class BasecampBilling extends Component
             // Create payment intent
             $paymentIntent = \Stripe\PaymentIntent::create([
                 'amount' => $this->monthlyPrice * 100, // Convert to cents
-                'currency' => 'usd',
+                'currency' => 'gbp',
                 'payment_method_types' => ['card'],
                 'metadata' => [
                     'invoice_id' => $this->selectedInvoice->id,
                     'user_id' => $this->userId,
                     'tier' => 'basecamp',
-                    'description' => "Basecamp subscription - $10/month",
+                    'description' => "Basecamp subscription - £10/month",
                 ],
                 'description' => "Basecamp Subscription - {$user->first_name} {$user->last_name}",
             ]);

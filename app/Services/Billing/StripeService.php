@@ -126,7 +126,7 @@ class StripeService
             $price = \Stripe\Price::create([
                 'product' => $productId,
                 'unit_amount' => $unitAmount * 100, // Convert $ to cents
-                'currency' => 'usd',
+                'currency' => 'gbp',
                 'recurring' => [
                     'interval' => 'month',
                 ],
@@ -304,7 +304,7 @@ class StripeService
             $invoiceItem = \Stripe\InvoiceItem::create([
                 'customer' => $customerId,
                 'amount' => $amount * 100, // Convert $ to cents
-                'currency' => 'usd',
+                'currency' => 'gbp',
                 'description' => $description,
                 'metadata' => $metadata,
             ]);

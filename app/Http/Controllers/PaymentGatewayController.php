@@ -109,7 +109,7 @@ class PaymentGatewayController extends Controller
             'payment_methods' => [
                 'card' => 'Credit/Debit Card (Stripe)',
             ],
-            'currency' => 'USD',
+            'currency' => 'GBP',
         ]);
     }
 }

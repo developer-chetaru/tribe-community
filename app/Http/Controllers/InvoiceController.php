@@ -262,7 +262,7 @@ class InvoiceController extends Controller
                 'payment_method_types' => ['card'],
                 'line_items' => [[
                     'price_data' => [
-                        'currency' => 'usd',
+                        'currency' => 'gbp',
                         'product_data' => [
                             'name' => "Invoice #{$invoice->invoice_number}",
                             'description' => "Payment for {$invoice->user_count} users - {$organisation->name}",

@@ -99,18 +99,18 @@
             <tr>
                 <td>Subscription - {{ $invoice->user_count }} Users</td>
                 <td>{{ $invoice->user_count }}</td>
-                <td>${{ number_format($invoice->price_per_user, 2) }}</td>
-                <td>${{ number_format($invoice->subtotal, 2) }}</td>
+                <td>£{{ number_format($invoice->price_per_user, 2) }}</td>
+                <td>£{{ number_format($invoice->subtotal, 2) }}</td>
             </tr>
             @if($invoice->tax_amount > 0)
             <tr>
                 <td colspan="3" style="text-align: right;">Tax:</td>
-                <td>${{ number_format($invoice->tax_amount, 2) }}</td>
+                <td>£{{ number_format($invoice->tax_amount, 2) }}</td>
             </tr>
             @endif
             <tr class="total-row">
                 <td colspan="3" style="text-align: right;"><strong>Total:</strong></td>
-                <td><strong>${{ number_format($invoice->total_amount, 2) }}</strong></td>
+                <td><strong>£{{ number_format($invoice->total_amount, 2) }}</strong></td>
             </tr>
         </tbody>
     </table>
@@ -128,7 +128,7 @@
             </tr>
             <tr>
                 <td style="border: none; padding: 5px;"><strong>Price per User:</strong></td>
-                <td style="border: none; padding: 5px;">${{ number_format($invoice->price_per_user, 2) }}</td>
+                <td style="border: none; padding: 5px;">£{{ number_format($invoice->price_per_user, 2) }}</td>
                 <td style="border: none; padding: 5px;"><strong>Subscription Status:</strong></td>
                 <td style="border: none; padding: 5px;">{{ ucfirst($subscription->status ?? 'N/A') }}</td>
             </tr>
@@ -150,7 +150,7 @@
                     <td style="border: none; padding: 8px; width: 30%;"><strong>Payment Method:</strong></td>
                     <td style="border: none; padding: 8px;">{{ ucfirst($payment->payment_method ?? 'Stripe') }}</td>
                     <td style="border: none; padding: 8px; width: 30%;"><strong>Amount:</strong></td>
-                    <td style="border: none; padding: 8px;">${{ number_format($payment->amount, 2) }}</td>
+                    <td style="border: none; padding: 8px;">£{{ number_format($payment->amount, 2) }}</td>
                 </tr>
                 <tr>
                     <td style="border: none; padding: 8px;"><strong>Transaction ID:</strong></td>

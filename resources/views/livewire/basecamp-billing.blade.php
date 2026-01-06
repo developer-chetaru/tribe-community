@@ -19,7 +19,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <p class="text-sm text-gray-600">Monthly Price</p>
-                        <p class="text-2xl font-bold text-[#EB1C24]">${{ number_format($monthlyPrice, 2) }}</p>
+                        <p class="text-2xl font-bold text-[#EB1C24]">£{{ number_format($monthlyPrice, 2) }}</p>
                     </div>
                     <div>
                         <p class="text-sm text-gray-600">Status</p>
@@ -42,7 +42,7 @@
                         <button 
                             wire:click="createInvoice"
                             class="bg-[#EB1C24] text-white font-semibold py-2 px-6 rounded-lg hover:bg-red-600 transition">
-                            Subscribe Now - ${{ number_format($monthlyPrice, 2) }}/month
+                            Subscribe Now - £{{ number_format($monthlyPrice, 2) }}/month
                         </button>
                     </div>
                 @endif
@@ -73,7 +73,7 @@
                                             {{ $invoice->invoice_date ? $invoice->invoice_date->format('M d, Y') : 'N/A' }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            ${{ number_format($invoice->total_amount, 2) }}
+                                            £{{ number_format($invoice->total_amount, 2) }}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
@@ -115,7 +115,7 @@
 
                         <div class="mb-4">
                             <p class="text-sm text-gray-600">Amount to Pay</p>
-                            <p class="text-2xl font-bold text-[#EB1C24]">${{ number_format($selectedInvoice->total_amount, 2) }}</p>
+                            <p class="text-2xl font-bold text-[#EB1C24]">£{{ number_format($selectedInvoice->total_amount, 2) }}</p>
                         </div>
 
                         @if($stripeClientSecret)
@@ -126,7 +126,7 @@
                                 wire:loading.attr="disabled"
                                 wire:target="confirmStripePayment"
                                 class="w-full bg-[#EB1C24] text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition disabled:opacity-50">
-                                <span wire:loading.remove wire:target="confirmStripePayment">Pay ${{ number_format($selectedInvoice->total_amount, 2) }}</span>
+                                <span wire:loading.remove wire:target="confirmStripePayment">Pay £{{ number_format($selectedInvoice->total_amount, 2) }}</span>
                                 <span wire:loading wire:target="confirmStripePayment">Processing...</span>
                             </button>
                         @else
@@ -206,14 +206,14 @@
                                     console.error('Payment error:', error);
                                     alert('Payment failed: ' + error.message);
                                     submitBtn.disabled = false;
-                                    submitBtn.innerHTML = '<span>Pay ${{ number_format($selectedInvoice->total_amount ?? 10, 2) }}</span>';
+                                    submitBtn.innerHTML = '<span>Pay £{{ number_format($selectedInvoice->total_amount ?? 10, 2) }}</span>';
                                 } else if (paymentIntent && paymentIntent.status === 'succeeded') {
                                     console.log('Payment succeeded:', paymentIntent.id);
                                     @this.confirmStripePayment(paymentIntent.id);
                                 } else {
                                     console.log('Payment status:', paymentIntent?.status);
                                     submitBtn.disabled = false;
-                                    submitBtn.innerHTML = '<span>Pay ${{ number_format($selectedInvoice->total_amount ?? 10, 2) }}</span>';
+                                    submitBtn.innerHTML = '<span>Pay £{{ number_format($selectedInvoice->total_amount ?? 10, 2) }}</span>';
                                 }
                             } catch (err) {
                                 console.error('Payment confirmation error:', err);

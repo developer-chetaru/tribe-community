@@ -268,7 +268,7 @@ class Billing extends Component
         // Close the subscription expired modal if it's open
         $this->showSubscriptionExpiredModal = false;
         
-        // For basecamp users, renewal is always $10/month for 1 user
+        // For basecamp users, renewal is always £10/month for 1 user
         if ($user->hasRole('basecamp')) {
             $this->renewalUserCount = 1;
             $this->renewalPricePerUser = 10.00;
@@ -286,7 +286,7 @@ class Billing extends Component
                 ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
                 ->count();
             
-            // Default price per user is $10
+            // Default price per user is £10
             $this->renewalPricePerUser = 10.00;
             $this->renewalPrice = $this->renewalUserCount * $this->renewalPricePerUser;
             $this->renewalExpiryDate = now()->addMonth()->format('M d, Y');
@@ -536,10 +536,10 @@ class Billing extends Component
                     'payment_method_types' => ['card'],
                     'line_items' => [[
                         'price_data' => [
-                            'currency' => 'usd',
+                            'currency' => 'gbp',
                             'product_data' => [
                                 'name' => 'Basecamp Subscription',
-                                'description' => 'Monthly subscription for Basecamp tier - $10/month',
+                                'description' => 'Monthly subscription for Basecamp tier - £10/month',
                             ],
                             'unit_amount' => $invoice->total_amount * 100, // Convert to cents
                         ],
@@ -623,7 +623,7 @@ class Billing extends Component
                 'payment_method_types' => ['card'],
                 'line_items' => [[
                     'price_data' => [
-                        'currency' => 'usd',
+                        'currency' => 'gbp',
                         'product_data' => [
                             'name' => "Invoice #{$invoice->invoice_number}",
                             'description' => "Payment for {$invoice->user_count} users - {$organisation->name}",

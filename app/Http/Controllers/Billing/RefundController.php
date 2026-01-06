@@ -226,7 +226,7 @@ class RefundController extends Controller
      *                         @OA\Property(property="id", type="integer", example=1),
      *                         @OA\Property(property="stripe_refund_id", type="string", example="re_1234567890"),
      *                         @OA\Property(property="amount", type="number", format="float", example=50.00),
-     *                         @OA\Property(property="currency", type="string", example="usd"),
+     *                         @OA\Property(property="currency", type="string", example="gbp"),
      *                         @OA\Property(property="status", type="string", example="succeeded"),
      *                         @OA\Property(property="refunded_at", type="string", format="date-time", example="2025-12-24T10:00:00Z")
      *                     )

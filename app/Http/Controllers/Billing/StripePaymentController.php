@@ -98,7 +98,7 @@ class StripePaymentController extends Controller
 
             $paymentIntent = \Stripe\PaymentIntent::create([
                 'amount' => $invoice->total_amount * 100, // Convert to cents
-                'currency' => 'usd',
+                'currency' => 'gbp',
                 'customer' => $organisation->stripe_customer_id,
                 'metadata' => [
                     'invoice_id' => $invoice->id,

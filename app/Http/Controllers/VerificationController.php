@@ -303,7 +303,7 @@ class VerificationController extends Controller
         }
         
         // Generate invoice
-        $monthlyPrice = 10.00; // $10 per month for basecamp users
+        $monthlyPrice = 10.00; // £10 per month for basecamp users
         $dueDate = now()->addDays(7);
         
         $invoice = DB::transaction(function () use ($user, $subscription, $monthlyPrice, $dueDate) {

@@ -324,7 +324,7 @@ class StripeWebhookController extends Controller
                 'subscription_id' => $invoice->subscription_id,
                 'stripe_payment_intent_id' => $session->payment_intent,
                 'amount' => $session->amount_total / 100,
-                'currency' => 'usd',
+                'currency' => 'gbp',
                 'status' => 'succeeded',
                 'type' => 'one_time_payment',
                 'paid_at' => now(),
