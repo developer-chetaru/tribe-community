@@ -693,5 +693,321 @@ class BasecampBillingController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * @OA\Get(
+     *     path="/api/basecamp/invoice/{id}/view",
+     *     tags={"Basecamp Billing", "Basecamp Users"},
+     *     summary="View invoice details",
+     *     description="Retrieve detailed invoice information including invoice items, payment details, subscription information, and payment method details. Returns complete invoice data for viewing in mobile app.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Invoice ID",
+     *         required=true,
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Invoice details retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Invoice details retrieved successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="invoice_number", type="string", example="INV-202512-0001"),
+     *                 @OA\Property(property="tier", type="string", example="basecamp"),
+     *                 @OA\Property(property="user_id", type="integer", example=1),
+     *                 @OA\Property(property="subscription_id", type="integer", nullable=true, example=1),
+     *                 @OA\Property(property="user_count", type="integer", example=1),
+     *                 @OA\Property(property="price_per_user", type="number", format="float", example=10.00),
+     *                 @OA\Property(property="subtotal", type="number", format="float", example=10.00),
+     *                 @OA\Property(property="tax_amount", type="number", format="float", example=0.00),
+     *                 @OA\Property(property="total_amount", type="number", format="float", example=10.00),
+     *                 @OA\Property(property="status", type="string", example="paid", enum={"unpaid", "paid", "pending", "overdue"}),
+     *                 @OA\Property(property="invoice_date", type="string", format="date", example="2025-01-05"),
+     *                 @OA\Property(property="due_date", type="string", format="date", example="2025-01-12"),
+     *                 @OA\Property(property="paid_at", type="string", format="date-time", nullable=true, example="2025-01-05T10:30:00.000000Z"),
+     *                 @OA\Property(property="created_at", type="string", format="date-time", example="2025-01-05T10:30:00.000000Z"),
+     *                 @OA\Property(property="updated_at", type="string", format="date-time", example="2025-01-05T10:30:00.000000Z"),
+     *                 @OA\Property(
+     *                     property="subscription",
+     *                     type="object",
+     *                     nullable=true,
+     *                     @OA\Property(property="id", type="integer", example=1),
+     *                     @OA\Property(property="tier", type="string", example="basecamp"),
+     *                     @OA\Property(property="status", type="string", example="active")
+     *                 ),
+     *                 @OA\Property(
+     *                     property="payments",
+     *                     type="array",
+     *                     @OA\Items(
+     *                         @OA\Property(property="id", type="integer", example=1),
+     *                         @OA\Property(property="amount", type="number", format="float", example=10.00),
+     *                         @OA\Property(property="payment_method", type="string", example="card"),
+     *                         @OA\Property(property="transaction_id", type="string", example="pi_1234567890"),
+     *                         @OA\Property(property="status", type="string", example="completed"),
+     *                         @OA\Property(property="payment_date", type="string", format="date", example="2025-01-05")
+     *                     )
+     *                 ),
+     *                 @OA\Property(
+     *                     property="user",
+     *                     type="object",
+     *                     @OA\Property(property="id", type="integer", example=1),
+     *                     @OA\Property(property="first_name", type="string", example="John"),
+     *                     @OA\Property(property="last_name", type="string", example="Doe"),
+     *                     @OA\Property(property="email", type="string", example="john@example.com")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthorized. Please login.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Forbidden - User cannot access this invoice",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="You can only view your own invoices.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Invoice not found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Invoice not found.")
+     *         )
+     *     )
+     * )
+     */
+    public function viewInvoice($id)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized. Please login.',
+                ], 401);
+            }
+
+            // Check if user is basecamp user
+            if (!$user->hasRole('basecamp')) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Only basecamp users can access this endpoint.',
+                ], 403);
+            }
+
+            $invoice = Invoice::with(['subscription', 'payments', 'user'])
+                ->where('id', $id)
+                ->where('tier', 'basecamp')
+                ->first();
+
+            if (!$invoice) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Invoice not found.',
+                ], 404);
+            }
+
+            // Verify invoice belongs to user
+            if ($invoice->user_id !== $user->id) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'You can only view your own invoices.',
+                ], 403);
+            }
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Invoice details retrieved successfully',
+                'data' => [
+                    'id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'tier' => $invoice->tier,
+                    'user_id' => $invoice->user_id,
+                    'subscription_id' => $invoice->subscription_id,
+                    'user_count' => $invoice->user_count,
+                    'price_per_user' => (float) $invoice->price_per_user,
+                    'subtotal' => (float) $invoice->subtotal,
+                    'tax_amount' => (float) $invoice->tax_amount,
+                    'total_amount' => (float) $invoice->total_amount,
+                    'status' => $invoice->status,
+                    'invoice_date' => $invoice->invoice_date ? $invoice->invoice_date->format('Y-m-d') : null,
+                    'due_date' => $invoice->due_date ? $invoice->due_date->format('Y-m-d') : null,
+                    'paid_at' => $invoice->paid_at ? $invoice->paid_at->toIso8601String() : null,
+                    'created_at' => $invoice->created_at ? $invoice->created_at->toIso8601String() : null,
+                    'updated_at' => $invoice->updated_at ? $invoice->updated_at->toIso8601String() : null,
+                    'subscription' => $invoice->subscription ? [
+                        'id' => $invoice->subscription->id,
+                        'tier' => $invoice->subscription->tier,
+                        'status' => $invoice->subscription->status,
+                        'current_period_start' => $invoice->subscription->current_period_start ? $invoice->subscription->current_period_start->toIso8601String() : null,
+                        'current_period_end' => $invoice->subscription->current_period_end ? $invoice->subscription->current_period_end->toIso8601String() : null,
+                    ] : null,
+                    'payments' => $invoice->payments->map(function ($payment) {
+                        return [
+                            'id' => $payment->id,
+                            'amount' => (float) $payment->amount,
+                            'payment_method' => $payment->payment_method,
+                            'transaction_id' => $payment->transaction_id,
+                            'status' => $payment->status,
+                            'payment_date' => $payment->payment_date ? $payment->payment_date->format('Y-m-d') : null,
+                            'created_at' => $payment->created_at ? $payment->created_at->toIso8601String() : null,
+                        ];
+                    }),
+                    'user' => $invoice->user ? [
+                        'id' => $invoice->user->id,
+                        'first_name' => $invoice->user->first_name,
+                        'last_name' => $invoice->user->last_name,
+                        'email' => $invoice->user->email,
+                    ] : null,
+                ],
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to retrieve invoice details: ' . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to retrieve invoice details.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/basecamp/invoice/{id}/download",
+     *     tags={"Basecamp Billing", "Basecamp Users"},
+     *     summary="Download invoice as PDF/HTML",
+     *     description="Download invoice as HTML file that can be printed as PDF. Returns invoice HTML content with proper headers for download. Mobile apps can save this HTML and convert to PDF or display in webview.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="id",
+     *         in="path",
+     *         description="Invoice ID",
+     *         required=true,
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Invoice downloaded successfully",
+     *         @OA\MediaType(
+     *             mediaType="text/html",
+     *             @OA\Schema(
+     *                 type="string",
+     *                 description="HTML content of the invoice"
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthorized. Please login.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Forbidden - User cannot download this invoice",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="You can only download your own invoices.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Invoice not found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Invoice not found.")
+     *         )
+     *     )
+     * )
+     */
+    public function downloadInvoice($id)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized. Please login.',
+                ], 401);
+            }
+
+            // Check if user is basecamp user
+            if (!$user->hasRole('basecamp')) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Only basecamp users can access this endpoint.',
+                ], 403);
+            }
+
+            $invoice = Invoice::with(['organisation', 'subscription', 'payments.paidBy', 'user'])
+                ->where('id', $id)
+                ->where('tier', 'basecamp')
+                ->first();
+
+            if (!$invoice) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Invoice not found.',
+                ], 404);
+            }
+
+            // Verify invoice belongs to user
+            if ($invoice->user_id !== $user->id) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'You can only download your own invoices.',
+                ], 403);
+            }
+
+            // Load Stripe payment method details if needed
+            if (method_exists(\App\Http\Controllers\InvoiceController::class, 'loadStripePaymentMethods')) {
+                $invoiceController = new \App\Http\Controllers\InvoiceController();
+                $invoiceController->loadStripePaymentMethods($invoice->payments);
+            }
+
+            // For basecamp users, get user instead of organisation
+            $invoiceUser = $invoice->user_id ? \App\Models\User::find($invoice->user_id) : null;
+            
+            // Return HTML view with download headers (can be printed as PDF by browser)
+            $html = view('invoices.pdf', [
+                'invoice' => $invoice,
+                'organisation' => $invoice->organisation,
+                'user' => $invoiceUser, // For basecamp users
+                'subscription' => $invoice->subscription,
+                'payments' => $invoice->payments,
+            ])->render();
+
+            return response($html)
+                ->header('Content-Type', 'text/html')
+                ->header('Content-Disposition', 'attachment; filename="invoice-' . $invoice->invoice_number . '.html"');
+
+        } catch (\Exception $e) {
+            Log::error('Failed to download invoice: ' . $e->getMessage());
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to download invoice.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }
 
