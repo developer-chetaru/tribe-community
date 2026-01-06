@@ -81,7 +81,7 @@ class AuthController extends Controller
         return response()->json(['status' => false, 'message' => 'Invalid credentials'], 401);
     }
 
-    $user = auth()->user()->load(['organisation', 'office', 'department']);
+    $user = auth()->user()->load(['organisation', 'office', 'department', 'roles']);
 
    
     // Check if user status is not active
@@ -93,9 +93,35 @@ class AuthController extends Controller
         ], 401);
     }
 
-  
-	$roleName = $user->getRoleNames()->first(); // "basecamp"
-
+    // Get role name - check for api guard first (since we're using JWT)
+    $roleName = $user->getRoleNames('api')->first();
+    
+    // If no role for api guard, check web guard
+    if (!$roleName) {
+        $roleName = $user->getRoleNames('web')->first();
+    }
+    
+    // If still no role, try to assign basecamp role
+    if (! $roleName) {
+        try {
+            // Ensure role exists for api guard
+            Role::firstOrCreate(['name' => 'basecamp', 'guard_name' => 'api']);
+            
+            // Assign role for api guard
+            $apiRole = Role::where('name', 'basecamp')->where('guard_name', 'api')->first();
+            if ($apiRole) {
+                $user->roles()->syncWithoutDetaching([$apiRole->id]);
+                $user->refresh();
+                $user->load('roles');
+                $roleName = $user->getRoleNames('api')->first();
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to assign role during login', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
 
     if (! $roleName) {
         return response()->json(['status' => false, 'message' => 'User has no role assigned'], 401);
@@ -244,7 +270,22 @@ class AuthController extends Controller
     	        'status'     => false, // Set to false initially, will be activated after email verification
 	        ]);
    
-	        $user->assignRole('basecamp');
+	        // Ensure role exists for both guards
+	        Role::firstOrCreate(['name' => 'basecamp', 'guard_name' => 'web']);
+	        Role::firstOrCreate(['name' => 'basecamp', 'guard_name' => 'api']);
+	        
+	        // Assign role
+	        if (!$user->hasRole('basecamp')) {
+	            $user->assignRole('basecamp');
+	        }
+	        
+	        // Also assign for api guard since login uses JWT (api guard)
+	        $apiRole = Role::where('name', 'basecamp')->where('guard_name', 'api')->first();
+	        if ($apiRole && !$user->hasRole('basecamp', 'api')) {
+	            $user->roles()->syncWithoutDetaching([$apiRole->id]);
+	        }
+	        
+	        $user->refresh();
 
         	$token = JWTAuth::fromUser($user);
 
@@ -596,8 +637,42 @@ class AuthController extends Controller
     // Refresh user model
     $user->refresh();
 
-    // Assign basecamp role
-    $user->assignRole('basecamp');
+    // Assign basecamp role - ensure role exists for both guards
+    try {
+        // Ensure role exists for both web and api guards
+        Role::firstOrCreate(
+            ['name' => 'basecamp', 'guard_name' => 'web']
+        );
+        Role::firstOrCreate(
+            ['name' => 'basecamp', 'guard_name' => 'api']
+        );
+        
+        // Assign role to user (will assign for current guard)
+        if (!$user->hasRole('basecamp')) {
+            $user->assignRole('basecamp');
+        }
+        
+        // Also explicitly assign for api guard since login uses JWT (api guard)
+        $apiRole = Role::where('name', 'basecamp')->where('guard_name', 'api')->first();
+        if ($apiRole && !$user->hasRole('basecamp', 'api')) {
+            $user->roles()->syncWithoutDetaching([$apiRole->id]);
+        }
+        
+        // Force refresh to ensure role is loaded
+        $user->refresh();
+        $user->load('roles');
+        
+        Log::info('Role assigned to user', [
+            'user_id' => $user->id,
+            'roles' => $user->getRoleNames()->toArray(),
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Failed to assign basecamp role', [
+            'user_id' => $user->id,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+    }
     
     // Refresh user to load roles and relationships
     $user->refresh();
