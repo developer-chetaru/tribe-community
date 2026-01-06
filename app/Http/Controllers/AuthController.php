@@ -466,6 +466,10 @@ class AuthController extends Controller
                 'password' => Hash::make($request->password),
                 'status'   => true,
             ]);
+            
+            // Refresh user to get updated data
+            $user->refresh();
+            $user->load(['organisation', 'office', 'department', 'roles']);
 
             $token = JWTAuth::fromUser($user);
             
@@ -479,16 +483,38 @@ class AuthController extends Controller
                     'error' => $e->getMessage(),
                 ]);
             }
+            
+            $roleName = $user->getRoleNames()->first() ?? 'No role assigned';
 
             return response()->json([
                 'success' => true,
                 'message' => 'Password updated successfully. You are now logged in!',
-                'user'    => $user,
-                'token'   => $token,
+                'data'    => [
+                    'name'              => $user->first_name,
+                    'last_name'         => $user->last_name,
+                    'email'             => $user->email,
+                    'token'             => $token,
+                    'role'              => $roleName,
+                    'orgId'             => optional($user->organisation)->id,
+                    'orgname'           => optional($user->organisation)->name,
+                    'officeId'          => optional($user->office)->id,
+                    'office'            => optional($user->office)->name,
+                    'departmentId'      => optional($user->department)->id,
+                    'department'        => optional($user->department)->name,
+                    'organisation_logo' => optional($user->organisation)->image,
+                    'profileImage'      => $user->profile_photo_path ? url('storage/' . $user->profile_photo_path) : null,
+                    'deviceType'        => $user->deviceType,
+                    'deviceId'          => $user->deviceId,
+                    'fcmToken'          => $user->fcmToken,
+                    'appPaymentVersion' => '1',
+                ],
             ]);
         }
 
         if (Hash::check($request->password, $user->password)) {
+            // Load relationships and roles
+            $user->load(['organisation', 'office', 'department', 'roles']);
+            
             $token = JWTAuth::fromUser($user);
             
             // ✅ Invalidate all previous sessions/tokens
@@ -510,12 +536,31 @@ class AuthController extends Controller
             } catch (\Throwable $e) {
                 Log::error('❌ Welcome email failed', ['email' => $user->email, 'error' => $e->getMessage()]);
             }
+            
+            $roleName = $user->getRoleNames()->first() ?? 'No role assigned';
 
             return response()->json([
                 'success' => true,
                 'message' => 'Login successful!',
-                'user'    => $user,
-                'token'   => $token,
+                'data'    => [
+                    'name'              => $user->first_name,
+                    'last_name'         => $user->last_name,
+                    'email'             => $user->email,
+                    'token'             => $token,
+                    'role'              => $roleName,
+                    'orgId'             => optional($user->organisation)->id,
+                    'orgname'           => optional($user->organisation)->name,
+                    'officeId'          => optional($user->office)->id,
+                    'office'            => optional($user->office)->name,
+                    'departmentId'      => optional($user->department)->id,
+                    'department'        => optional($user->department)->name,
+                    'organisation_logo' => optional($user->organisation)->image,
+                    'profileImage'      => $user->profile_photo_path ? url('storage/' . $user->profile_photo_path) : null,
+                    'deviceType'        => $user->deviceType,
+                    'deviceId'          => $user->deviceId,
+                    'fcmToken'          => $user->fcmToken,
+                    'appPaymentVersion' => '1',
+                ],
             ]);
         } else {
             return response()->json([
@@ -551,7 +596,12 @@ class AuthController extends Controller
     // Refresh user model
     $user->refresh();
 
+    // Assign basecamp role
     $user->assignRole('basecamp');
+    
+    // Refresh user to load roles and relationships
+    $user->refresh();
+    $user->load(['organisation', 'office', 'department', 'roles']);
 
     $token = JWTAuth::fromUser($user);
 
@@ -580,11 +630,32 @@ class AuthController extends Controller
         ]);
     }
 
+    // Get role name for response
+    $roleName = $user->getRoleNames()->first() ?? 'basecamp';
+
+    // Return proper response structure matching login API
     return response()->json([
         'success' => true,
-        'message' => 'Registration successful! Please check your email to activate your account.',
-        'user'    => $user,
-        'token'   => $token,
+        'message' => 'Password set successfully. Please check your email to verify your account.',
+        'data'    => [
+            'name'              => $user->first_name,
+            'last_name'         => $user->last_name,
+            'email'             => $user->email,
+            'token'             => $token,
+            'role'              => $roleName,
+            'orgId'             => optional($user->organisation)->id,
+            'orgname'           => optional($user->organisation)->name,
+            'officeId'          => optional($user->office)->id,
+            'office'            => optional($user->office)->name,
+            'departmentId'      => optional($user->department)->id,
+            'department'        => optional($user->department)->name,
+            'organisation_logo' => optional($user->organisation)->image,
+            'profileImage'      => $user->profile_photo_path ? url('storage/' . $user->profile_photo_path) : null,
+            'deviceType'        => $user->deviceType,
+            'deviceId'          => $user->deviceId,
+            'fcmToken'          => $user->fcmToken,
+            'appPaymentVersion' => '1',
+        ],
     ]);
 }
 }
