@@ -84,12 +84,26 @@ class AuthController extends Controller
     $user = auth()->user()->load(['organisation', 'office', 'department', 'roles']);
 
    
-    // Check if email is verified - email_verified_at must be set
-    if (!$user->email_verified_at) {
+    // Check if email is verified - only enforce for basecamp users (new registrations)
+    // Organisation users and existing users may not have email_verified_at set
+    $isBasecampUser = $user->hasRole('basecamp');
+    
+    if ($isBasecampUser && !$user->email_verified_at) {
+        // For basecamp users (new registrations), email verification is required
         return response()->json([
             'status'  => false,
             'message' => 'Please verify your email first. Check your email and click the verification link to activate your account.',
         ], 401);
+    }
+    
+    // For existing users without email_verified_at, auto-verify them (legacy users)
+    if (!$user->email_verified_at && !$isBasecampUser) {
+        $user->email_verified_at = now();
+        $user->save();
+        Log::info('Auto-verified email for existing user (legacy user)', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+        ]);
     }
     
     // Check if user status is not active
