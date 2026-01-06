@@ -287,8 +287,7 @@ class AuthController extends Controller
 	        
 	        $user->refresh();
 
-        	$token = JWTAuth::fromUser($user);
-
+        	// Send verification email - DO NOT return token
 			try {
                 $oneSignal = new OneSignalService();
 
@@ -310,21 +309,25 @@ class AuthController extends Controller
                 // ✅ Set initial OneSignal tags on registration
                 $oneSignal->setUserTagsOnLogin($user);
 
-                \Log::info('✅ OneSignal verification email sent (with inline Blade)', [
+                Log::info('✅ OneSignal verification email sent (with inline Blade)', [
                     'email' => $user->email,
                 ]);            
 
             } catch (\Throwable $e) {
-                \Log::error('❌ OneSignal registration/email failed for new user', [
+                Log::error('❌ OneSignal registration/email failed for new user', [
                     'user_id' => $user->id,
                     'error'   => $e->getMessage(),
                 ]);
             }
 
+        	// Return success message WITHOUT token - user must verify email first
         	return response()->json([
-            	'message' => 'User registered successfully',
-            	'user'    => $user,
-            	'token'   => $token,
+            	'status'  => true,
+            	'message' => 'Registration successful! Please check your email to verify your account. After verification, you can login.',
+            	'data'    => [
+                    'email' => $user->email,
+                    'email_verified' => false,
+                ],
         	], 201);
 
     	} catch (\Exception $e) {
@@ -674,12 +677,7 @@ class AuthController extends Controller
         ]);
     }
     
-    // Refresh user to load roles and relationships
-    $user->refresh();
-    $user->load(['organisation', 'office', 'department', 'roles']);
-
-    $token = JWTAuth::fromUser($user);
-
+    // Send verification email - DO NOT generate token
     $expires = Carbon::now()->addMinutes(1440); 
     $verificationUrl = URL::temporarySignedRoute(
         'user.verify', $expires, ['id' => $user->id]
@@ -705,31 +703,14 @@ class AuthController extends Controller
         ]);
     }
 
-    // Get role name for response
-    $roleName = $user->getRoleNames()->first() ?? 'basecamp';
-
-    // Return proper response structure matching login API
+    // DO NOT return token - user must verify email first
+    // Return success message asking user to verify email
     return response()->json([
         'success' => true,
-        'message' => 'Password set successfully. Please check your email to verify your account.',
+        'message' => 'Password set successfully! Please check your email to verify your account. After verification, you can login.',
         'data'    => [
-            'name'              => $user->first_name,
-            'last_name'         => $user->last_name,
-            'email'             => $user->email,
-            'token'             => $token,
-            'role'              => $roleName,
-            'orgId'             => optional($user->organisation)->id,
-            'orgname'           => optional($user->organisation)->name,
-            'officeId'          => optional($user->office)->id,
-            'office'            => optional($user->office)->name,
-            'departmentId'      => optional($user->department)->id,
-            'department'        => optional($user->department)->name,
-            'organisation_logo' => optional($user->organisation)->image,
-            'profileImage'      => $user->profile_photo_path ? url('storage/' . $user->profile_photo_path) : null,
-            'deviceType'        => $user->deviceType,
-            'deviceId'          => $user->deviceId,
-            'fcmToken'          => $user->fcmToken,
-            'appPaymentVersion' => '1',
+            'email' => $user->email,
+            'email_verified' => false,
         ],
     ]);
 }

@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\Http;
 use App\Mail\ActivationSuccessMail;
 use App\Mail\VerifyUserMail;
 use App\Models\User;
+use App\Models\Invoice;
+use App\Models\SubscriptionRecord;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Services\OneSignalService;
 
@@ -114,6 +117,31 @@ class VerificationController extends Controller
             'status' => $user->status,
         ]);
         
+        // Check if this is a basecamp user who needs automatic invoice generation
+        $isBasecamp = $user->hasRole('basecamp');
+        $invoiceGenerated = false;
+        $invoiceError = null;
+        
+        // Generate invoice automatically for basecamp users after email verification
+        // This is non-blocking - if it fails, verification still succeeds
+        if ($isBasecamp) {
+            try {
+                $this->generateInvoiceForBasecampUser($user);
+                $invoiceGenerated = true;
+                Log::info('Invoice generated successfully for basecamp user after email verification', [
+                    'user_id' => $user->id,
+                ]);
+            } catch (\Exception $e) {
+                $invoiceError = $e->getMessage();
+                Log::error('Failed to generate invoice for basecamp user after email verification', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                // Don't fail verification if invoice generation fails
+            }
+        }
+        
         // Return JSON response for mobile apps
         if ($isMobileApp) {
             return response()->json([
@@ -125,6 +153,8 @@ class VerificationController extends Controller
                     'email_verified_at' => $user->email_verified_at,
                     'status' => $user->status ? 1 : 0,
                 ],
+                'invoice_generated' => $invoiceGenerated,
+                'invoice_error' => $invoiceError,
             ]);
         }
         
@@ -233,5 +263,72 @@ class VerificationController extends Controller
                 </body>
                 </html>
             ');
+    }
+    
+    /**
+     * Generate invoice for basecamp user after email verification
+     *
+     * @param User $user
+     * @return void
+     */
+    private function generateInvoiceForBasecampUser(User $user)
+    {
+        // Create or get subscription for basecamp user
+        $subscription = SubscriptionRecord::firstOrCreate(
+            [
+                'user_id' => $user->id,
+                'tier' => 'basecamp',
+            ],
+            [
+                'organisation_id' => null,
+                'status' => 'inactive',
+                'user_count' => 1,
+            ]
+        );
+        
+        // Check if invoice already exists for today (to avoid duplicates)
+        $existingInvoice = Invoice::where('user_id', $user->id)
+            ->where('tier', 'basecamp')
+            ->whereDate('invoice_date', now()->toDateString())
+            ->where('status', '!=', 'cancelled')
+            ->first();
+            
+        if ($existingInvoice) {
+            Log::info('Invoice already exists for basecamp user after email verification', [
+                'user_id' => $user->id,
+                'invoice_id' => $existingInvoice->id,
+                'invoice_number' => $existingInvoice->invoice_number,
+            ]);
+            return;
+        }
+        
+        // Generate invoice
+        $monthlyPrice = 10.00; // $10 per month for basecamp users
+        $dueDate = now()->addDays(7);
+        
+        $invoice = DB::transaction(function () use ($user, $subscription, $monthlyPrice, $dueDate) {
+            return Invoice::create([
+                'user_id' => $user->id,
+                'organisation_id' => null, // Null for basecamp users
+                'subscription_id' => $subscription->id,
+                'invoice_number' => Invoice::generateInvoiceNumber(),
+                'tier' => 'basecamp',
+                'user_count' => 1,
+                'price_per_user' => $monthlyPrice,
+                'subtotal' => $monthlyPrice,
+                'tax_amount' => 0,
+                'total_amount' => $monthlyPrice,
+                'status' => 'unpaid',
+                'due_date' => $dueDate,
+                'invoice_date' => now(),
+            ]);
+        });
+        
+        Log::info('Invoice generated automatically for basecamp user after email verification', [
+            'user_id' => $user->id,
+            'invoice_id' => $invoice->id,
+            'invoice_number' => $invoice->invoice_number,
+            'total_amount' => $invoice->total_amount,
+        ]);
     }
 }
