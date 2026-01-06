@@ -119,25 +119,25 @@ class HPTMController extends Controller
             $roleName = $user->getRoleNames()->first() ?? 'No role assigned';
 
             $resultArray = [
-                'id'                => $user->id,
+                'id'                => (int) $user->id,
                 'first_name'        => $user->first_name,
                 'last_name'         => $user->last_name,
                 'email'             => $user->email,
-                'officeId'          => optional($user->office)->id,
-                'departmentId'      => optional($user->department)->id,
-                'orgId'             => optional($user->organisation)->id,
+                'officeId'          => $user->office ? (int) $user->office->id : null,
+                'departmentId'      => $user->department ? (int) $user->department->id : null,
+                'orgId'             => $user->organisation ? (int) $user->organisation->id : null,
                 'officeName'        => optional($user->office)->name,
                 'departmentName'    => optional($user->department->allDepartment ?? null)->name ?? '',
    		        'profileImage' => $user->profile_photo_path ? url('storage/' . $user->profile_photo_path) : null,
                 'organisation_logo' => optional($user->organisation)->image,
                 'personaliseData'   => optional($user->organisation)->personaliseData,
-                'status'            => $user->status,
+                'status'            => (bool) $user->status,
                 'userContact'       => $user->phone,
               	'country_code'      => $user->country_code,
                 'timezone'          => $user->timezone,
                 "organisationName"  => optional($user->organisation)->name,
                 "role"              => $roleName,
-              	"created_at"        => $user->created_at,
+              	"created_at"        => $user->created_at ? $user->created_at->toIso8601String() : null,
             ];
 
             $resultArray['cotTeamRoleMap']    = '';
