@@ -9,11 +9,8 @@ use Illuminate\Support\Facades\Http;
 use App\Mail\ActivationSuccessMail;
 use App\Mail\VerifyUserMail;
 use App\Models\User;
-use App\Models\Invoice;
-use App\Models\SubscriptionRecord;
 use Illuminate\Support\Facades\Log;
 use App\Services\OneSignalService;
-use Illuminate\Support\Facades\DB;
 
 class VerificationController extends Controller
 {
@@ -46,7 +43,21 @@ class VerificationController extends Controller
  	*/
     public function verify(Request $request, $id)
     {
+        // Check if request is from mobile app (expects JSON) or web (expects HTML)
+        $isMobileApp = $request->wantsJson() || 
+                      $request->header('Accept') === 'application/json' ||
+                      str_contains(strtolower($request->header('User-Agent', '')), 'mobile') ||
+                      str_contains(strtolower($request->header('User-Agent', '')), 'android') ||
+                      str_contains(strtolower($request->header('User-Agent', '')), 'iphone') ||
+                      str_contains(strtolower($request->header('User-Agent', '')), 'ipad');
+        
         if (! $request->hasValidSignature()) {
+            if ($isMobileApp) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Link expired or invalid. Please request a new activation link.',
+                ], 403);
+            }
             return response("
                 <html>
                 <head><title>Link Expired</title></head>
@@ -61,6 +72,13 @@ class VerificationController extends Controller
         
         // Check if email is already verified
         if ($user->email_verified_at) {
+            if ($isMobileApp) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Account is already activated.',
+                    'already_verified' => true,
+                ]);
+            }
             // Already verified - show message and redirect
             return response("
                 <html>
@@ -83,19 +101,10 @@ class VerificationController extends Controller
         // Email not verified yet - verify now
         $user->email_verified_at = now();
         
-        // Update status based on current status
-        // If user is suspended or cancelled, don't change status
-        if (in_array($user->status, ['suspended', 'cancelled'])) {
-            // Keep current status, just mark email as verified
-            // Don't change status
-        } elseif (in_array($user->status, ['active_verified', 'active_unverified', 'pending_payment', 'inactive', null])) {
-            // User is in normal flow - set to active_verified now that email is verified
-            $user->status = 'active_verified';
-        } else {
-            // Default to active_verified for any other status
-            $user->status = 'active_verified';
+        // Update status - keep existing status logic for compatibility
+        if (! $user->status) {
+            $user->status = true;
         }
-        
         $user->save();
         
         Log::info('User email verified', [
@@ -103,23 +112,25 @@ class VerificationController extends Controller
             'email' => $user->email,
             'status' => $user->status,
         ]);
-            
-            // Check if this is a basecamp user who needs to set up billing
-            $isBasecamp = $user->hasRole('basecamp');
-            
-            // Generate invoice automatically for basecamp users after email verification
-            if ($isBasecamp) {
-                try {
-                    $this->generateInvoiceForBasecampUser($user);
-                } catch (\Exception $e) {
-                    Log::error('Failed to generate invoice for basecamp user after email verification', [
-                        'user_id' => $user->id,
-                        'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString(),
-                    ]);
-                }
-            }
-            $redirectUrl = url('/login'); // Always redirect to login after verification
+        
+        // Return JSON response for mobile apps
+        if ($isMobileApp) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Account activated successfully!',
+                'user' => [
+                    'id' => $user->id,
+                    'email' => $user->email,
+                    'email_verified_at' => $user->email_verified_at,
+                    'status' => $user->status,
+                ],
+            ]);
+        }
+        
+        // Web response (HTML)
+        // Check if this is a basecamp user who needs to set up billing
+        $isBasecamp = $user->hasRole('basecamp');
+        $redirectUrl = url('/login'); // Always redirect to login after verification
             // --------------------------------------
             // Create HTML email body from your template
             // --------------------------------------
@@ -203,90 +214,23 @@ class VerificationController extends Controller
                     'error' => $e->getMessage(),
                 ]);
             }
-        // Return success page
-        $redirectUrl = url('/login');
-        return response('
-            <html>
-            <head>
-                <title>Account Activated</title>
-            </head>
-            <body style="text-align:center; padding:50px; font-family:sans-serif;">
-                <h2 style="color:green;">Your account has been activated successfully!</h2>
-                <p>You will be redirected in 5 seconds...</p>
-                <script>
-                    setTimeout(function() {
-                        window.location.href = "' . $redirectUrl . '";
-                    }, 5000);
-                </script>
-            </body>
-            </html>
-        ');
-    }
-    
-    /**
-     * Generate invoice for basecamp user after email verification
-     *
-     * @param User $user
-     * @return void
-     */
-    private function generateInvoiceForBasecampUser(User $user)
-    {
-        // Create or get subscription for basecamp user
-        $subscription = SubscriptionRecord::firstOrCreate(
-            [
-                'user_id' => $user->id,
-                'tier' => 'basecamp',
-            ],
-            [
-                'organisation_id' => null,
-                'status' => 'inactive',
-                'user_count' => 1,
-            ]
-        );
-        
-        // Check if invoice already exists for today (to avoid duplicates)
-        $existingInvoice = Invoice::where('user_id', $user->id)
-            ->where('tier', 'basecamp')
-            ->whereDate('invoice_date', now()->toDateString())
-            ->where('status', '!=', 'cancelled')
-            ->first();
-            
-        if ($existingInvoice) {
-            Log::info('Invoice already exists for basecamp user after email verification', [
-                'user_id' => $user->id,
-                'invoice_id' => $existingInvoice->id,
-                'invoice_number' => $existingInvoice->invoice_number,
-            ]);
-            return;
-        }
-        
-        // Generate invoice
-        $monthlyPrice = 10.00; // $10 per month for basecamp users
-        $dueDate = now()->addDays(7);
-        
-        $invoice = DB::transaction(function () use ($user, $subscription, $monthlyPrice, $dueDate) {
-            return Invoice::create([
-                'user_id' => $user->id,
-                'organisation_id' => null, // Null for basecamp users
-                'subscription_id' => $subscription->id,
-                'invoice_number' => Invoice::generateInvoiceNumber(),
-                'tier' => 'basecamp',
-                'user_count' => 1,
-                'price_per_user' => $monthlyPrice,
-                'subtotal' => $monthlyPrice,
-                'tax_amount' => 0,
-                'total_amount' => $monthlyPrice,
-                'status' => 'unpaid',
-                'due_date' => $dueDate,
-                'invoice_date' => now(),
-            ]);
-        });
-        
-        Log::info('Invoice generated automatically for basecamp user after email verification', [
-            'user_id' => $user->id,
-            'invoice_id' => $invoice->id,
-            'invoice_number' => $invoice->invoice_number,
-            'total_amount' => $invoice->total_amount,
-        ]);
+            // Return success page
+            $redirectUrl = url('/login');
+            return response('
+                <html>
+                <head>
+                    <title>Account Activated</title>
+                </head>
+                <body style="text-align:center; padding:50px; font-family:sans-serif;">
+                    <h2 style="color:green;">Your account has been activated successfully!</h2>
+                    <p>You will be redirected in 5 seconds...</p>
+                    <script>
+                        setTimeout(function() {
+                            window.location.href = "' . $redirectUrl . '";
+                        }, 5000);
+                    </script>
+                </body>
+                </html>
+            ');
     }
 }

@@ -33,8 +33,7 @@ class BaseCampUser extends Component
     {
         $user = User::findOrFail($userId);
 
-        // Only send if email is not verified
-        if ($user->email_verified_at) {
+        if ($user->status != 0) {
             return;
         }
 

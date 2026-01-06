@@ -238,7 +238,7 @@ class AuthController extends Controller
         	    'last_name'  => $request->last_name,
         	    'email'      => $request->email,
         	    'password'   => Hash::make($request->password),
-    	        'is_active'  => true,
+    	        'status'     => false, // Set to false initially, will be activated after email verification
 	        ]);
    
 	        $user->assignRole('basecamp');

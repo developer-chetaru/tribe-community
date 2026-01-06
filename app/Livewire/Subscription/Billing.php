@@ -46,11 +46,6 @@ class Billing extends Component
     public $stripeClientSecret = null;
     public $stripePaymentIntentId = null;
     public $isProcessingStripePayment = false;
-    
-    // Additional billing features
-    public $searchQuery = '';
-    public $statusFilter = '';
-    public $paymentMethod = null;
 
     public function mount()
     {
@@ -890,78 +885,24 @@ class Billing extends Component
     {
         $user = auth()->user();
         
-        $query = null;
+        // For basecamp users, filter by user_id
         if ($user->hasRole('basecamp')) {
-            $query = Invoice::where('user_id', $user->id)
-                ->where('tier', 'basecamp');
-        } else {
-            $query = Invoice::where('organisation_id', $user->orgId);
+            return Invoice::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->with(['subscription', 'payments'])
+                ->orderBy('created_at', 'desc')
+                ->paginate(10);
         }
         
-        // Apply search filter
-        if ($this->searchQuery) {
-            $query->where(function($q) {
-                $q->where('invoice_number', 'like', '%' . $this->searchQuery . '%')
-                  ->orWhere('total_amount', 'like', '%' . $this->searchQuery . '%');
-            });
-        }
-        
-        // Apply status filter
-        if ($this->statusFilter) {
-            $query->where('status', $this->statusFilter);
-        }
-        
-        return $query->with(['subscription', 'payments'])
+        // For directors, filter by organisation_id
+        return Invoice::where('organisation_id', $user->orgId)
+            ->with(['subscription', 'payments'])
             ->orderBy('created_at', 'desc')
             ->paginate(10);
-    }
-    
-    public function loadPaymentMethod()
-    {
-        $user = auth()->user();
-        
-        if (!$this->subscription) {
-            return;
-        }
-        
-        // Get the last successful payment
-        $lastPayment = \App\Models\Payment::where(function($q) use ($user) {
-                if ($user->hasRole('basecamp')) {
-                    $q->where('user_id', $user->id);
-                } else {
-                    $q->where('organisation_id', $user->orgId);
-                }
-            })
-            ->where('payment_method', 'card')
-            ->whereNotNull('transaction_id')
-            ->latest()
-            ->first();
-            
-        if ($lastPayment && $lastPayment->transaction_id) {
-            try {
-                \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
-                $paymentIntent = \Stripe\PaymentIntent::retrieve($lastPayment->transaction_id);
-                
-                if ($paymentIntent->payment_method) {
-                    $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentIntent->payment_method);
-                    $this->paymentMethod = [
-                        'brand' => $paymentMethod->card->brand ?? 'Card',
-                        'last4' => $paymentMethod->card->last4 ?? '****',
-                        'exp_month' => $paymentMethod->card->exp_month ?? null,
-                        'exp_year' => $paymentMethod->card->exp_year ?? null,
-                    ];
-                }
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::warning('Failed to load payment method: ' . $e->getMessage());
-            }
-        }
     }
 
     public function render()
     {
-        // Load payment method
-        $this->loadPaymentMethod();
-        
         return view('livewire.subscription.billing', [
             'subscription' => $this->subscription,
             'invoices' => $this->invoices,

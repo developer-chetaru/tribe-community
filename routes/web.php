@@ -102,15 +102,6 @@ Route::get('/', function () {
     return redirect()->to('/login');
 });
 
-// Terms and Privacy Policy routes
-Route::get('/terms', function () {
-    return view('legal.terms');
-})->name('terms');
-
-Route::get('/privacy', function () {
-    return view('legal.privacy');
-})->name('privacy');
-
 Route::post('/register', [RegisteredUserController::class, 'store'])->name('custom.register');
 
 // CSRF Token Refresh Route
@@ -121,10 +112,6 @@ Route::get('/refresh-csrf-token', function () {
 // Basecamp Billing - Allow access without login (payment first, then activation)
 // User ID will be passed via session or query parameter
 Route::get('/basecamp/billing', \App\Livewire\BasecampBilling::class)->name('basecamp.billing');
-
-// Account Suspension - Allow access without login
-Route::get('/account/suspended', [\App\Http\Controllers\AccountSuspensionController::class, 'show'])->name('account.suspended');
-Route::post('/account/reactivate', [\App\Http\Controllers\AccountSuspensionController::class, 'reactivate'])->name('account.reactivate');
 
 // Basecamp payment routes with rate limiting (10 requests per minute)
 Route::middleware(['throttle:10,1'])->group(function () {

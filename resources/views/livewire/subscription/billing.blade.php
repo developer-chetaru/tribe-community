@@ -53,55 +53,6 @@
                             </p>
                         </div>
                     </div>
-                    
-                    @if($subscriptionStatus['active'] && $subscription)
-                        <!-- Upcoming Bill Section -->
-                        <div class="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                            <h4 class="text-md font-semibold mb-3 text-gray-800">Upcoming Payment</h4>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <p class="text-sm text-gray-600">Amount</p>
-                                    <p class="text-xl font-bold text-gray-900">
-                                        ${{ number_format(($subscription->tier === 'basecamp' ? 10 : ($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30))) * ($subscription->tier === 'basecamp' ? 1 : $subscription->user_count), 2) }}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p class="text-sm text-gray-600">Billing Date</p>
-                                    <p class="text-lg font-semibold text-gray-900">
-                                        {{ $subscription->next_billing_date ? $subscription->next_billing_date->format('M d, Y') : ($subscription->current_period_end ? $subscription->current_period_end->format('M d, Y') : 'N/A') }}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p class="text-sm text-gray-600">Billing Period</p>
-                                    <p class="text-lg font-semibold text-gray-900">
-                                        @if($subscription->current_period_start && $subscription->current_period_end)
-                                            {{ $subscription->current_period_start->format('M Y') }} - {{ $subscription->current_period_end->format('M Y') }}
-                                        @else
-                                            N/A
-                                        @endif
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Payment Method Display -->
-                        @if($paymentMethod)
-                        <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                            <div class="flex justify-between items-center">
-                                <div>
-                                    <p class="text-sm text-gray-600">Payment Method</p>
-                                    <p class="text-lg font-semibold text-gray-900">
-                                        {{ ucfirst($paymentMethod['brand'] ?? 'Card') }} •••• {{ $paymentMethod['last4'] ?? '****' }}
-                                        @if(isset($paymentMethod['exp_month']) && isset($paymentMethod['exp_year']))
-                                            <span class="text-sm text-gray-500">(Expires {{ str_pad($paymentMethod['exp_month'], 2, '0', STR_PAD_LEFT) }}/{{ substr($paymentMethod['exp_year'], -2) }})</span>
-                                        @endif
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                        @endif
-                    @endif
-                    
                     @if(isset($subscriptionStatus['status']) && $subscriptionStatus['status'] === 'suspended')
                         <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                             <p class="text-yellow-800 text-sm font-medium mb-2">
@@ -140,27 +91,7 @@
             <!-- Invoices -->
             <div class="bg-white rounded-lg shadow overflow-hidden">
                 <div class="p-4 border-b">
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-lg font-semibold">Invoices</h3>
-                        
-                        <!-- Search and Filter -->
-                        <div class="flex gap-3">
-                            <input 
-                                type="text" 
-                                wire:model.live.debounce.300ms="searchQuery"
-                                placeholder="Search invoices..." 
-                                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#EB1C24] focus:border-transparent">
-                            <select 
-                                wire:model.live="statusFilter"
-                                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#EB1C24] focus:border-transparent">
-                                <option value="">All Status</option>
-                                <option value="paid">Paid</option>
-                                <option value="unpaid">Unpaid</option>
-                                <option value="pending">Pending</option>
-                                <option value="overdue">Overdue</option>
-                            </select>
-                        </div>
-                    </div>
+                    <h3 class="text-lg font-semibold">Invoices</h3>
                 </div>
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">

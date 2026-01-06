@@ -46,32 +46,6 @@ class ValidateWebSession
             return $next($request);
         }
         
-        // Check if user is suspended - redirect to suspension page
-        if ($user->status === 'suspended') {
-            $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
-                ->where('tier', 'basecamp')
-                ->first();
-            
-            $unpaidInvoice = null;
-            if ($subscription) {
-                $unpaidInvoice = \App\Models\Invoice::where('subscription_id', $subscription->id)
-                    ->where('status', 'unpaid')
-                    ->orderBy('due_date', 'asc')
-                    ->first();
-            }
-            
-            // Store suspension info in session
-            session()->put('suspended_user_id', $user->id);
-            session()->put('suspended_invoice_id', $unpaidInvoice?->id);
-            
-            // Logout user and redirect to suspension page
-            Auth::logout();
-            session()->invalidate();
-            session()->regenerateToken();
-            
-            return redirect()->route('account.suspended');
-        }
-        
         $currentSessionId = session()->getId();
         
         try {

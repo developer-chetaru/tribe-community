@@ -70,31 +70,8 @@ class LoginForm extends Component
             }
         }
         
-        // Check if account is suspended
-        if ($user->status === 'suspended') {
-            $subscription = SubscriptionRecord::where('user_id', $user->id)
-                ->where('tier', 'basecamp')
-                ->first();
-            
-            $unpaidInvoice = null;
-            if ($subscription) {
-                $unpaidInvoice = Invoice::where('subscription_id', $subscription->id)
-                    ->where('status', 'unpaid')
-                    ->orderBy('due_date', 'asc')
-                    ->first();
-            }
-            
-            // Store suspension info in session for reactivation page
-            session()->put('suspended_user_id', $user->id);
-            session()->put('suspended_invoice_id', $unpaidInvoice?->id);
-            
-            \Log::warning('Login blocked - account suspended: ' . $this->email);
-            return redirect()->route('account.suspended');
-        }
-
         // Check if account is activated (for all users including basecamp after payment)
-        // Note: status is now ENUM, so check for active statuses
-        if (!in_array($user->status, ['active_verified', 'active_unverified', 'pending_payment'])) {
+        if (!$user->status) {
             $this->addError('email', 'Your account is not activated yet, please check your email and follow the instruction to verify your account.');
             \Log::warning('Login failed - account not activated: ' . $this->email);
             return;

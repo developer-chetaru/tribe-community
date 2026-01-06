@@ -68,32 +68,8 @@ class FortifyServiceProvider extends ServiceProvider
     	    ]);
     	}
 
-    	// Check if account is suspended
-    	if ($user->status === 'suspended') {
-    	    $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
-    	        ->where('tier', 'basecamp')
-    	        ->first();
-    	    
-    	    $unpaidInvoice = null;
-    	    if ($subscription) {
-    	        $unpaidInvoice = \App\Models\Invoice::where('subscription_id', $subscription->id)
-    	            ->where('status', 'unpaid')
-    	            ->orderBy('due_date', 'asc')
-    	            ->first();
-    	    }
-    	    
-    	    // Store suspension info in session for reactivation page
-    	    session()->put('suspended_user_id', $user->id);
-    	    session()->put('suspended_invoice_id', $unpaidInvoice?->id);
-    	    
-    	    throw ValidationException::withMessages([
-    	        'email' => __('Your account has been suspended due to payment failure. Please reactivate your account.'),
-    	    ]);
-    	}
-
     	// Check if account is activated
-    	// Note: status is now ENUM, so check for active statuses
-    	if (!in_array($user->status, ['active_verified', 'active_unverified', 'pending_payment'])) {
+    	if (!$user->status) {
     	    throw ValidationException::withMessages([
     	        'email' => __('Your account is not activated yet, please check your email and follow the instruction to verify your account.'),
     	    ]);

@@ -52,14 +52,9 @@ class ProcessMonthlyBilling extends Command
     {
         $this->info("Processing subscription ID: {$subscription->id}");
 
-        // Calculate monthly amount - basecamp users have fixed $10/month
-        if ($subscription->tier === 'basecamp') {
-            $monthlyPrice = 10.00; // Fixed $10 for basecamp
-            $totalAmount = $monthlyPrice; // Basecamp is single user, no user_count multiplier
-        } else {
-            $monthlyPrice = $this->getTierPrice($subscription->tier);
-            $totalAmount = $monthlyPrice * $subscription->user_count;
-        }
+        // Calculate monthly amount
+        $monthlyPrice = $this->getTierPrice($subscription->tier);
+        $totalAmount = $monthlyPrice * $subscription->user_count;
 
         // Check for credits/adjustments (if implemented)
         // $credits = $this->getCreditsForSubscription($subscription);
@@ -79,30 +74,23 @@ class ProcessMonthlyBilling extends Command
         }
 
         // Generate invoice
-        $invoiceData = [
+        $invoice = Invoice::create([
             'subscription_id' => $subscription->id,
             'organisation_id' => $subscription->organisation_id,
-            'user_id' => $subscription->user_id, // For basecamp users
             'invoice_number' => Invoice::generateInvoiceNumber(),
             'invoice_date' => now(),
             'due_date' => now()->addDays(7),
-            'tier' => $subscription->tier,
-            'user_count' => $subscription->tier === 'basecamp' ? 1 : $subscription->user_count,
+            'user_count' => $subscription->user_count,
             'price_per_user' => $monthlyPrice,
             'subtotal' => $totalAmount,
-            'tax_amount' => 0, // No tax for basecamp (or adjust as needed)
-            'total_amount' => $totalAmount,
-            'status' => 'unpaid', // Changed from 'pending' to 'unpaid'
-        ];
-
-        $invoice = Invoice::create($invoiceData);
+            'tax_amount' => $totalAmount * 0.20, // UK VAT 20%
+            'total_amount' => $totalAmount * 1.20,
+            'status' => 'pending',
+        ]);
 
         // Process payment based on payment gateway (Stripe only)
         if ($subscription->stripe_subscription_id) {
             $this->processStripePayment($subscription, $invoice);
-        } elseif ($subscription->tier === 'basecamp' && $subscription->user_id) {
-            // For basecamp users, try to charge payment method directly
-            $this->processBasecampPayment($subscription, $invoice);
         } else {
             // Manual payment required
             $this->sendManualPaymentRequest($subscription, $invoice);
@@ -135,123 +123,6 @@ class ProcessMonthlyBilling extends Command
         // TODO: Send email notification for manual payment
         Log::info("Manual payment required for subscription {$subscription->id}, invoice {$invoice->id}");
         $this->warn("Manual payment required for subscription {$subscription->id}");
-    }
-
-    protected function processBasecampPayment(SubscriptionRecord $subscription, Invoice $invoice)
-    {
-        try {
-            $user = \App\Models\User::find($subscription->user_id);
-            if (!$user || !$user->stripe_customer_id) {
-                Log::warning("Basecamp user {$user->id} has no Stripe customer ID");
-                return;
-            }
-
-            // Get default payment method
-            $paymentMethod = $this->stripeService->getDefaultPaymentMethod($user->stripe_customer_id);
-            
-            if ($paymentMethod) {
-                // Create payment intent and charge
-                $paymentIntent = $this->stripeService->createPaymentIntent([
-                    'amount' => $invoice->total_amount * 100,
-                    'currency' => 'usd',
-                    'customer' => $user->stripe_customer_id,
-                    'payment_method' => $paymentMethod->id,
-                    'confirm' => true,
-                    'description' => "Monthly subscription for invoice {$invoice->invoice_number}",
-                    'metadata' => [
-                        'invoice_id' => $invoice->id,
-                        'subscription_id' => $subscription->id,
-                        'user_id' => $user->id,
-                        'tier' => 'basecamp',
-                    ],
-                ]);
-
-                if ($paymentIntent->status === 'succeeded') {
-                    // Payment succeeded
-                    $invoice->update([
-                        'status' => 'paid',
-                        'paid_date' => now(),
-                    ]);
-
-                    \App\Models\Payment::create([
-                        'invoice_id' => $invoice->id,
-                        'user_id' => $user->id,
-                        'payment_method' => 'stripe',
-                        'amount' => $invoice->total_amount,
-                        'transaction_id' => $paymentIntent->id,
-                        'status' => 'completed',
-                        'payment_date' => now(),
-                    ]);
-
-                    $subscription->update([
-                        'status' => 'active',
-                        'payment_failed_count' => 0,
-                        'last_payment_date' => now(),
-                    ]);
-
-                    $user->update([
-                        'payment_grace_period_start' => null,
-                        'last_payment_failure_date' => null,
-                    ]);
-
-                    Log::info("Basecamp payment succeeded for subscription {$subscription->id}, invoice {$invoice->id}");
-                } else {
-                    // Payment failed
-                    $this->handleBasecampPaymentFailure($subscription, $invoice, $paymentIntent);
-                }
-            } else {
-                // No payment method - create failure log
-                $this->handleBasecampPaymentFailure($subscription, $invoice, null);
-            }
-        } catch (\Exception $e) {
-            Log::error("Failed to process basecamp payment: " . $e->getMessage());
-            $this->handleBasecampPaymentFailure($subscription, $invoice, null);
-        }
-    }
-
-    protected function handleBasecampPaymentFailure(SubscriptionRecord $subscription, Invoice $invoice, $paymentIntent = null)
-    {
-        // Create payment failure log
-        \App\Models\PaymentFailureLog::create([
-            'user_id' => $subscription->user_id,
-            'subscription_id' => $subscription->id,
-            'invoice_id' => $invoice->id,
-            'payment_method' => 'stripe',
-            'transaction_id' => $paymentIntent?->id,
-            'amount' => $invoice->total_amount,
-            'currency' => 'usd',
-            'failure_reason' => $paymentIntent ? 'payment_declined' : 'no_payment_method',
-            'failure_message' => $paymentIntent?->last_payment_error->message ?? 'No payment method on file',
-            'retry_attempt' => 1,
-            'failure_date' => now(),
-            'status' => 'pending_retry',
-        ]);
-
-        // Update subscription
-        $subscription->update([
-            'status' => 'past_due',
-            'payment_failed_count' => ($subscription->payment_failed_count ?? 0) + 1,
-        ]);
-
-        // Update user
-        if ($subscription->user_id) {
-            $user = \App\Models\User::find($subscription->user_id);
-            if ($user) {
-                $user->update([
-                    'last_payment_failure_date' => now(),
-                ]);
-
-                // If 3rd failure, start grace period
-                if ($subscription->payment_failed_count >= 3 && !$user->payment_grace_period_start) {
-                    $user->update([
-                        'payment_grace_period_start' => now(),
-                        'status' => 'suspended',
-                    ]);
-                }
-            }
-        }
-
-        Log::warning("Basecamp payment failed for subscription {$subscription->id}, invoice {$invoice->id}");
     }
 
     protected function getTierPrice($tier)

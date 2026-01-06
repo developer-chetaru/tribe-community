@@ -7,19 +7,8 @@ use App\Services\Billing\StripeService;
 use App\Models\SubscriptionRecord;
 use App\Models\PaymentRecord;
 use App\Models\Organisation;
-use App\Models\User;
-use App\Models\Invoice;
-use App\Models\Payment;
-use App\Models\PaymentFailureLog;
-use App\Models\SubscriptionEvent;
-use App\Mail\PaymentConfirmationMail;
-use App\Mail\PaymentFailedMail;
-use App\Mail\AccountSuspendedMail;
-use App\Mail\AccountReactivatedMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 
 class StripeWebhookController extends Controller
 {
@@ -101,97 +90,29 @@ class StripeWebhookController extends Controller
             $subscription = SubscriptionRecord::where('stripe_subscription_id', $invoice->subscription)->first();
 
             if ($subscription) {
-                DB::beginTransaction();
-                try {
-                    $subscription->update([
-                        'status' => 'active',
-                        'last_payment_date' => now(),
-                        'payment_failed_count' => 0, // Reset failure count
-                    ]);
+                $subscription->update([
+                    'status' => 'active',
+                    'last_payment_date' => now(),
+                ]);
 
-                    // Update user status if basecamp user
-                    if ($subscription->user_id) {
-                        $user = User::find($subscription->user_id);
-                        if ($user) {
-                            $user->update([
-                                'payment_grace_period_start' => null,
-                                'last_payment_failure_date' => null,
-                                'suspension_date' => null,
-                                'status' => $user->email_verified_at ? 'active_verified' : 'active_unverified',
-                            ]);
-                        }
-                    }
+                // Record payment
+                PaymentRecord::create([
+                    'organisation_id' => $subscription->organisation_id,
+                    'subscription_id' => $subscription->id,
+                    'stripe_invoice_id' => $invoice->id,
+                    'stripe_payment_intent_id' => $invoice->payment_intent,
+                    'amount' => $invoice->amount_paid / 100,
+                    'currency' => $invoice->currency,
+                    'status' => 'succeeded',
+                    'type' => 'subscription_payment',
+                    'paid_at' => now(),
+                ]);
 
-                    // Find and update invoice
-                    $dbInvoice = Invoice::where('subscription_id', $subscription->id)
-                        ->where('status', 'unpaid')
-                        ->orderBy('due_date', 'asc')
-                        ->first();
-
-                    if ($dbInvoice) {
-                        $dbInvoice->update([
-                            'status' => 'paid',
-                            'paid_date' => now(),
-                        ]);
-                    }
-
-                    // Record payment
-                    PaymentRecord::create([
-                        'organisation_id' => $subscription->organisation_id,
-                        'subscription_id' => $subscription->id,
-                        'stripe_invoice_id' => $invoice->id,
-                        'stripe_payment_intent_id' => $invoice->payment_intent,
-                        'amount' => $invoice->amount_paid / 100,
-                        'currency' => $invoice->currency,
-                        'status' => 'succeeded',
-                        'type' => 'subscription_payment',
-                        'paid_at' => now(),
-                    ]);
-
-                    // Mark failure logs as resolved
-                    if ($dbInvoice) {
-                        PaymentFailureLog::where('invoice_id', $dbInvoice->id)
-                            ->where('status', '!=', 'resolved')
-                            ->update([
-                                'status' => 'resolved',
-                                'resolved_at' => now(),
-                            ]);
-                    }
-
-                    // Log subscription event
-                    SubscriptionEvent::create([
-                        'subscription_id' => $subscription->id,
-                        'user_id' => $subscription->user_id,
-                        'organisation_id' => $subscription->organisation_id,
-                        'event_type' => 'payment_succeeded',
-                        'event_data' => [
-                            'stripe_invoice_id' => $invoice->id,
-                            'amount' => $invoice->amount_paid / 100,
-                        ],
-                        'triggered_by' => 'webhook',
-                        'event_date' => now(),
-                        'notes' => "Payment succeeded via Stripe webhook",
-                    ]);
-
-                    DB::commit();
-
-                    // Send payment success email
-                    if ($subscription->user_id) {
-                        $user = User::find($subscription->user_id);
-                        if ($user && $dbInvoice) {
-                            try {
-                                Mail::to($user->email)->send(new PaymentConfirmationMail($user, $dbInvoice));
-                            } catch (\Exception $e) {
-                                Log::error("Failed to send payment confirmation email: " . $e->getMessage());
-                            }
-                        }
-                    } elseif ($subscription->organisation_id) {
-                        $organisation = Organisation::find($subscription->organisation_id);
-                        // TODO: Send email notification to organisation admin
-                    }
-                } catch (\Exception $e) {
-                    DB::rollBack();
-                    Log::error('Failed to process payment succeeded webhook: ' . $e->getMessage());
+                // Send payment success email
+                $organisation = Organisation::find($subscription->organisation_id);
+                if ($organisation) {
+                    // TODO: Send email notification
+                    // Mail::to($organisation->admin_email)->send(new PaymentSuccessEmail($invoice));
                 }
             }
         }
@@ -208,114 +129,34 @@ class StripeWebhookController extends Controller
             $subscription = SubscriptionRecord::where('stripe_subscription_id', $invoice->subscription)->first();
 
             if ($subscription) {
-                DB::beginTransaction();
-                try {
-                    $newFailureCount = ($subscription->payment_failed_count ?? 0) + 1;
-                    
-                    $subscription->update([
-                        'status' => 'past_due',
-                        'payment_failed_count' => $newFailureCount,
-                    ]);
+                $subscription->update([
+                    'status' => 'past_due',
+                    'payment_failed_count' => $subscription->payment_failed_count + 1,
+                ]);
 
-                    // Find associated invoice
-                    $dbInvoice = Invoice::where('subscription_id', $subscription->id)
-                        ->where('status', 'unpaid')
-                        ->orderBy('due_date', 'asc')
-                        ->first();
+                // Record failed payment
+                PaymentRecord::create([
+                    'organisation_id' => $subscription->organisation_id,
+                    'subscription_id' => $subscription->id,
+                    'stripe_invoice_id' => $invoice->id,
+                    'stripe_payment_intent_id' => $invoice->payment_intent,
+                    'amount' => $invoice->amount_due / 100,
+                    'currency' => $invoice->currency,
+                    'status' => 'failed',
+                    'type' => 'subscription_payment',
+                    'failure_reason' => $invoice->last_finalization_error->message ?? 'Unknown',
+                ]);
 
-                    // Record failed payment
-                    PaymentRecord::create([
-                        'organisation_id' => $subscription->organisation_id,
-                        'subscription_id' => $subscription->id,
-                        'stripe_invoice_id' => $invoice->id,
-                        'stripe_payment_intent_id' => $invoice->payment_intent,
-                        'amount' => $invoice->amount_due / 100,
-                        'currency' => $invoice->currency,
-                        'status' => 'failed',
-                        'type' => 'subscription_payment',
-                        'failure_reason' => $invoice->last_finalization_error->message ?? 'Unknown',
-                    ]);
+                // Send payment failed email
+                $organisation = Organisation::find($subscription->organisation_id);
+                if ($organisation) {
+                    // TODO: Send email notification
+                    // Mail::to($organisation->admin_email)->send(new PaymentFailedEmail($invoice));
+                }
 
-                    // Create payment failure log
-                    if ($dbInvoice) {
-                        PaymentFailureLog::create([
-                            'user_id' => $subscription->user_id,
-                            'organisation_id' => $subscription->organisation_id,
-                            'subscription_id' => $subscription->id,
-                            'invoice_id' => $dbInvoice->id,
-                            'payment_method' => 'stripe',
-                            'transaction_id' => $invoice->payment_intent,
-                            'amount' => $invoice->amount_due / 100,
-                            'currency' => $invoice->currency,
-                            'failure_reason' => 'payment_declined',
-                            'failure_message' => $invoice->last_finalization_error->message ?? 'Payment failed',
-                            'retry_attempt' => $newFailureCount,
-                            'failure_date' => now(),
-                            'status' => 'pending_retry',
-                        ]);
-                    }
-
-                    // Update user's last payment failure date
-                    if ($subscription->user_id) {
-                        $user = User::find($subscription->user_id);
-                        if ($user) {
-                            $user->update([
-                                'last_payment_failure_date' => now(),
-                            ]);
-
-                            // If 3rd failure, start grace period
-                            if ($newFailureCount >= 3 && !$user->payment_grace_period_start) {
-                                $user->update([
-                                    'payment_grace_period_start' => now(),
-                                    'status' => 'suspended', // Temporarily suspended during grace period
-                                ]);
-                            }
-                        }
-                    }
-
-                    // Log subscription event
-                    SubscriptionEvent::create([
-                        'subscription_id' => $subscription->id,
-                        'user_id' => $subscription->user_id,
-                        'organisation_id' => $subscription->organisation_id,
-                        'event_type' => 'payment_failed',
-                        'event_data' => [
-                            'stripe_invoice_id' => $invoice->id,
-                            'amount' => $invoice->amount_due / 100,
-                            'failure_count' => $newFailureCount,
-                            'failure_reason' => $invoice->last_finalization_error->message ?? 'Unknown',
-                        ],
-                        'triggered_by' => 'webhook',
-                        'event_date' => now(),
-                        'notes' => "Payment failed via Stripe webhook - Attempt {$newFailureCount}",
-                    ]);
-
-                    DB::commit();
-
-                    // Send payment failed email
-                    if ($subscription->user_id) {
-                        $user = User::find($subscription->user_id);
-                        if ($user && $dbInvoice) {
-                            try {
-                                // Send Day 1 payment failed email
-                                Mail::to($user->email)->send(new PaymentFailedMail($user, $dbInvoice, 1));
-                            } catch (\Exception $e) {
-                                Log::error("Failed to send payment failed email: " . $e->getMessage());
-                            }
-                        }
-                    } elseif ($subscription->organisation_id) {
-                        $organisation = Organisation::find($subscription->organisation_id);
-                        // TODO: Send email notification to organisation admin
-                    }
-
-                    // Check if we should enter grace period (after 3 failures)
-                    if ($newFailureCount >= 3) {
-                        // Grace period will be handled by ProcessPaymentRetries command
-                        Log::warning("Payment failed 3+ times for subscription {$subscription->id} - Grace period will start");
-                    }
-                } catch (\Exception $e) {
-                    DB::rollBack();
-                    Log::error('Failed to process payment failed webhook: ' . $e->getMessage());
+                // Check if we should suspend the account
+                if ($subscription->payment_failed_count >= 3) {
+                    $this->suspendAccount($subscription);
                 }
             }
         }
@@ -337,21 +178,6 @@ class StripeWebhookController extends Controller
                 'current_period_start' => \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_start),
                 'current_period_end' => \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end),
                 'next_billing_date' => \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end),
-            ]);
-
-            // Log subscription event
-            SubscriptionEvent::create([
-                'subscription_id' => $subscription->id,
-                'user_id' => $subscription->user_id,
-                'organisation_id' => $subscription->organisation_id,
-                'event_type' => 'subscription_updated',
-                'event_data' => [
-                    'stripe_status' => $stripeSubscription->status,
-                    'user_count' => $stripeSubscription->items->data[0]->quantity ?? $subscription->user_count,
-                ],
-                'triggered_by' => 'webhook',
-                'event_date' => now(),
-                'notes' => "Subscription updated via Stripe webhook",
             ]);
         }
     }
@@ -406,13 +232,7 @@ class StripeWebhookController extends Controller
     {
         Log::warning('Payment intent failed', ['payment_intent_id' => $paymentIntent->id]);
 
-        // Try to find associated invoice from metadata
-        $invoiceId = $paymentIntent->metadata->invoice_id ?? null;
-        $invoice = $invoiceId ? Invoice::find($invoiceId) : null;
-
         PaymentRecord::create([
-            'organisation_id' => $invoice?->organisation_id,
-            'subscription_id' => $invoice?->subscription_id,
             'stripe_payment_intent_id' => $paymentIntent->id,
             'amount' => $paymentIntent->amount / 100,
             'currency' => $paymentIntent->currency,
@@ -420,35 +240,6 @@ class StripeWebhookController extends Controller
             'type' => 'one_time_payment',
             'failure_reason' => $paymentIntent->last_payment_error->message ?? 'Unknown',
         ]);
-
-        // Create payment failure log if invoice exists
-        if ($invoice) {
-            PaymentFailureLog::create([
-                'user_id' => $invoice->user_id,
-                'organisation_id' => $invoice->organisation_id,
-                'subscription_id' => $invoice->subscription_id,
-                'invoice_id' => $invoice->id,
-                'payment_method' => 'stripe',
-                'transaction_id' => $paymentIntent->id,
-                'amount' => $paymentIntent->amount / 100,
-                'currency' => $paymentIntent->currency,
-                'failure_reason' => 'payment_declined',
-                'failure_message' => $paymentIntent->last_payment_error->message ?? 'Payment intent failed',
-                'retry_attempt' => 1,
-                'failure_date' => now(),
-                'status' => 'pending_retry',
-            ]);
-
-            // Update user's last payment failure date
-            if ($invoice->user_id) {
-                $user = User::find($invoice->user_id);
-                if ($user) {
-                    $user->update([
-                        'last_payment_failure_date' => now(),
-                    ]);
-                }
-            }
-        }
     }
 
     /**
@@ -585,73 +376,20 @@ class StripeWebhookController extends Controller
     {
         Log::warning('Suspending account', ['subscription_id' => $subscription->id]);
 
-        DB::beginTransaction();
-        try {
+        $organisation = Organisation::find($subscription->organisation_id);
+
+        if ($organisation) {
+            $organisation->update([
+                'status' => 'suspended',
+            ]);
+
             $subscription->update([
                 'status' => 'suspended',
                 'suspended_at' => now(),
             ]);
 
-            // Update user if basecamp user
-            if ($subscription->user_id) {
-                $user = User::find($subscription->user_id);
-                if ($user) {
-                    $user->update([
-                        'status' => 'suspended',
-                        'suspension_date' => now(),
-                    ]);
-                }
-            }
-
-            // Update organisation if exists
-            if ($subscription->organisation_id) {
-                $organisation = Organisation::find($subscription->organisation_id);
-                if ($organisation) {
-                    $organisation->update([
-                        'status' => 'suspended',
-                    ]);
-                }
-            }
-
-            // Log subscription event
-            SubscriptionEvent::create([
-                'subscription_id' => $subscription->id,
-                'user_id' => $subscription->user_id,
-                'organisation_id' => $subscription->organisation_id,
-                'event_type' => 'suspended',
-                'event_data' => [
-                    'suspension_date' => now()->toDateString(),
-                    'reason' => 'payment_failed_multiple_attempts',
-                ],
-                'triggered_by' => 'webhook',
-                'event_date' => now(),
-                'notes' => "Account suspended via Stripe webhook after multiple payment failures",
-            ]);
-
-            DB::commit();
-
-            // Send suspension notification
-            if ($subscription->user_id) {
-                $user = User::find($subscription->user_id);
-                if ($user) {
-                    $unpaidInvoice = Invoice::where('subscription_id', $subscription->id)
-                        ->where('status', 'unpaid')
-                        ->orderBy('due_date', 'asc')
-                        ->first();
-                    
-                    try {
-                        Mail::to($user->email)->send(new AccountSuspendedMail($user, $unpaidInvoice));
-                    } catch (\Exception $e) {
-                        Log::error("Failed to send suspension email: " . $e->getMessage());
-                    }
-                }
-            } elseif ($subscription->organisation_id) {
-                $organisation = Organisation::find($subscription->organisation_id);
-                // TODO: Send email notification to organisation admin
-            }
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Failed to suspend account via webhook: ' . $e->getMessage());
+            // TODO: Send suspension notification
+            // Mail::to($organisation->admin_email)->send(new AccountSuspendedEmail());
         }
     }
 }

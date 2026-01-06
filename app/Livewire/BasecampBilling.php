@@ -9,12 +9,9 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\Billing\StripeService;
 use App\Services\OneSignalService;
-use App\Mail\PaymentConfirmationMail;
-use App\Mail\AccountReactivatedMail;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
 
 class BasecampBilling extends Component
@@ -30,18 +27,6 @@ class BasecampBilling extends Component
     
     public $userId = null;
     public $invoiceId = null;
-    
-    // Filter/search properties
-    public $searchQuery = '';
-    public $statusFilter = '';
-    public $showCancelModal = false;
-    public $showUpdatePaymentModal = false;
-    public $paymentMethod = null;
-    public $showInvoiceModal = false;
-    public $selectedInvoiceForView = null;
-    public $showShareModal = false;
-    public $selectedInvoiceForShare = null;
-    public $shareLink = '';
     
     public function mount($user_id = null)
     {
@@ -373,14 +358,6 @@ class BasecampBilling extends Component
             return;
         }
         
-        // Check if terms checkbox is checked (if present in request)
-        $termsAccepted = request()->input('terms_accepted', false);
-        if (!$termsAccepted) {
-            session()->flash('error', 'Please accept the Terms of Service and Privacy Policy to continue.');
-            $this->isProcessingStripePayment = false;
-            return;
-        }
-        
         $this->isProcessingStripePayment = true;
         
         try {
@@ -439,44 +416,16 @@ class BasecampBilling extends Component
                 'paid_at' => now(),
             ]);
             
-            // Check if account was suspended
-            $wasSuspended = $user->status === 'suspended';
-            
-            // Update user status
-            $user->update([
-                'status' => $user->email_verified_at ? 'active_verified' : 'active_unverified',
-                'payment_grace_period_start' => null,
-                'last_payment_failure_date' => null,
-                'suspension_date' => null,
-            ]);
-            
             // Activate subscription
             $this->subscription->update([
                 'status' => 'active',
                 'current_period_start' => now(),
                 'current_period_end' => now()->addMonth(),
                 'next_billing_date' => now()->addMonth(),
-                'payment_failed_count' => 0, // Reset failure count
             ]);
             
-            // Send payment confirmation email
-            try {
-                if ($wasSuspended) {
-                    Mail::to($user->email)->send(new AccountReactivatedMail($user, $this->selectedInvoice));
-                } else {
-                    Mail::to($user->email)->send(new PaymentConfirmationMail($user, $this->selectedInvoice));
-                }
-            } catch (\Exception $e) {
-                Log::error("Failed to send payment confirmation email: " . $e->getMessage());
-            }
-            
-            // Send activation email after payment is completed (if not already verified)
-            if (!$user->email_verified_at) {
-                $this->sendActivationEmail($user);
-            }
-            
-            // If payment method was updated, check for other unpaid invoices and retry
-            $this->retryUnpaidInvoicesAfterPaymentMethodUpdate($user);
+            // Send activation email after payment is completed
+            $this->sendActivationEmail($user);
             
             Log::info("Stripe payment confirmed for basecamp invoice {$this->selectedInvoice->id}: {$paymentIntentId}");
             
@@ -511,197 +460,6 @@ class BasecampBilling extends Component
         $this->showPaymentPage = false;
     }
     
-    public function openCancelModal()
-    {
-        $this->showCancelModal = true;
-    }
-    
-    public function closeCancelModal()
-    {
-        $this->showCancelModal = false;
-    }
-    
-    public function cancelSubscription()
-    {
-        try {
-            if (!$this->subscription) {
-                session()->flash('error', 'No subscription found.');
-                return;
-            }
-            
-            $user = \App\Models\User::find($this->userId);
-            if (!$user) {
-                session()->flash('error', 'User not found.');
-                return;
-            }
-            
-            // Update subscription status to canceled
-            $this->subscription->update([
-                'status' => 'canceled',
-                'canceled_at' => now(),
-            ]);
-            
-            // If Stripe subscription exists, cancel it
-            if ($this->subscription->stripe_subscription_id) {
-                $stripeService = new StripeService();
-                $stripeService->cancelSubscription($this->subscription->stripe_subscription_id, true);
-            }
-            
-            session()->flash('success', 'Subscription has been canceled. You will continue to have access until the end of your billing period.');
-            $this->closeCancelModal();
-            $this->loadSubscriptionForUser($user);
-            
-        } catch (\Exception $e) {
-            Log::error('Failed to cancel subscription: ' . $e->getMessage());
-            session()->flash('error', 'Failed to cancel subscription: ' . $e->getMessage());
-        }
-    }
-    
-    public function openUpdatePaymentModal()
-    {
-        $this->loadPaymentMethod();
-        $this->showUpdatePaymentModal = true;
-    }
-    
-    public function closeUpdatePaymentModal()
-    {
-        $this->showUpdatePaymentModal = false;
-    }
-    
-    public function loadPaymentMethod()
-    {
-        if (!$this->subscription || !$this->userId) {
-            return;
-        }
-        
-        // Get the last successful payment for this user
-        $lastPayment = Payment::where('user_id', $this->userId)
-            ->where('payment_method', 'card')
-            ->whereNotNull('transaction_id')
-            ->latest()
-            ->first();
-            
-        if ($lastPayment && $lastPayment->transaction_id) {
-            try {
-                \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
-                $paymentIntent = \Stripe\PaymentIntent::retrieve($lastPayment->transaction_id);
-                
-                if ($paymentIntent->payment_method) {
-                    $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentIntent->payment_method);
-                    $this->paymentMethod = [
-                        'brand' => $paymentMethod->card->brand ?? 'Card',
-                        'last4' => $paymentMethod->card->last4 ?? '****',
-                        'exp_month' => $paymentMethod->card->exp_month ?? null,
-                        'exp_year' => $paymentMethod->card->exp_year ?? null,
-                    ];
-                }
-            } catch (\Exception $e) {
-                Log::warning('Failed to load payment method: ' . $e->getMessage());
-            }
-        }
-    }
-    
-    public function openInvoiceModal($invoiceId)
-    {
-        $user = \App\Models\User::find($this->userId);
-        if (!$user) {
-            session()->flash('error', 'User not found.');
-            return;
-        }
-        
-        $invoice = Invoice::with(['subscription', 'payments.paidBy'])
-            ->findOrFail($invoiceId);
-        
-        // Check if invoice belongs to this user
-        if ($invoice->user_id !== $user->id) {
-            session()->flash('error', 'You can only view your own invoices.');
-            return;
-        }
-        
-        // Load Stripe payment method details for each payment
-        foreach ($invoice->payments as $payment) {
-            if ($payment->transaction_id && $payment->payment_method === 'stripe') {
-                try {
-                    \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
-                    $paymentIntent = \Stripe\PaymentIntent::retrieve($payment->transaction_id);
-                    
-                    if ($paymentIntent->payment_method) {
-                        $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentIntent->payment_method);
-                        $payment->stripe_card_brand = $paymentMethod->card->brand ?? null;
-                        $payment->stripe_card_last4 = $paymentMethod->card->last4 ?? null;
-                        $payment->stripe_card_exp_month = $paymentMethod->card->exp_month ?? null;
-                        $payment->stripe_card_exp_year = $paymentMethod->card->exp_year ?? null;
-                    }
-                } catch (\Exception $e) {
-                    Log::warning('Failed to retrieve Stripe payment method: ' . $e->getMessage());
-                }
-            }
-        }
-        
-        $this->selectedInvoiceForView = $invoice;
-        $this->showInvoiceModal = true;
-    }
-    
-    public function closeInvoiceModal()
-    {
-        $this->showInvoiceModal = false;
-        $this->selectedInvoiceForView = null;
-    }
-    
-    public function openShareModal($invoiceId)
-    {
-        $user = \App\Models\User::find($this->userId);
-        if (!$user) {
-            session()->flash('error', 'User not found.');
-            return;
-        }
-        
-        $invoice = Invoice::findOrFail($invoiceId);
-        
-        // Check if invoice belongs to this user
-        if ($invoice->user_id !== $user->id) {
-            session()->flash('error', 'You can only share your own invoices.');
-            return;
-        }
-        
-        $this->selectedInvoiceForShare = $invoice;
-        $this->shareLink = $invoice->getShareableUrl();
-        $this->showShareModal = true;
-    }
-    
-    public function closeShareModal()
-    {
-        $this->showShareModal = false;
-        $this->selectedInvoiceForShare = null;
-        $this->shareLink = '';
-    }
-    
-    public function copyShareLink()
-    {
-        if ($this->shareLink) {
-            $this->dispatch('copy-to-clipboard', text: $this->shareLink);
-        }
-    }
-    
-    public function shareViaWhatsApp()
-    {
-        if ($this->shareLink && $this->selectedInvoiceForShare) {
-            $message = urlencode("Please find the invoice link for Invoice {$this->selectedInvoiceForShare->invoice_number}:\n\n{$this->shareLink}");
-            $whatsappUrl = "https://wa.me/?text={$message}";
-            $this->dispatch('open-window', url: $whatsappUrl);
-        }
-    }
-    
-    public function shareViaEmail()
-    {
-        if ($this->shareLink && $this->selectedInvoiceForShare) {
-            $subject = urlencode("Invoice {$this->selectedInvoiceForShare->invoice_number}");
-            $body = urlencode("Please find the invoice link:\n\n{$this->shareLink}");
-            $mailtoUrl = "mailto:?subject={$subject}&body={$body}";
-            $this->dispatch('open-window', url: $mailtoUrl);
-        }
-    }
-    
     public function render()
     {
         // Get user - if no user, show empty billing page
@@ -722,27 +480,11 @@ class BasecampBilling extends Component
             $this->loadSubscriptionForUser($user);
         }
         
-        // Get invoices for this user with filters
-        $invoicesQuery = Invoice::where('user_id', $this->userId)
-            ->where('tier', 'basecamp');
-            
-        // Apply search filter
-        if ($this->searchQuery) {
-            $invoicesQuery->where(function($q) {
-                $q->where('invoice_number', 'like', '%' . $this->searchQuery . '%')
-                  ->orWhere('total_amount', 'like', '%' . $this->searchQuery . '%');
-            });
-        }
-        
-        // Apply status filter
-        if ($this->statusFilter) {
-            $invoicesQuery->where('status', $this->statusFilter);
-        }
-        
-        $invoices = $invoicesQuery->orderBy('created_at', 'desc')->get();
-        
-        // Load payment method for display
-        $this->loadPaymentMethod();
+        // Get invoices for this user
+        $invoices = Invoice::where('user_id', $this->userId)
+            ->where('tier', 'basecamp')
+            ->orderBy('created_at', 'desc')
+            ->get();
             
         $isActive = $this->subscription && 
                    $this->subscription->status === 'active' && 
