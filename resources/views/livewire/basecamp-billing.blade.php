@@ -83,9 +83,9 @@
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                             @if($invoice->status === 'unpaid')
-                                                <button 
-                                                    wire:click="openPaymentModal({{ $invoice->id }})"
-                                                    class="text-[#EB1C24] hover:text-red-600 font-semibold">
+                                                <button type="button" 
+                                                        onclick="handlePaymentClick({{ $invoice->id }}, {{ $userId ?? auth()->id() }})"
+                                                        class="text-[#EB1C24] hover:text-red-600 font-semibold">
                                                     Pay Now
                                                 </button>
                                             @endif
@@ -230,48 +230,65 @@
                     }
                 });
                 
-                // Immediate redirect to Stripe - PRIMARY METHOD
-                Livewire.on('redirect-stripe-immediate', (event) => {
-                    console.log('redirect-stripe-immediate event received:', event);
+            
+            // Also listen outside livewire:init as fallback
+            document.addEventListener('DOMContentLoaded', () => {
+                Livewire.on('redirect-to-stripe', (event) => {
+                    console.log('redirect-to-stripe event (DOMContentLoaded):', event);
                     const url = event.url || event[0]?.url;
-                    console.log('Stripe URL from event:', url);
-                    if (url && (url.startsWith('https://checkout.stripe.com') || url.startsWith('http://checkout.stripe.com'))) {
-                        console.log('REDIRECTING TO STRIPE NOW:', url);
-                        window.location.href = url; // Use href for better compatibility
-                    } else {
-                        console.error('Invalid URL in event, trying property...');
-                        setTimeout(() => {
-                            const propUrl = @this.get('stripeCheckoutUrl');
-                            if (propUrl) {
-                                console.log('Using property URL:', propUrl);
-                                window.location.href = propUrl;
-                            }
-                        }, 50);
+                    if (url) {
+                        console.log('Redirecting to Stripe (fallback):', url);
+                        window.location.href = url;
                     }
                 });
             });
-            
-            // Check property immediately after any Livewire update
-            document.addEventListener('livewire:init', () => {
-                Livewire.hook('morph.updated', ({ component }) => {
-                    const url = component.get('stripeCheckoutUrl');
-                    if (url && (url.startsWith('https://checkout.stripe.com') || url.startsWith('http://checkout.stripe.com'))) {
-                        console.log('Stripe URL detected in property after update, redirecting immediately...', url);
-                        window.location.replace(url);
+        </script>
+        
+        <script>
+            function handlePaymentClick(invoiceId, userId) {
+                console.log('Payment button clicked', { invoiceId, userId });
+                
+                if (!invoiceId || !userId) {
+                    alert('Missing payment information. Please refresh the page.');
+                    return;
+                }
+                
+                // Create form data
+                const formData = new FormData();
+                formData.append('_token', '{{ csrf_token() }}');
+                formData.append('invoice_id', invoiceId);
+                formData.append('user_id', userId);
+                
+                // Submit via fetch
+                fetch('{{ route("basecamp.checkout.create") }}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
                     }
+                })
+                .then(response => {
+                    console.log('Response received', response);
+                    if (response.redirected) {
+                        // If server redirects, follow it
+                        window.location.href = response.url;
+                        return;
+                    }
+                    return response.text();
+                })
+                .then(html => {
+                    if (html) {
+                        // If HTML is returned (redirect page), replace current page
+                        document.open();
+                        document.write(html);
+                        document.close();
+                    }
+                })
+                .catch(error => {
+                    console.error('Payment error:', error);
+                    alert('Failed to process payment. Please try again.');
                 });
-            });
-            
-            // Immediate check when property is set - runs on every Livewire update
-            Livewire.hook('morph.updated', () => {
-                setTimeout(() => {
-                    const url = @this.get('stripeCheckoutUrl');
-                    if (url && (url.startsWith('https://checkout.stripe.com') || url.startsWith('http://checkout.stripe.com'))) {
-                        console.log('Stripe URL detected, redirecting NOW:', url);
-                        window.location.replace(url);
-                    }
-                }, 50);
-            });
+            }
         </script>
     </div>
 </div>

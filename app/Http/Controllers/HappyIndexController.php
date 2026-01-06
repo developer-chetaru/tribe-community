@@ -79,9 +79,17 @@ class HappyIndexController extends Controller
             ]);
         }
 
-        $user = User::where('id', $userId)->where('status', true)->first();
+        $user = User::where('id', $userId)
+            ->whereIn('status', ['active_verified', 'active_unverified', true, '1', 1])
+            ->first();
 
         if (! $user || $user->onLeave) {
+            Log::warning('User not eligible for HappyIndex', [
+                'user_id' => $userId,
+                'user_found' => $user ? true : false,
+                'user_status' => $user ? $user->status : null,
+                'onLeave' => $user ? $user->onLeave : null,
+            ]);
             return response()->json(['status' => false, 'message' => 'User not eligible']);
         }
       

@@ -111,6 +111,10 @@ Route::get('/refresh-csrf-token', function () {
 
 // Basecamp Billing - Allow access without login (payment first, then activation)
 // User ID will be passed via session or query parameter
+Route::get('/test-stripe-redirect', function() {
+    return view('test-stripe-redirect');
+})->name('test.stripe.redirect');
+
 Route::get('/basecamp/billing', \App\Livewire\BasecampBilling::class)->name('basecamp.billing');
 
 // Basecamp payment routes with rate limiting (10 requests per minute)

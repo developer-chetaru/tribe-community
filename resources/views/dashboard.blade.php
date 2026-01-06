@@ -34,17 +34,58 @@
         </div>
 
             <div class="flex gap-3">
-            <form method="POST" action="{{ route('basecamp.checkout.create') }}" class="flex-1">
-                @csrf
-                <input type="hidden" name="user_id" value="{{ $user->id ?? '' }}">
-                <input type="hidden" name="tier" value="basecamp">
-                <input type="hidden" name="amount" value="1000"> 
-                <button type="submit" 
-                        class="w-full bg-[#EB1C24] text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition">
-                    Pay Now
-                </button>
-            </form>
+            <button type="button" 
+                    onclick="handleDashboardPayment({{ $user->id ?? 0 }})"
+                    class="w-full bg-[#EB1C24] text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition">
+                Pay Now
+            </button>
         </div>
+        
+        <script>
+            function handleDashboardPayment(userId) {
+                if (!userId) {
+                    alert('User ID is missing. Please refresh the page.');
+                    return;
+                }
+                
+                console.log('Dashboard payment initiated', { userId });
+                
+                // First, get or create invoice
+                fetch('{{ route("basecamp.checkout.create") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        tier: 'basecamp',
+                        amount: 1000
+                    })
+                })
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                        return;
+                    }
+                    return response.text();
+                })
+                .then(html => {
+                    if (html) {
+                        // If HTML is returned (redirect page), replace current page
+                        document.open();
+                        document.write(html);
+                        document.close();
+                    }
+                })
+                .catch(error => {
+                    console.error('Payment error:', error);
+                    alert('Failed to process payment. Please try again.');
+                });
+            }
+        </script>
         </div>
         @livewireScripts
     </body>

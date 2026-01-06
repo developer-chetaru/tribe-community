@@ -21,39 +21,72 @@ class BasecampStripeCheckoutController extends Controller
     public function createCheckoutSession(Request $request)
     {
         try {
-            $userId = $request->input('user_id');
-            $amount = $request->input('amount', 1000); // Default $10.00
+            Log::info('createCheckoutSession called', [
+                'all_input' => $request->all(),
+                'method' => $request->method(),
+                'headers' => $request->headers->all(),
+            ]);
             
+            $invoiceId = $request->input('invoice_id');
+            $userId = $request->input('user_id');
+            $amount = $request->input('amount', null); // For dashboard payment without invoice
+            
+            // If no invoice_id but user_id and amount provided, create invoice first
+            if (!$invoiceId && $userId && $amount) {
+                $user = User::findOrFail($userId);
+                
+                // Create or get subscription
+                $subscription = \App\Models\SubscriptionRecord::firstOrCreate(
+                    [
+                        'user_id' => $user->id,
+                        'tier' => 'basecamp',
+                    ],
+                    [
+                        'organisation_id' => null,
+                        'status' => 'inactive',
+                        'user_count' => 1,
+                    ]
+                );
+                
+                // Create invoice
+                $invoice = Invoice::create([
+                    'user_id' => $user->id,
+                    'organisation_id' => null,
+                    'subscription_id' => $subscription->id,
+                    'invoice_number' => Invoice::generateInvoiceNumber(),
+                    'tier' => 'basecamp',
+                    'user_count' => 1,
+                    'price_per_user' => $amount / 100, // Convert from cents
+                    'subtotal' => $amount / 100,
+                    'tax_amount' => 0,
+                    'total_amount' => $amount / 100,
+                    'status' => 'unpaid',
+                    'due_date' => now()->addDays(7),
+                    'invoice_date' => now(),
+                ]);
+                
+                $invoiceId = $invoice->id;
+            }
+            
+            if (!$invoiceId || !$userId) {
+                Log::error('Missing parameters', [
+                    'invoice_id' => $invoiceId,
+                    'user_id' => $userId,
+                ]);
+                return back()->with('error', 'Missing required parameters.');
+            }
+            
+            $invoice = Invoice::findOrFail($invoiceId);
             $user = User::findOrFail($userId);
             
-            // Create invoice
-            $subscription = SubscriptionRecord::firstOrCreate(
-                [
-                    'user_id' => $user->id,
-                    'tier' => 'basecamp',
-                ],
-                [
-                    'organisation_id' => null,
-                    'status' => 'inactive',
-                    'user_count' => 1,
-                ]
-            );
-            
-            $invoice = Invoice::create([
-                'user_id' => $user->id,
-                'organisation_id' => null,
-                'subscription_id' => $subscription->id,
-                'invoice_number' => Invoice::generateInvoiceNumber(),
-                'tier' => 'basecamp',
-                'user_count' => 1,
-                'price_per_user' => 10,
-                'subtotal' => 10,
-                'tax_amount' => 0,
-                'total_amount' => 10,
-                'status' => 'unpaid',
-                'due_date' => now()->addDays(7),
-                'invoice_date' => now(),
-            ]);
+            // Verify invoice belongs to user
+            if ($invoice->user_id != $userId) {
+                Log::error('Invoice mismatch', [
+                    'invoice_user_id' => $invoice->user_id,
+                    'request_user_id' => $userId,
+                ]);
+                return back()->with('error', 'Invalid invoice.');
+            }
             
             // Set Stripe key
             Stripe::setApiKey(config('services.stripe.secret'));
@@ -61,7 +94,7 @@ class BasecampStripeCheckoutController extends Controller
             // Create checkout session
             $session = Session::create([
                 'payment_method_types' => ['card'],
-                'customer_email' => $user->email, // Auto-fill customer email
+                'customer_email' => $user->email,
                 'line_items' => [[
                     'price_data' => [
                         'currency' => 'usd',
@@ -69,27 +102,37 @@ class BasecampStripeCheckoutController extends Controller
                             'name' => 'Basecamp Subscription',
                             'description' => 'Monthly subscription for Tribe365 Basecamp',
                         ],
-                        'unit_amount' => $amount,
+                        'unit_amount' => $invoice->total_amount * 100, // Convert to cents
                     ],
                     'quantity' => 1,
                 ]],
                 'mode' => 'payment',
                 'success_url' => route('basecamp.billing.payment.success') . '?session_id={CHECKOUT_SESSION_ID}&invoice_id=' . $invoice->id . '&user_id=' . $user->id,
                 'cancel_url' => route('basecamp.billing') . '?user_id=' . $user->id,
+                'metadata' => [
+                    'invoice_id' => $invoice->id,
+                    'user_id' => $user->id,
+                    'tier' => 'basecamp',
+                ],
             ]);
             
             Log::info('Basecamp checkout session created', [
                 'session_id' => $session->id,
+                'session_url' => $session->url,
                 'invoice_id' => $invoice->id,
                 'user_id' => $user->id,
-                'amount' => $amount,
             ]);
             
-            return redirect($session->url);
+            // Return view with JavaScript redirect - more reliable than redirect()->away()
+            $redirectUrl = $session->url;
+            Log::info('Redirecting to Stripe via JavaScript', ['url' => $redirectUrl]);
+            
+            return response()->view('stripe-redirect', ['url' => $redirectUrl]);
             
         } catch (\Exception $e) {
             Log::error('Failed to create basecamp checkout session: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
+                'input' => $request->all(),
             ]);
             
             return back()->with('error', 'Failed to create payment session. Please try again.');
@@ -98,6 +141,11 @@ class BasecampStripeCheckoutController extends Controller
     
     public function redirectToCheckout(Request $request)
     {
+        // For testing - if test parameter is provided, redirect to test URL
+        if ($request->has('test')) {
+            return redirect()->away('https://checkout.stripe.com/test');
+        }
+        
         $checkoutUrl = session()->pull('stripe_checkout_redirect');
         
         if (!$checkoutUrl) {

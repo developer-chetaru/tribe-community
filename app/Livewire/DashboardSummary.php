@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use App\Models\HappyIndex;
 use App\Models\HptmLearningChecklist;
 use App\Models\HptmLearningType;
+use App\Services\OneSignalService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 
@@ -337,6 +338,13 @@ public function updatedSelectedDepartment($value)
 
     public function happyIndex()
     {
+        $this->validate([
+            'moodStatus' => 'required|integer|in:1,2,3',
+        ], [
+            'moodStatus.required' => 'Please select a mood status.',
+            'moodStatus.in' => 'Invalid mood status selected.',
+        ]);
+
         $userId = auth()->id();
         $moodValue = $this->moodStatus;
 
@@ -352,9 +360,17 @@ public function updatedSelectedDepartment($value)
             return;
         }
 
-        $user = User::where('id', $userId)->where('status', '1')->first();
+        $user = User::where('id', $userId)
+            ->whereIn('status', ['active_verified', 'active_unverified', true, '1', 1])
+            ->first();
 
         if (!$user || $user->onLeave) {
+            Log::warning('User not eligible for HappyIndex in DashboardSummary', [
+                'user_id' => $userId,
+                'user_found' => $user ? true : false,
+                'user_status' => $user ? $user->status : null,
+                'onLeave' => $user ? $user->onLeave : null,
+            ]);
             $this->dispatch('close-leave-modal');
             session()->flash('error', 'User not eligible.');
             return;
@@ -373,6 +389,21 @@ public function updatedSelectedDepartment($value)
         $user->lastHIDate = now()->toDateString();
         $user->updated_at = now();
         $user->save();
+
+        // ✅ Mark sentiment submitted in OneSignal (stops 6PM email reminder)
+        try {
+            $oneSignal = new OneSignalService();
+            $result = $oneSignal->markSentimentSubmitted($userId);
+            Log::info('OneSignal markSentimentSubmitted called from DashboardSummary', [
+                'user_id' => $userId,
+                'result' => $result,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('OneSignal markSentimentSubmitted failed in DashboardSummary', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         $learningChecklistTotalScore = HptmLearningChecklist::leftJoin(
                 'hptm_learning_types',

@@ -244,15 +244,10 @@ class BasecampBilling extends Component
         $checkoutUrl = $this->createStripeCheckoutSession();
         
         if ($checkoutUrl) {
-            Log::info('Stripe checkout URL created', [
-                'url' => $checkoutUrl,
-                'invoice_id' => $this->selectedInvoice->id,
-            ]);
-            
-            // Store URL in public property and dispatch event
-            $this->stripeCheckoutUrl = $checkoutUrl;
-            // Dispatch event with URL for immediate redirect
-            $this->dispatch('redirect-stripe-immediate', url: $checkoutUrl);
+            // Store URL in session for redirect route
+            session()->put('stripe_checkout_redirect', $checkoutUrl);
+            // Use Livewire redirect to go to redirect route
+            return $this->redirect(route('basecamp.checkout.redirect'), navigate: false);
         } else {
             session()->flash('error', 'Failed to create payment session. Please try again.');
             Log::error('openPaymentModal: Failed to create checkout session');
