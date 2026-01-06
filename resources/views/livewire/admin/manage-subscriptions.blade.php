@@ -220,7 +220,7 @@
                         <option value="spark">Spark</option>
                         <option value="momentum">Momentum</option>
                         <option value="vision">Vision</option>
-                        <option value="basecamp">Basecamp (Free)</option>
+                        <option value="basecamp">Basecamp</option>
                     </select>
                     @error('tier') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                 </div>
@@ -302,7 +302,7 @@
                         <option value="spark">Spark</option>
                         <option value="momentum">Momentum</option>
                         <option value="vision">Vision</option>
-                        <option value="basecamp">Basecamp (Free)</option>
+                        <option value="basecamp">Basecamp</option>
                     </select>
                     @error('tier') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                 </div>
