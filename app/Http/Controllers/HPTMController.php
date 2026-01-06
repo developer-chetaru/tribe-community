@@ -17,6 +17,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Concerns\UpdatesUserTimezone;
 
 /**
@@ -386,19 +387,20 @@ class HPTMController extends Controller
      */
  	public function getFreeVersionHomeDetails(Request $request)
     {
-        // COMMENTED OUT: Automatic timezone update from request
-        // Timezone should be set from user profile instead
-        // Update user timezone from request if provided
-        // $this->updateUserTimezoneIfNeeded($request);
-        
-        $user = Auth::user();
-        if (!$user) {
-            return response()->json([
-                'code'    => 401,
-                'status'  => false,
-                'message' => 'Unauthorized',
-            ], 401);
-        }
+        try {
+            // COMMENTED OUT: Automatic timezone update from request
+            // Timezone should be set from user profile instead
+            // Update user timezone from request if provided
+            // $this->updateUserTimezoneIfNeeded($request);
+            
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json([
+                    'code'    => 401,
+                    'status'  => false,
+                    'message' => 'Unauthorized',
+                ], 401);
+            }
 
         $userId              = $user->id;
         $orgId               = $request->input('orgId') ?? $user->orgId;
@@ -418,11 +420,11 @@ class HPTMController extends Controller
         try {
             $oneSignal = new \App\Services\OneSignalService();
             $oneSignal->setUserTagsOnLogin($user);
-            \Log::info('OneSignal tags updated on mobile dashboard access', [
+            Log::info('OneSignal tags updated on mobile dashboard access', [
                 'user_id' => $user->id,
             ]);
         } catch (\Throwable $e) {
-            \Log::warning('OneSignal tag update failed on mobile dashboard access', [
+            Log::warning('OneSignal tag update failed on mobile dashboard access', [
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
             ]);
@@ -435,6 +437,7 @@ class HPTMController extends Controller
         $noOfDaysInMonth = ($yearAndMonth == date('Y-m')) ? date('j') - 1 : cal_days_in_month(CAL_GREGORIAN, $month, $year);
 
         $happyIndexArr = [];
+        $filteredUserIds = []; // Initialize to avoid undefined variable errors
 
         $officeIds     = $officeId ? [$officeId] : [];
         $departmentIds = $departmentId ? [$departmentId] : [];
@@ -469,7 +472,8 @@ class HPTMController extends Controller
             }
         } else {
             // Organisation users: calculate total happy users per day
-            $usersQuery = User::whereIn('status', ['active_verified', 'active_unverified'])->where('orgId', $orgId);
+            // Status is boolean: true = active, false = inactive
+            $usersQuery = User::where('status', true)->where('orgId', $orgId);
             if ($officeIds) $usersQuery->whereIn('officeId', $officeIds);
             if ($departmentIds) $usersQuery->whereIn('departmentId', $departmentIds);
             $filteredUserIds = $usersQuery->pluck('id')->toArray();
@@ -624,6 +628,20 @@ class HPTMController extends Controller
             'message'      => '',
             'data'         => $resultArray,
         ]);
+        } catch (\Exception $e) {
+            Log::error('Error in getFreeVersionHomeDetails API', [
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'code'         => 500,
+                'status'       => false,
+                'service_name' => 'free-version-home-detail',
+                'message'      => 'Failed to fetch dashboard details',
+                'error'        => $e->getMessage(),
+            ], 500);
+        }
     }
 
   	/**
@@ -766,7 +784,7 @@ class HPTMController extends Controller
 
         $principleArray['principleData'] = $resultArray;
 
-        $user = \App\Models\User::where('id', $userId)->whereIn('status', ['active_verified', 'active_unverified'])->first();
+        $user = \App\Models\User::where('id', $userId)->where('status', true)->first();
 
         $userHptmScore = 0;
         if (! empty($user)) {
@@ -884,7 +902,7 @@ class HPTMController extends Controller
             $learningScore = $scoreModel->score ?? 0;
         }
 
-        $user = User::where('id', $userId)->whereIn('status', ['active_verified', 'active_unverified'])->first();
+        $user = User::where('id', $userId)->where('status', true)->first();
 
         if ($user) {
             $newHptmScore = ($readStatus == 1)
@@ -916,7 +934,7 @@ class HPTMController extends Controller
             ]);
         }
 
-        $updatedUser = User::where('id', $userId)->whereIn('status', ['active_verified', 'active_unverified'])->first();
+        $updatedUser = User::where('id', $userId)->where('status', true)->first();
 
         $userScore = 0;
         if ($updatedUser) {
