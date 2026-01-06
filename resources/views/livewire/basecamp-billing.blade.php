@@ -272,24 +272,38 @@
                     body: formData,
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
                     }
                 })
                 .then(response => {
                     console.log('Response received', response);
+                    
+                    // Check if response is JSON
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        return response.json().then(data => {
+                            if (data.success && data.redirect_url) {
+                                // Redirect to Stripe checkout
+                                window.location.href = data.redirect_url;
+                            } else {
+                                alert(data.error || 'Failed to create payment session. Please try again.');
+                            }
+                        });
+                    }
+                    
+                    // Handle HTML response (fallback)
                     if (response.redirected) {
-                        // If server redirects, follow it
                         window.location.href = response.url;
                         return;
                     }
-                    return response.text();
-                })
-                .then(html => {
-                    if (html) {
-                        // If HTML is returned (redirect page), replace current page
-                        document.open();
-                        document.write(html);
-                        document.close();
-                    }
+                    
+                    return response.text().then(html => {
+                        if (html) {
+                            document.open();
+                            document.write(html);
+                            document.close();
+                        }
+                    });
                 })
                 .catch(error => {
                     console.error('Payment error:', error);

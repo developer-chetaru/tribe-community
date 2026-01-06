@@ -67,6 +67,13 @@ class BasecampBilling extends Component
             abort(403, 'Only basecamp users can access this billing page.');
         }
         
+        // Ensure user is authenticated for proper navigation display
+        if (!auth()->check() || auth()->id() !== $user->id) {
+            Log::info('BasecampBilling - User not authenticated, logging in user: ' . $user->id);
+            auth()->login($user);
+            session()->regenerate();
+        }
+        
         Log::info('BasecampBilling - User is basecamp, loading data');
         
         // Load subscription
