@@ -38,7 +38,7 @@ class AdminReportController extends Controller
         }
 
         $office = Office::with(['users' => function ($query) use ($date) {
-                $query->where('status', 1)
+                $query->where('status', true)
                       ->whereDate('created_at', '<=', $date);
             }])
             ->where('id', $officeId)
@@ -73,7 +73,7 @@ class AdminReportController extends Controller
             ->where('office_id', $officeId)
             ->whereDate('created_at', '<=', $date)
             ->with(['users' => function ($query) {
-                $query->where('status', 1);
+                $query->where('status', true);
             }])
             ->get();
 
@@ -188,7 +188,7 @@ class AdminReportController extends Controller
         $happyIndexMoodValues = $happyIndexMoodValuesQuery->get();
 
         $totalUsersQuery = DB::table('users')
-            ->where('status', 1)
+            ->where('status', true)
             ->whereDate('created_at', '<=', $date)
            
             ->where('onLeave', 0);

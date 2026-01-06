@@ -131,7 +131,7 @@ class HPTMController extends Controller
    		        'profileImage' => $user->profile_photo_path ? url('storage/' . $user->profile_photo_path) : null,
                 'organisation_logo' => optional($user->organisation)->image,
                 'personaliseData'   => optional($user->organisation)->personaliseData,
-                'status'            => (bool) $user->status,
+                'status'            => $user->status ? 1 : 0,
                 'userContact'       => $user->phone,
               	'country_code'      => $user->country_code,
                 'timezone'          => $user->timezone,

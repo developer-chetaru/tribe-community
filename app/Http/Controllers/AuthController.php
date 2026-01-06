@@ -240,7 +240,7 @@ class AuthController extends Controller
         	    'last_name'  => $request->last_name ?? '',
         	    'email'      => $request->email,
         	    'password'   => Hash::make($request->password),
-    	        'status'     => 'pending_payment', // Set to pending_payment initially, will be activated after email verification
+    	        'status'     => false, // Set to false initially, will be activated after email verification
 	        ]);
    
 	        $user->assignRole('basecamp');
@@ -529,7 +529,7 @@ class AuthController extends Controller
         'last_name'  => $request->last_name ?? '',
         'email'      => $request->email,
         'password'   => Hash::make($request->password),
-        'status'     => 'pending_payment', 
+        'status'     => false, // Set to false initially, will be activated after email verification
     ]);
 
     $user->assignRole('basecamp');

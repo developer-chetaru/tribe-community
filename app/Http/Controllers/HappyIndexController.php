@@ -79,7 +79,7 @@ class HappyIndexController extends Controller
             ]);
         }
 
-        $user = User::where('id', $userId)->where('status', '1')->first();
+        $user = User::where('id', $userId)->where('status', true)->first();
 
         if (! $user || $user->onLeave) {
             return response()->json(['status' => false, 'message' => 'User not eligible']);

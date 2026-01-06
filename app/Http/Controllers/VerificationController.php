@@ -123,7 +123,7 @@ class VerificationController extends Controller
                     'id' => $user->id,
                     'email' => $user->email,
                     'email_verified_at' => $user->email_verified_at,
-                    'status' => $user->status,
+                    'status' => $user->status ? 1 : 0,
                 ],
             ]);
         }

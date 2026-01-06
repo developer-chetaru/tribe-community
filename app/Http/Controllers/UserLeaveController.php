@@ -35,7 +35,7 @@ class UserLeaveController extends Controller
         ]);
 
         $user = User::where('id', $request->userId)
-            ->where('status', '1')
+            ->where('status', true)
             ->first();
 
         if (! $user) {
@@ -107,7 +107,7 @@ class UserLeaveController extends Controller
         $user = DB::table('users')
             ->select('id', 'orgId', 'HI_include_saturday', 'HI_include_sunday')
             ->where('id', $userId)
-            ->where('status', 1)
+            ->where('status', true)
             ->first();
 
         if (! $user) {
@@ -135,7 +135,7 @@ class UserLeaveController extends Controller
 
         DB::table('users')
             ->where('id', $userId)
-            ->where('status', '1')
+            ->where('status', true)
             ->update([
                 'onLeave'    => 0,
                 'updated_at' => now(),
