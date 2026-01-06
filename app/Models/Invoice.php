@@ -55,6 +55,14 @@ class Invoice extends Model
     }
 
     /**
+     * Get the user that owns the invoice (for basecamp users).
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /**
      * Get the payments for the invoice.
      */
     public function payments(): HasMany

@@ -142,7 +142,8 @@ return [
              * @see \OpenApi\scan
              */
             'processors' => [
-                new \App\SwaggerProcessors\ServerUrlProcessor(),
+                // Server URL is dynamically updated from APP_URL in AppServiceProvider
+                // Processor removed to allow config caching
             ],
 
             /**
