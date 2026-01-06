@@ -46,7 +46,9 @@ Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     Route::post('/basecamp/payment-intent', [BasecampBillingController::class, 'createPaymentIntent']);
     Route::post('/basecamp/confirm-payment', [BasecampBillingController::class, 'confirmPayment']);
     Route::get('/basecamp/invoice/{id}/view', [BasecampBillingController::class, 'viewInvoice']);
+    Route::get('/basecamp/invoices/{id}/view', [BasecampBillingController::class, 'viewInvoice']); // Alias for mobile app compatibility
     Route::get('/basecamp/invoice/{id}/download', [BasecampBillingController::class, 'downloadInvoice']);
+    Route::get('/basecamp/invoices/{id}/download', [BasecampBillingController::class, 'downloadInvoice']); // Alias for mobile app compatibility
 
 });
 
