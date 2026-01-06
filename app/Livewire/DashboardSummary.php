@@ -124,14 +124,13 @@ class DashboardSummary extends Component
                     $isExpired = now()->greaterThan($endDate);
                     
                     if ($isExpired || $subscription->status !== 'active') {
-                        // Redirect to billing page if subscription is expired
-                        return redirect()->route('billing')
-                            ->with('error', 'Your subscription has expired. Please renew to continue using the service.');
+                        // Don't redirect, just show payment modal on dashboard
+                        // The dashboard will show payment required modal
+                        return;
                     }
                 } else {
-                    // No subscription found, redirect to billing
-                    return redirect()->route('billing')
-                        ->with('error', 'No active subscription found. Please complete your payment.');
+                    // No subscription found, don't redirect - dashboard will show payment modal
+                    return;
                 }
             } elseif ($user->orgId) {
                 $subscriptionService = new SubscriptionService();

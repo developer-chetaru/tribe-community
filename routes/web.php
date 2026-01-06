@@ -132,6 +132,7 @@ Route::middleware([
     config('jetstream.auth_session'),
     'verified',
     'validate.web.session', // Validate session is from most recent login
+    'check.basecamp.payment', // Check basecamp payment before accessing any route
 ])->group(function () {
      Route::get('/change-password', function () {
         return view('profile.change-password');

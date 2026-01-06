@@ -18,6 +18,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             'validate.jwt' => \App\Http\Middleware\ValidateJWTToken::class,
             'validate.web.session' => \App\Http\Middleware\ValidateWebSession::class,
+            'check.basecamp.payment' => \App\Http\Middleware\CheckBasecampPayment::class,
+        ]);
+        
+        // Apply basecamp payment check globally to all web routes (including Jetstream routes)
+        $middleware->web(append: [
+            \App\Http\Middleware\CheckBasecampPayment::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
