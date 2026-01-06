@@ -84,12 +84,20 @@ class AuthController extends Controller
     $user = auth()->user()->load(['organisation', 'office', 'department', 'roles']);
 
    
+    // Check if email is verified - email_verified_at must be set
+    if (!$user->email_verified_at) {
+        return response()->json([
+            'status'  => false,
+            'message' => 'Please verify your email first. Check your email and click the verification link to activate your account.',
+        ], 401);
+    }
+    
     // Check if user status is not active
     // Status is boolean: true = active, false = inactive
     if (!$user->status) {
         return response()->json([
             'status'  => false,
-            'message' => 'Check your email to verify your account. For using Tribe365, account need to be verified. Your account is not activated yet.',
+            'message' => 'Your account is not activated yet. Please check your email and verify your account.',
         ], 401);
     }
 

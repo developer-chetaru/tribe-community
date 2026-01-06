@@ -143,18 +143,18 @@ class VerificationController extends Controller
         }
         
         // Return JSON response for mobile apps
+        // IMPORTANT: Do NOT return token - user must login separately after verification
         if ($isMobileApp) {
             return response()->json([
                 'success' => true,
-                'message' => 'Account activated successfully!',
-                'user' => [
-                    'id' => $user->id,
+                'message' => 'Account activated successfully! Please login to continue.',
+                'data' => [
                     'email' => $user->email,
-                    'email_verified_at' => $user->email_verified_at,
-                    'status' => $user->status ? 1 : 0,
+                    'email_verified' => true,
+                    'invoice_generated' => $invoiceGenerated,
+                    'invoice_error' => $invoiceError,
                 ],
-                'invoice_generated' => $invoiceGenerated,
-                'invoice_error' => $invoiceError,
+                // NO TOKEN - user must login separately
             ]);
         }
         
