@@ -71,7 +71,8 @@ class LoginForm extends Component
         }
         
         // Check if account is activated (for all users including basecamp after payment)
-        if (!$user->status) {
+        // Check if user status is not active
+        if (!in_array($user->status, ['active_verified', 'active_unverified'])) {
             $this->addError('email', 'Your account is not activated yet, please check your email and follow the instruction to verify your account.');
             \Log::warning('Login failed - account not activated: ' . $this->email);
             return;

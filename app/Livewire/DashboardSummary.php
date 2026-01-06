@@ -279,7 +279,7 @@ public function updatedSelectedDepartment($value)
 
         $user = auth()->user();
 
-        if (!$user || $user->status != '1') {
+        if (!$user || !in_array($user->status, ['active_verified', 'active_unverified'])) {
             session()->flash('error', 'User not found or inactive.');
             return;
         }

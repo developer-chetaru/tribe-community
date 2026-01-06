@@ -83,7 +83,8 @@ class AuthController extends Controller
     $user = auth()->user()->load(['organisation', 'office', 'department']);
 
    
-    if (! $user->status) {
+    // Check if user status is not active (pending_payment, inactive, suspended, cancelled)
+    if (!in_array($user->status, ['active_verified', 'active_unverified'])) {
         return response()->json([
             'status'  => false,
             'message' => 'Check your email to verify your account. For using Tribe365, account need to be verified. Your account is not activated yet.',
@@ -234,11 +235,11 @@ class AuthController extends Controller
             ]);
 
        	 $user = User::create([
-        	    'first_name' => $request->first_name,
-        	    'last_name'  => $request->last_name,
+        	    'first_name' => $request->first_name ?? '',
+        	    'last_name'  => $request->last_name ?? '',
         	    'email'      => $request->email,
         	    'password'   => Hash::make($request->password),
-    	        'status'     => false, // Set to false initially, will be activated after email verification
+    	        'status'     => 'pending_payment', // Set to pending_payment initially, will be activated after email verification
 	        ]);
    
 	        $user->assignRole('basecamp');
@@ -523,11 +524,11 @@ class AuthController extends Controller
     }
 
     $user = User::create([
-        'first_name' => '',
-        'last_name'  => '',
+        'first_name' => $request->first_name ?? '',
+        'last_name'  => $request->last_name ?? '',
         'email'      => $request->email,
         'password'   => Hash::make($request->password),
-        'status'     => false, 
+        'status'     => 'pending_payment', 
     ]);
 
     $user->assignRole('basecamp');

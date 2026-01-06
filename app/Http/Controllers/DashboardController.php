@@ -48,7 +48,7 @@ class DashboardController extends Controller
             }
             
             // If payment completed but account not activated, show verification message
-            if (!$user->status) {
+            if (!in_array($user->status, ['active_verified', 'active_unverified'])) {
                 $needsPayment = true;
                 $paymentMessage = 'Payment completed! Please check your email to activate your account.';
             }

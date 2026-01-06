@@ -38,6 +38,7 @@ class User extends Authenticatable implements JWTSubject
         'password' => 'hashed', 
    		'last_login_at' => 'datetime',
   		'first_login_at' => 'datetime',
+        // Status is ENUM: 'pending_payment', 'active_unverified', 'active_verified', 'suspended', 'cancelled', 'inactive'
     ];
 
  	public function getNameAttribute()

@@ -469,7 +469,7 @@ class HPTMController extends Controller
             }
         } else {
             // Organisation users: calculate total happy users per day
-            $usersQuery = User::where('status', true)->where('orgId', $orgId);
+            $usersQuery = User::whereIn('status', ['active_verified', 'active_unverified'])->where('orgId', $orgId);
             if ($officeIds) $usersQuery->whereIn('officeId', $officeIds);
             if ($departmentIds) $usersQuery->whereIn('departmentId', $departmentIds);
             $filteredUserIds = $usersQuery->pluck('id')->toArray();
@@ -766,7 +766,7 @@ class HPTMController extends Controller
 
         $principleArray['principleData'] = $resultArray;
 
-        $user = \App\Models\User::where('id', $userId)->where('status', true)->first();
+        $user = \App\Models\User::where('id', $userId)->whereIn('status', ['active_verified', 'active_unverified'])->first();
 
         $userHptmScore = 0;
         if (! empty($user)) {
@@ -884,7 +884,7 @@ class HPTMController extends Controller
             $learningScore = $scoreModel->score ?? 0;
         }
 
-        $user = User::where('id', $userId)->where('status', true)->first();
+        $user = User::where('id', $userId)->whereIn('status', ['active_verified', 'active_unverified'])->first();
 
         if ($user) {
             $newHptmScore = ($readStatus == 1)
@@ -916,7 +916,7 @@ class HPTMController extends Controller
             ]);
         }
 
-        $updatedUser = User::where('id', $userId)->where('status', true)->first();
+        $updatedUser = User::where('id', $userId)->whereIn('status', ['active_verified', 'active_unverified'])->first();
 
         $userScore = 0;
         if ($updatedUser) {
