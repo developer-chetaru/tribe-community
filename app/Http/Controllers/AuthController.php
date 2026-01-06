@@ -524,13 +524,17 @@ class AuthController extends Controller
         }
     }
 
+    // Create user without status, then update status separately to avoid type issues
     $user = User::create([
         'first_name' => $request->first_name ?? '',
         'last_name'  => $request->last_name ?? '',
         'email'      => $request->email,
         'password'   => Hash::make($request->password),
-        'status'     => false, // Set to false initially, will be activated after email verification
     ]);
+    
+    // Update status separately to ensure proper boolean handling
+    $user->status = false;
+    $user->save();
 
     $user->assignRole('basecamp');
 

@@ -35,13 +35,17 @@ class CreateNewUser implements CreatesNewUsers
             'password.confirmed'              => 'The password confirmation does not match.',
         ])->validate();
 
+        // Create user without status, then update status separately to avoid type issues
         $user = User::create([
             'first_name' => $input['first_name'] ?? '',
             'last_name'  => $input['last_name'] ?? '',
             'email'      => $input['email'],
             'password'   => $input['password'],
-            'status'     => false, // Set to false initially, will be activated after email verification
         ]);
+        
+        // Update status separately to ensure proper boolean handling
+        $user->status = false;
+        $user->save();
 
         $expires = Carbon::now()->addMinutes(1440);
         $verificationUrl = URL::temporarySignedRoute(
