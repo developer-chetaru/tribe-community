@@ -9,7 +9,7 @@
                 </li>
             @else
                 <li>
-                    <a href="{{ $paginator->previousPageUrl() }}" class="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition">‹</a>
+                    <button type="button" wire:click="previousPage('{{ $paginator->getPageName() }}')" wire:loading.attr="disabled" class="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition">‹</button>
                 </li>
             @endif
 
@@ -25,9 +25,9 @@
                             <li><span class="px-4 py-2 bg-red-500 text-white rounded-lg shadow font-medium">{{ $page }}</span></li>
                         @else
                             <li>
-                                <a href="{{ $url }}" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition">
+                                <button type="button" wire:click="gotoPage({{ $page }}, '{{ $paginator->getPageName() }}')" wire:loading.attr="disabled" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition">
                                     {{ $page }}
-                                </a>
+                                </button>
                             </li>
                         @endif
                     @endforeach
@@ -37,7 +37,7 @@
             {{-- Next --}}
             @if ($paginator->hasMorePages())
                 <li>
-                    <a href="{{ $paginator->nextPageUrl() }}" class="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition">›</a>
+                    <button type="button" wire:click="nextPage('{{ $paginator->getPageName() }}')" wire:loading.attr="disabled" class="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition">›</button>
                 </li>
             @else
                 <li><span class="px-3 py-2 text-gray-400 bg-gray-100 rounded-lg cursor-not-allowed">›</span></li>

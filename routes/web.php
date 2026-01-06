@@ -117,6 +117,8 @@ Route::get('/basecamp/billing', \App\Livewire\BasecampBilling::class)->name('bas
 Route::middleware(['throttle:10,1'])->group(function () {
     Route::post('/basecamp/checkout/create', [\App\Http\Controllers\Billing\BasecampStripeCheckoutController::class, 'createCheckoutSession'])
         ->name('basecamp.checkout.create');
+    Route::get('/basecamp/checkout/redirect', [\App\Http\Controllers\Billing\BasecampStripeCheckoutController::class, 'redirectToCheckout'])
+        ->name('basecamp.checkout.redirect');
     Route::get('/basecamp/billing/payment/success', [\App\Http\Controllers\Billing\BasecampStripeCheckoutController::class, 'handleSuccess'])
         ->name('basecamp.billing.payment.success');
 });

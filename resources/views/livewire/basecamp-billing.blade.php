@@ -84,8 +84,7 @@
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                             @if($invoice->status === 'unpaid')
                                                 <button 
-                                                    wire:click="$set('selectedInvoice', {{ $invoice->id }})"
-                                                    wire:click="openPaymentModal"
+                                                    wire:click="openPaymentModal({{ $invoice->id }})"
                                                     class="text-[#EB1C24] hover:text-red-600 font-semibold">
                                                     Pay Now
                                                 </button>
@@ -230,6 +229,48 @@
                         console.error('Submit payment button not found');
                     }
                 });
+                
+                // Immediate redirect to Stripe - PRIMARY METHOD
+                Livewire.on('redirect-stripe-immediate', (event) => {
+                    console.log('redirect-stripe-immediate event received:', event);
+                    const url = event.url || event[0]?.url;
+                    console.log('Stripe URL from event:', url);
+                    if (url && (url.startsWith('https://checkout.stripe.com') || url.startsWith('http://checkout.stripe.com'))) {
+                        console.log('REDIRECTING TO STRIPE NOW:', url);
+                        window.location.href = url; // Use href for better compatibility
+                    } else {
+                        console.error('Invalid URL in event, trying property...');
+                        setTimeout(() => {
+                            const propUrl = @this.get('stripeCheckoutUrl');
+                            if (propUrl) {
+                                console.log('Using property URL:', propUrl);
+                                window.location.href = propUrl;
+                            }
+                        }, 50);
+                    }
+                });
+            });
+            
+            // Check property immediately after any Livewire update
+            document.addEventListener('livewire:init', () => {
+                Livewire.hook('morph.updated', ({ component }) => {
+                    const url = component.get('stripeCheckoutUrl');
+                    if (url && (url.startsWith('https://checkout.stripe.com') || url.startsWith('http://checkout.stripe.com'))) {
+                        console.log('Stripe URL detected in property after update, redirecting immediately...', url);
+                        window.location.replace(url);
+                    }
+                });
+            });
+            
+            // Immediate check when property is set - runs on every Livewire update
+            Livewire.hook('morph.updated', () => {
+                setTimeout(() => {
+                    const url = @this.get('stripeCheckoutUrl');
+                    if (url && (url.startsWith('https://checkout.stripe.com') || url.startsWith('http://checkout.stripe.com'))) {
+                        console.log('Stripe URL detected, redirecting NOW:', url);
+                        window.location.replace(url);
+                    }
+                }, 50);
             });
         </script>
     </div>

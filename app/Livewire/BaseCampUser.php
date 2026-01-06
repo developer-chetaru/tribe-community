@@ -140,13 +140,15 @@ class BaseCampUser extends Component
         }
 
         $query = User::whereHas('roles', function ($q) {
-            $q->where('id', 5);
+            $q->where('name', 'basecamp');
         });
 
         if ($this->activeTab === 'active') {
-            $query->where('status', 1);
+            // Show verified and unverified active users
+            $query->whereIn('status', ['active_verified', 'active_unverified']);
         } else {
-            $query->where('status', 0);
+            // Show inactive users (pending_payment, null, or any other status)
+            $query->whereNotIn('status', ['active_verified', 'active_unverified']);
         }
 
         $users = $query->orderBy('id', 'desc')->paginate($this->perPage);

@@ -27,6 +27,7 @@ class BasecampBilling extends Component
     
     public $userId = null;
     public $invoiceId = null;
+    public $stripeCheckoutUrl = null;
     
     public function mount($user_id = null)
     {
@@ -216,19 +217,45 @@ class BasecampBilling extends Component
         $this->openPaymentModal();
     }
     
-    public function openPaymentModal()
+    public function openPaymentModal($invoiceId = null)
     {
+        // If invoice ID is provided, set it first
+        if ($invoiceId) {
+            $this->selectedInvoice = Invoice::find($invoiceId);
+            $this->invoiceId = $invoiceId;
+            session()->put('basecamp_invoice_id', $invoiceId);
+        }
+        
         if (!$this->selectedInvoice) {
             session()->flash('error', 'No invoice selected.');
+            Log::error('openPaymentModal: No invoice selected', [
+                'invoice_id' => $invoiceId,
+                'selected_invoice' => $this->selectedInvoice?->id,
+            ]);
             return;
         }
+        
+        Log::info('openPaymentModal: Creating checkout session', [
+            'invoice_id' => $this->selectedInvoice->id,
+            'user_id' => $this->userId,
+        ]);
         
         // Create Stripe Checkout Session and redirect to Stripe website
         $checkoutUrl = $this->createStripeCheckoutSession();
         
         if ($checkoutUrl) {
-            // Redirect to Stripe checkout
-            return redirect($checkoutUrl);
+            Log::info('Stripe checkout URL created', [
+                'url' => $checkoutUrl,
+                'invoice_id' => $this->selectedInvoice->id,
+            ]);
+            
+            // Store URL in public property and dispatch event
+            $this->stripeCheckoutUrl = $checkoutUrl;
+            // Dispatch event with URL for immediate redirect
+            $this->dispatch('redirect-stripe-immediate', url: $checkoutUrl);
+        } else {
+            session()->flash('error', 'Failed to create payment session. Please try again.');
+            Log::error('openPaymentModal: Failed to create checkout session');
         }
     }
     
@@ -262,7 +289,7 @@ class BasecampBilling extends Component
                             'name' => 'Basecamp Subscription',
                             'description' => 'Monthly subscription for Basecamp tier',
                         ],
-                        'unit_amount' => $this->monthlyPrice * 100, // Convert to cents
+                        'unit_amount' => ($this->selectedInvoice->total_amount ?? $this->monthlyPrice) * 100, // Convert to cents
                     ],
                     'quantity' => 1,
                 ]],

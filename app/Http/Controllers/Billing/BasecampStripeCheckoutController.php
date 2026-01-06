@@ -96,6 +96,28 @@ class BasecampStripeCheckoutController extends Controller
         }
     }
     
+    public function redirectToCheckout(Request $request)
+    {
+        $checkoutUrl = session()->pull('stripe_checkout_redirect');
+        
+        if (!$checkoutUrl) {
+            Log::error('No Stripe checkout URL found in session', [
+                'session_keys' => array_keys(session()->all()),
+            ]);
+            $userId = $request->query('user_id') ?? session('basecamp_user_id');
+            return redirect()->route('basecamp.billing', ['user_id' => $userId])
+                ->with('error', 'Payment session expired. Please try again.');
+        }
+        
+        Log::info('Redirecting to Stripe checkout', [
+            'url' => $checkoutUrl,
+            'user_id' => $request->query('user_id'),
+        ]);
+        
+        // Use redirect()->away() for external URLs
+        return redirect()->away($checkoutUrl);
+    }
+    
     public function handleSuccess(Request $request)
     {
         try {

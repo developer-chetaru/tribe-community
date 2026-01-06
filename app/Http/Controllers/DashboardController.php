@@ -24,6 +24,12 @@ class DashboardController extends Controller
 	public function index(Request $request, DashboardService $service)
 	{
     	$user = Auth::user();
+    	
+    	// Show Coming Soon page for super admin users
+    	if ($user && $user->hasRole('super_admin')) {
+    	    return view('dashboard-coming-soon');
+    	}
+    	
     	$needsPayment = false;
     	$paymentMessage = '';
     	
