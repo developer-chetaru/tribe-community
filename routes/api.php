@@ -36,15 +36,25 @@ Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     Route::post('/change-read-status-of-user-checklist', [HPTMController::class, 'changeReadStatusOfUserChecklist']);
 	Route::get('/summary/{filterType}', [SummaryController::class, 'getSummary']);
 
-    // Payment APIs
-    Route::post('/submit-payment', [PaymentController::class, 'submitPayment']);
-    Route::get('/payments', [PaymentController::class, 'getPayments']);
+    // Payment APIs with rate limiting
+    Route::middleware(['throttle:10,1'])->group(function () {
+        Route::post('/submit-payment', [PaymentController::class, 'submitPayment']);
+        Route::get('/payments', [PaymentController::class, 'getPayments']);
+    });
 
-    // Basecamp Billing APIs
-    Route::get('/basecamp/invoices', [BasecampBillingController::class, 'getInvoices']);
-    Route::get('/basecamp/subscription', [BasecampBillingController::class, 'getSubscription']);
-    Route::post('/basecamp/payment-intent', [BasecampBillingController::class, 'createPaymentIntent']);
-    Route::post('/basecamp/confirm-payment', [BasecampBillingController::class, 'confirmPayment']);
+    // Basecamp Billing APIs with rate limiting
+    Route::middleware(['throttle:10,1'])->group(function () {
+        Route::get('/basecamp/invoices', [BasecampBillingController::class, 'getInvoices']);
+        Route::get('/basecamp/subscription', [BasecampBillingController::class, 'getSubscription']);
+        Route::get('/basecamp/upcoming', [BasecampBillingController::class, 'getUpcoming']);
+        Route::get('/basecamp/invoice/{id}', [BasecampBillingController::class, 'getInvoice']);
+        Route::post('/basecamp/payment-intent', [BasecampBillingController::class, 'createPaymentIntent']);
+        Route::post('/basecamp/confirm-payment', [BasecampBillingController::class, 'confirmPayment']);
+        Route::post('/basecamp/pay-now', [BasecampBillingController::class, 'payNow']);
+        Route::put('/basecamp/payment-method', [BasecampBillingController::class, 'updatePaymentMethod']);
+        Route::post('/basecamp/reactivate', [BasecampBillingController::class, 'reactivate']);
+        Route::delete('/basecamp/cancel', [BasecampBillingController::class, 'cancel']);
+    });
 
 });
 

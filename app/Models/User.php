@@ -20,8 +20,9 @@ class User extends Authenticatable implements JWTSubject
         'first_name', 'last_name', 'email', 'password', 'profile_photo_path', 'EIScore',
         'fcmToken', 'lastHIDate', 'onLeave', 'hptmEvaluationScore', 'HI_include_sunday',
         'HI_include_saturday', 'orgId', 'departmentId', 'officeId', 'first_login_at',
-        'deviceType', 'deviceId', 'contact', 'status', 'phone', 'hptmScore'  ,  'last_login_at',
-    'time_spent_on_app','country_code', 'timezone',
+        'deviceType', 'deviceId', 'contact', 'status', 'phone', 'hptmScore', 'last_login_at',
+        'time_spent_on_app', 'country_code', 'timezone',
+        'stripe_customer_id', 'payment_grace_period_start', 'suspension_date', 'last_payment_failure_date',
     ];
 
     protected $hidden = [
@@ -38,6 +39,9 @@ class User extends Authenticatable implements JWTSubject
         'password' => 'hashed', 
    		'last_login_at' => 'datetime',
   		'first_login_at' => 'datetime',
+        'payment_grace_period_start' => 'datetime',
+        'suspension_date' => 'datetime',
+        'last_payment_failure_date' => 'datetime',
     ];
 
  	public function getNameAttribute()
@@ -114,5 +118,21 @@ class User extends Authenticatable implements JWTSubject
         $orgName = $this->organisation ? $this->organisation->name : 'Organisation';
 
         $this->notify(new CustomResetPasswordNotification($token, $orgName));
+    }
+
+    /**
+     * Get subscriptions for this user (for basecamp users)
+     */
+    public function subscriptions()
+    {
+        return $this->hasMany(SubscriptionRecord::class, 'user_id');
+    }
+
+    /**
+     * Get payment failure logs for this user
+     */
+    public function paymentFailureLogs()
+    {
+        return $this->hasMany(PaymentFailureLog::class, 'user_id');
     }
 }

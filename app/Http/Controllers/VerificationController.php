@@ -5,10 +5,15 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Http;
 use App\Mail\ActivationSuccessMail;
 use App\Mail\VerifyUserMail;
 use App\Models\User;
+use App\Models\Invoice;
+use App\Models\SubscriptionRecord;
 use Illuminate\Support\Facades\Log;
+use App\Services\OneSignalService;
+use Illuminate\Support\Facades\DB;
 
 class VerificationController extends Controller
 {
@@ -53,13 +58,67 @@ class VerificationController extends Controller
             ", 403);
         }
         $user = User::findOrFail($id);
-        // If not activated → activate now
-        if (! $user->status) {
-            $user->status = true;
-            $user->save();
+        
+        // Check if email is already verified
+        if ($user->email_verified_at) {
+            // Already verified - show message and redirect
+            return response("
+                <html>
+                <head>
+                    <title>Already Activated</title>
+                </head>
+                <body style='text-align:center; padding:50px; font-family:sans-serif;'>
+                    <h2 style='color:orange;'>Warning: This account is already active.</h2>
+                    <p>You will be redirected in 5 seconds...</p>
+                    <script>
+                        setTimeout(function() {
+                            window.location.href = '".url('/login')."';
+                        }, 5000);
+                    </script>
+                </body>
+                </html>
+            ");
+        }
+        
+        // Email not verified yet - verify now
+        $user->email_verified_at = now();
+        
+        // Update status based on current status
+        // If user is suspended or cancelled, don't change status
+        if (in_array($user->status, ['suspended', 'cancelled'])) {
+            // Keep current status, just mark email as verified
+            // Don't change status
+        } elseif (in_array($user->status, ['active_verified', 'active_unverified', 'pending_payment', 'inactive', null])) {
+            // User is in normal flow - set to active_verified now that email is verified
+            $user->status = 'active_verified';
+        } else {
+            // Default to active_verified for any other status
+            $user->status = 'active_verified';
+        }
+        
+        $user->save();
+        
+        Log::info('User email verified', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'status' => $user->status,
+        ]);
             
             // Check if this is a basecamp user who needs to set up billing
             $isBasecamp = $user->hasRole('basecamp');
+            
+            // Generate invoice automatically for basecamp users after email verification
+            if ($isBasecamp) {
+                try {
+                    $this->generateInvoiceForBasecampUser($user);
+                } catch (\Exception $e) {
+                    Log::error('Failed to generate invoice for basecamp user after email verification', [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString(),
+                    ]);
+                }
+            }
             $redirectUrl = url('/login'); // Always redirect to login after verification
             // --------------------------------------
             // Create HTML email body from your template
@@ -127,70 +186,107 @@ class VerificationController extends Controller
             </body>
             </html>';
             
+            // Send activation confirmation email via OneSignal
             try {
-                $payload = [
-                    'app_id' => $this->appId,
-                    'include_email_tokens' => [$user->email],
-                    'email_subject' => 'Your Account Has Been Activated',
-                    'email_body' => $htmlBody,
-                ];
-                $response = Http::withHeaders([
-                    'Authorization' => "Basic {$this->restApiKey}",
-                    'Content-Type' => 'application/json',
-                ])->post('https://onesignal.com/api/v1/notifications', $payload);
-                if ($response->failed()) {
-                    Log::error('OneSignal activation email failed', [
-                        'email' => $user->email,
-                        'status' => $response->status(),
-                        'body' => $response->body(),
-                    ]);
-                } else {
-                    Log::info('OneSignal activation email sent', [
-                        'email' => $user->email,
-                        'response' => $response->json(),
-                    ]);
-                }
+                $oneSignalService = new OneSignalService();
+                $oneSignalService->registerEmailUserFallback($user->email, $user->id, [
+                    'subject' => 'Your Account Has Been Activated',
+                    'body' => $htmlBody,
+                ]);
+                Log::info('Activation confirmation email sent via OneSignal', [
+                    'email' => $user->email,
+                    'user_id' => $user->id,
+                ]);
             } catch (\Throwable $e) {
                 Log::error('OneSignal activation email error', [
                     'email' => $user->email,
                     'error' => $e->getMessage(),
                 ]);
             }
-            // Return success page
-            $redirectUrl = url('/login');
-            return response('
-                <html>
-                <head>
-                    <title>Account Activated</title>
-                </head>
-                <body style="text-align:center; padding:50px; font-family:sans-serif;">
-                    <h2 style="color:green;">Your account has been activated successfully!</h2>
-                    <p>You will be redirected in 5 seconds...</p>
-                    <script>
-                        setTimeout(function() {
-                            window.location.href = "' . $redirectUrl . '";
-                        }, 5000);
-                    </script>
-                </body>
-                </html>
-            ');
-        }
-        // Already activated
-        return response("
+        // Return success page
+        $redirectUrl = url('/login');
+        return response('
             <html>
             <head>
-                <title>Already Activated</title>
+                <title>Account Activated</title>
             </head>
-            <body style='text-align:center; padding:50px; font-family:sans-serif;'>
-                <h2 style='color:orange;'>Warning: This account is already active.</h2>
+            <body style="text-align:center; padding:50px; font-family:sans-serif;">
+                <h2 style="color:green;">Your account has been activated successfully!</h2>
                 <p>You will be redirected in 5 seconds...</p>
                 <script>
                     setTimeout(function() {
-                        window.location.href = '".url('/login')."';
+                        window.location.href = "' . $redirectUrl . '";
                     }, 5000);
                 </script>
             </body>
             </html>
-        ");
+        ');
+    }
+    
+    /**
+     * Generate invoice for basecamp user after email verification
+     *
+     * @param User $user
+     * @return void
+     */
+    private function generateInvoiceForBasecampUser(User $user)
+    {
+        // Create or get subscription for basecamp user
+        $subscription = SubscriptionRecord::firstOrCreate(
+            [
+                'user_id' => $user->id,
+                'tier' => 'basecamp',
+            ],
+            [
+                'organisation_id' => null,
+                'status' => 'inactive',
+                'user_count' => 1,
+            ]
+        );
+        
+        // Check if invoice already exists for today (to avoid duplicates)
+        $existingInvoice = Invoice::where('user_id', $user->id)
+            ->where('tier', 'basecamp')
+            ->whereDate('invoice_date', now()->toDateString())
+            ->where('status', '!=', 'cancelled')
+            ->first();
+            
+        if ($existingInvoice) {
+            Log::info('Invoice already exists for basecamp user after email verification', [
+                'user_id' => $user->id,
+                'invoice_id' => $existingInvoice->id,
+                'invoice_number' => $existingInvoice->invoice_number,
+            ]);
+            return;
+        }
+        
+        // Generate invoice
+        $monthlyPrice = 10.00; // $10 per month for basecamp users
+        $dueDate = now()->addDays(7);
+        
+        $invoice = DB::transaction(function () use ($user, $subscription, $monthlyPrice, $dueDate) {
+            return Invoice::create([
+                'user_id' => $user->id,
+                'organisation_id' => null, // Null for basecamp users
+                'subscription_id' => $subscription->id,
+                'invoice_number' => Invoice::generateInvoiceNumber(),
+                'tier' => 'basecamp',
+                'user_count' => 1,
+                'price_per_user' => $monthlyPrice,
+                'subtotal' => $monthlyPrice,
+                'tax_amount' => 0,
+                'total_amount' => $monthlyPrice,
+                'status' => 'unpaid',
+                'due_date' => $dueDate,
+                'invoice_date' => now(),
+            ]);
+        });
+        
+        Log::info('Invoice generated automatically for basecamp user after email verification', [
+            'user_id' => $user->id,
+            'invoice_id' => $invoice->id,
+            'invoice_number' => $invoice->invoice_number,
+            'total_amount' => $invoice->total_amount,
+        ]);
     }
 }

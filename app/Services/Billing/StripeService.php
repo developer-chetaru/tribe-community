@@ -490,5 +490,57 @@ class StripeService
             ];
         }
     }
+
+    /**
+     * Get default payment method for a customer
+     */
+    public function getDefaultPaymentMethod($customerId)
+    {
+        try {
+            if (!class_exists(\Stripe\Customer::class)) {
+                throw new \Exception('Stripe PHP package is not installed.');
+            }
+
+            $customer = \Stripe\Customer::retrieve($customerId);
+            
+            if ($customer->invoice_settings->default_payment_method) {
+                $paymentMethod = \Stripe\PaymentMethod::retrieve($customer->invoice_settings->default_payment_method);
+                return $paymentMethod;
+            }
+
+            // Try to get the first payment method
+            $paymentMethods = \Stripe\PaymentMethod::all([
+                'customer' => $customerId,
+                'type' => 'card',
+            ]);
+
+            if (count($paymentMethods->data) > 0) {
+                return $paymentMethods->data[0];
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error('Stripe Get Default Payment Method Failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Create a payment intent
+     */
+    public function createPaymentIntent(array $params)
+    {
+        try {
+            if (!class_exists(\Stripe\PaymentIntent::class)) {
+                throw new \Exception('Stripe PHP package is not installed.');
+            }
+
+            $paymentIntent = \Stripe\PaymentIntent::create($params);
+            return $paymentIntent;
+        } catch (\Exception $e) {
+            Log::error('Stripe Payment Intent Creation Failed: ' . $e->getMessage());
+            throw $e;
+        }
+    }
 }
 
