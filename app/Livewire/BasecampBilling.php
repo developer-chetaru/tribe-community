@@ -190,8 +190,13 @@ class BasecampBilling extends Component
             $dueDate = min($dueDate, $subscriptionEndDate);
         }
         
+        // Calculate VAT (20% of subtotal)
+        $subtotal = $this->monthlyPrice;
+        $taxAmount = $subtotal * 0.20; // 20% VAT
+        $totalAmount = $subtotal + $taxAmount;
+        
         // Create new invoice within transaction
-        $invoice = DB::transaction(function () use ($dueDate) {
+        $invoice = DB::transaction(function () use ($dueDate, $subtotal, $taxAmount, $totalAmount) {
             return Invoice::create([
             'user_id' => $this->userId,
             'organisation_id' => null, // Null for basecamp users
@@ -200,9 +205,9 @@ class BasecampBilling extends Component
             'tier' => 'basecamp',
             'user_count' => 1,
             'price_per_user' => $this->monthlyPrice,
-            'subtotal' => $this->monthlyPrice,
-            'tax_amount' => 0,
-            'total_amount' => $this->monthlyPrice,
+            'subtotal' => $subtotal,
+            'tax_amount' => $taxAmount,
+            'total_amount' => $totalAmount,
             'status' => 'unpaid',
             'due_date' => $dueDate,
             'invoice_date' => now(),
@@ -338,16 +343,17 @@ class BasecampBilling extends Component
                 return;
             }
             
-            // Create payment intent
+            // Create payment intent - use total_amount (includes VAT) from invoice
+            $amountToCharge = $this->selectedInvoice->total_amount ?? ($this->monthlyPrice * 1.20); // Include VAT
             $paymentIntent = \Stripe\PaymentIntent::create([
-                'amount' => $this->monthlyPrice * 100, // Convert to cents
+                'amount' => (int)($amountToCharge * 100), // Convert to cents
                 'currency' => 'gbp',
                 'payment_method_types' => ['card'],
                 'metadata' => [
                     'invoice_id' => $this->selectedInvoice->id,
                     'user_id' => $this->userId,
                     'tier' => 'basecamp',
-                    'description' => "Basecamp subscription - £10/month",
+                    'description' => "Basecamp subscription - £10/month + VAT",
                 ],
                 'description' => "Basecamp Subscription - {$user->first_name} {$user->last_name}",
             ]);

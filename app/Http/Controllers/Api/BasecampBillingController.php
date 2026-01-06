@@ -72,6 +72,8 @@ class BasecampBillingController extends Controller
                     'publishable_key' => $publishableKey,
                     'currency' => 'gbp',
                     'monthly_price' => 10.00,
+                    'monthly_price_with_vat' => 12.00, // £10 + 20% VAT
+                    'vat_rate' => 20.00, // VAT percentage
                 ],
             ], 200);
 
@@ -119,7 +121,9 @@ class BasecampBillingController extends Controller
      *                     @OA\Property(property="id", type="integer", example=1),
      *                     @OA\Property(property="invoice_number", type="string", example="INV-202512-0001"),
      *                     @OA\Property(property="tier", type="string", example="basecamp"),
-     *                     @OA\Property(property="total_amount", type="number", format="float", example=10.00),
+     *                     @OA\Property(property="subtotal", type="number", format="float", example=10.00, description="Amount before VAT"),
+     *                     @OA\Property(property="tax_amount", type="number", format="float", example=2.00, description="VAT amount (20%)"),
+     *                     @OA\Property(property="total_amount", type="number", format="float", example=12.00, description="Total amount including VAT"),
      *                     @OA\Property(property="status", type="string", example="unpaid"),
      *                     @OA\Property(property="invoice_date", type="string", format="date", example="2025-01-05"),
      *                     @OA\Property(property="due_date", type="string", format="date", example="2025-01-12"),
@@ -296,7 +300,9 @@ class BasecampBillingController extends Controller
                     'current_period_start' => $subscription->current_period_start,
                     'current_period_end' => $subscription->current_period_end,
                     'next_billing_date' => $subscription->next_billing_date,
-                    'monthly_price' => 10.00, // Basecamp subscription is £10/month
+                    'monthly_price' => 10.00, // Basecamp subscription is £10/month (before VAT)
+                    'monthly_price_with_vat' => 12.00, // £10 + 20% VAT
+                    'vat_rate' => 20.00, // VAT percentage
                 ],
             ], 200);
 
@@ -335,7 +341,7 @@ class BasecampBillingController extends Controller
      *                 type="object",
      *                 @OA\Property(property="client_secret", type="string", example="pi_1234567890_secret_...", description="Stripe payment intent client secret for frontend integration"),
      *                 @OA\Property(property="payment_intent_id", type="string", example="pi_1234567890", description="Stripe payment intent ID"),
- *                 @OA\Property(property="amount", type="number", format="float", example=10.00, description="Payment amount in GBP"),
+ *                 @OA\Property(property="amount", type="number", format="float", example=12.00, description="Payment amount in GBP (includes 20% VAT)"),
  *                 @OA\Property(property="currency", type="string", example="gbp")
      *             )
      *         )
@@ -723,10 +729,10 @@ class BasecampBillingController extends Controller
      *                 @OA\Property(property="user_id", type="integer", example=1),
      *                 @OA\Property(property="subscription_id", type="integer", nullable=true, example=1),
      *                 @OA\Property(property="user_count", type="integer", example=1),
-     *                 @OA\Property(property="price_per_user", type="number", format="float", example=10.00),
-     *                 @OA\Property(property="subtotal", type="number", format="float", example=10.00),
-     *                 @OA\Property(property="tax_amount", type="number", format="float", example=0.00),
-     *                 @OA\Property(property="total_amount", type="number", format="float", example=10.00),
+     *                 @OA\Property(property="price_per_user", type="number", format="float", example=10.00, description="Price per user before VAT"),
+     *                 @OA\Property(property="subtotal", type="number", format="float", example=10.00, description="Subtotal before VAT"),
+     *                 @OA\Property(property="tax_amount", type="number", format="float", example=2.00, description="VAT amount (20%)"),
+     *                 @OA\Property(property="total_amount", type="number", format="float", example=12.00, description="Total amount including VAT"),
      *                 @OA\Property(property="status", type="string", example="paid", enum={"unpaid", "paid", "pending", "overdue"}),
      *                 @OA\Property(property="invoice_date", type="string", format="date", example="2025-01-05"),
      *                 @OA\Property(property="due_date", type="string", format="date", example="2025-01-12"),
@@ -746,7 +752,7 @@ class BasecampBillingController extends Controller
      *                     type="array",
      *                     @OA\Items(
      *                         @OA\Property(property="id", type="integer", example=1),
-     *                         @OA\Property(property="amount", type="number", format="float", example=10.00),
+     *                         @OA\Property(property="amount", type="number", format="float", example=12.00, description="Payment amount including VAT"),
      *                         @OA\Property(property="payment_method", type="string", example="card"),
      *                         @OA\Property(property="transaction_id", type="string", example="pi_1234567890"),
      *                         @OA\Property(property="status", type="string", example="completed"),

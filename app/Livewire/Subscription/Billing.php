@@ -380,6 +380,11 @@ class Billing extends Component
                     if ($existingInvoice) {
                         $invoice = $existingInvoice;
                     } else {
+                        // Calculate VAT (20% of subtotal) for basecamp renewal
+                        $subtotal = $this->renewalPrice;
+                        $taxAmount = $subtotal * 0.20; // 20% VAT
+                        $totalAmount = $subtotal + $taxAmount;
+                        
                         // Create invoice for renewal
                         $invoice = Invoice::create([
                             'subscription_id' => $subscription->id,
@@ -391,9 +396,9 @@ class Billing extends Component
                             'due_date' => now()->addDays(7)->toDateString(), // Due date is 7 days from invoice date
                             'user_count' => 1,
                             'price_per_user' => $this->renewalPricePerUser,
-                            'subtotal' => $this->renewalPrice,
-                            'tax_amount' => 0.00,
-                            'total_amount' => $this->renewalPrice,
+                            'subtotal' => $subtotal,
+                            'tax_amount' => $taxAmount,
+                            'total_amount' => $totalAmount,
                             'status' => 'pending',
                         ]);
                     }

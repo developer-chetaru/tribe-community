@@ -62,6 +62,11 @@ class BasecampStripeCheckoutController extends Controller
                     ]);
                     $invoiceId = $existingInvoice->id;
                 } else {
+                    // Calculate VAT (20% of subtotal)
+                    $subtotal = $amount / 100; // Convert from cents
+                    $taxAmount = $subtotal * 0.20; // 20% VAT
+                    $totalAmount = $subtotal + $taxAmount;
+                    
                     // Create new invoice
                     $invoice = Invoice::create([
                         'user_id' => $user->id,
@@ -70,10 +75,10 @@ class BasecampStripeCheckoutController extends Controller
                         'invoice_number' => Invoice::generateInvoiceNumber(),
                         'tier' => 'basecamp',
                         'user_count' => 1,
-                        'price_per_user' => $amount / 100, // Convert from cents
-                        'subtotal' => $amount / 100,
-                        'tax_amount' => 0,
-                        'total_amount' => $amount / 100,
+                        'price_per_user' => $subtotal, // Base price without VAT
+                        'subtotal' => $subtotal,
+                        'tax_amount' => $taxAmount,
+                        'total_amount' => $totalAmount,
                         'status' => 'unpaid',
                         'due_date' => now()->addDays(7),
                         'invoice_date' => now(),

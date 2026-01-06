@@ -306,7 +306,12 @@ class VerificationController extends Controller
         $monthlyPrice = 10.00; // £10 per month for basecamp users
         $dueDate = now()->addDays(7);
         
-        $invoice = DB::transaction(function () use ($user, $subscription, $monthlyPrice, $dueDate) {
+        // Calculate VAT (20% of subtotal)
+        $subtotal = $monthlyPrice;
+        $taxAmount = $subtotal * 0.20; // 20% VAT
+        $totalAmount = $subtotal + $taxAmount;
+        
+        $invoice = DB::transaction(function () use ($user, $subscription, $monthlyPrice, $dueDate, $subtotal, $taxAmount, $totalAmount) {
             return Invoice::create([
                 'user_id' => $user->id,
                 'organisation_id' => null, // Null for basecamp users
@@ -315,9 +320,9 @@ class VerificationController extends Controller
                 'tier' => 'basecamp',
                 'user_count' => 1,
                 'price_per_user' => $monthlyPrice,
-                'subtotal' => $monthlyPrice,
-                'tax_amount' => 0,
-                'total_amount' => $monthlyPrice,
+                'subtotal' => $subtotal,
+                'tax_amount' => $taxAmount,
+                'total_amount' => $totalAmount,
                 'status' => 'unpaid',
                 'due_date' => $dueDate,
                 'invoice_date' => now(),

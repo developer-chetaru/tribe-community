@@ -50,7 +50,7 @@ class DashboardController extends Controller
             // If no payment completed, show payment popup
             if (!$hasActiveSubscription && !$hasPaidInvoice) {
                 $needsPayment = true;
-                $paymentMessage = 'Please complete your payment of £10 to activate your account.';
+                $paymentMessage = 'Please complete your payment of £12.00 (incl. VAT) to activate your account.';
             }
             
             // If payment completed but account not activated, show verification message

@@ -77,6 +77,8 @@ class ProcessMonthlyBilling extends Command
         $invoice = Invoice::create([
             'subscription_id' => $subscription->id,
             'organisation_id' => $subscription->organisation_id,
+            'user_id' => $subscription->user_id, // For basecamp users
+            'tier' => $subscription->tier, // Include tier for basecamp users
             'invoice_number' => Invoice::generateInvoiceNumber(),
             'invoice_date' => now(),
             'due_date' => now()->addDays(7),

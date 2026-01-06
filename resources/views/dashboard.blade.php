@@ -30,7 +30,8 @@
 
         <div class="mb-4">
             <p class="text-sm text-gray-600">Amount to Pay</p>
-            <p class="text-2xl font-bold text-[#EB1C24]">£10.00</p>
+            <p class="text-2xl font-bold text-[#EB1C24]">£12.00</p>
+            <p class="text-sm text-gray-600 mt-1">(£10.00 + 20% VAT)</p>
         </div>
 
             <div class="flex gap-3">
@@ -62,7 +63,7 @@
                 formData.append('_token', '{{ csrf_token() }}');
                 formData.append('user_id', userId);
                 formData.append('tier', 'basecamp');
-                formData.append('amount', 1000);
+                formData.append('amount', 1200); // £12.00 with VAT (in cents)
                 
                 // First, get or create invoice
                 const checkoutUrl = '{{ route("basecamp.checkout.create") }}';

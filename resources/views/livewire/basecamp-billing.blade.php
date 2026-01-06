@@ -19,7 +19,8 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <p class="text-sm text-gray-600">Monthly Price</p>
-                        <p class="text-2xl font-bold text-[#EB1C24]">£{{ number_format($monthlyPrice, 2) }}</p>
+                        <p class="text-2xl font-bold text-[#EB1C24]">£{{ number_format($monthlyPrice, 2) }} <span class="text-sm text-gray-500">+ VAT</span></p>
+                        <p class="text-sm text-gray-600 mt-1">Total: £{{ number_format($monthlyPrice * 1.20, 2) }} (incl. 20% VAT)</p>
                     </div>
                     <div>
                         <p class="text-sm text-gray-600">Status</p>
@@ -42,7 +43,7 @@
                         <button 
                             wire:click="createInvoice"
                             class="bg-[#EB1C24] text-white font-semibold py-2 px-6 rounded-lg hover:bg-red-600 transition">
-                            Subscribe Now - £{{ number_format($monthlyPrice, 2) }}/month
+                            Subscribe Now - £{{ number_format($monthlyPrice * 1.20, 2) }}/month
                         </button>
                     </div>
                 @endif
@@ -116,6 +117,12 @@
                         <div class="mb-4">
                             <p class="text-sm text-gray-600">Amount to Pay</p>
                             <p class="text-2xl font-bold text-[#EB1C24]">£{{ number_format($selectedInvoice->total_amount, 2) }}</p>
+                            @if($selectedInvoice->tax_amount > 0)
+                                <div class="mt-2 text-sm text-gray-600">
+                                    <p>Subtotal: £{{ number_format($selectedInvoice->subtotal, 2) }}</p>
+                                    <p>VAT (20%): £{{ number_format($selectedInvoice->tax_amount, 2) }}</p>
+                                </div>
+                            @endif
                         </div>
 
                         @if($stripeClientSecret)
