@@ -525,8 +525,8 @@ class AuthController extends Controller
     }
 
     $user = User::create([
-        'first_name' => $request->first_name ?? '',
-        'last_name'  => $request->last_name ?? '',
+        'first_name' => $request->first_name ?? null,
+        'last_name'  => $request->last_name ?? null,
         'email'      => $request->email,
         'password'   => Hash::make($request->password),
         'status'     => false, // Set to false initially, will be activated after email verification

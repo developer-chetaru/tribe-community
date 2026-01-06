@@ -33,8 +33,8 @@ class BaseCampUser extends Component
     {
         $user = User::findOrFail($userId);
 
-        // Only send verification email if user is pending_payment or inactive
-        if (!in_array($user->status, ['pending_payment', 'inactive'])) {
+        // Only send verification email if user is not active (status is false)
+        if ($user->status) {
             return;
         }
 

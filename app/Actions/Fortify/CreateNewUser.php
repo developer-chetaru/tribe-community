@@ -40,7 +40,7 @@ class CreateNewUser implements CreatesNewUsers
             'last_name'  => $input['last_name'] ?? '',
             'email'      => $input['email'],
             'password'   => $input['password'],
-            'status'     => 'pending_payment',
+            'status'     => false, // Set to false initially, will be activated after email verification
         ]);
 
         $expires = Carbon::now()->addMinutes(1440);

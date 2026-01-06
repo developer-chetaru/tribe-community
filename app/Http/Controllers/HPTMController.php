@@ -784,10 +784,9 @@ class HPTMController extends Controller
 
         $principleArray['principleData'] = $resultArray;
 
-        $user = \App\Models\User::where('id', $userId)->where('status', true)->first();
-
+        // Use the already authenticated user instead of querying again
         $userHptmScore = 0;
-        if (! empty($user)) {
+        if ($user) {
             $userHptmScore = ($user->hptmScore ?? 0) + ($user->hptmEvaluationScore ?? 0);
         }
 
@@ -902,9 +901,10 @@ class HPTMController extends Controller
             $learningScore = $scoreModel->score ?? 0;
         }
 
-        $user = User::where('id', $userId)->where('status', true)->first();
+        // Use authenticated user instead of querying with status check
+        $user = auth()->user();
 
-        if ($user) {
+        if ($user && $user->id == $userId) {
             $newHptmScore = ($readStatus == 1)
             ? ($user->hptmScore ?? 0) + $learningScore
             : ($user->hptmScore ?? 0) - $learningScore;
@@ -934,12 +934,13 @@ class HPTMController extends Controller
             ]);
         }
 
-        $updatedUser = User::where('id', $userId)->where('status', true)->first();
+        // Refresh user to get updated hptmScore after the update above
+        $user->refresh();
 
         $userScore = 0;
-        if ($updatedUser) {
-            $userScore += $updatedUser->hptmScore ?? 0;
-            $userScore += $updatedUser->hptmEvaluationScore ?? 0;
+        if ($user) {
+            $userScore += $user->hptmScore ?? 0;
+            $userScore += $user->hptmEvaluationScore ?? 0;
         }
 
         return response()->json([
