@@ -18,6 +18,7 @@ use App\Services\SessionManagementService;
 use App\Mail\VerifyUserEmail;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @OA\Tag(
@@ -524,7 +525,7 @@ class AuthController extends Controller
         }
     }
 
-    // Create user without status, then update status separately to avoid type issues
+    // Create user - let default status handle it, then update if needed
     $user = User::create([
         'first_name' => $request->first_name ?? '',
         'last_name'  => $request->last_name ?? '',
@@ -532,9 +533,23 @@ class AuthController extends Controller
         'password'   => Hash::make($request->password),
     ]);
     
-    // Update status separately to ensure proper boolean handling
-    $user->status = false;
-    $user->save();
+    // Update status using DB raw to avoid type conversion issues
+    // Use explicit cast to handle boolean column type
+    try {
+        DB::table('users')
+            ->where('id', $user->id)
+            ->update(['status' => DB::raw('0')]);
+        $user->refresh();
+    } catch (\Exception $e) {
+        // If status update fails, log but continue (user is created)
+        Log::warning('Failed to set user status to false', [
+            'user_id' => $user->id,
+            'error' => $e->getMessage(),
+        ]);
+    }
+    
+    // Refresh user model
+    $user->refresh();
 
     $user->assignRole('basecamp');
 

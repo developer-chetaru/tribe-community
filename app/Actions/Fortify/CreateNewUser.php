@@ -13,6 +13,7 @@ use Laravel\Fortify\Contracts\CreatesNewUsers;
 use App\Services\OneSignalService;
 use TijsVerkoyen\CssToInlineStyles\CssToInlineStyles;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class CreateNewUser implements CreatesNewUsers
 {
@@ -35,7 +36,7 @@ class CreateNewUser implements CreatesNewUsers
             'password.confirmed'              => 'The password confirmation does not match.',
         ])->validate();
 
-        // Create user without status, then update status separately to avoid type issues
+        // Create user - let default status handle it, then update if needed
         $user = User::create([
             'first_name' => $input['first_name'] ?? '',
             'last_name'  => $input['last_name'] ?? '',
@@ -43,9 +44,20 @@ class CreateNewUser implements CreatesNewUsers
             'password'   => $input['password'],
         ]);
         
-        // Update status separately to ensure proper boolean handling
-        $user->status = false;
-        $user->save();
+        // Update status using DB raw to avoid type conversion issues
+        // Use explicit cast to handle boolean column type
+        try {
+            DB::table('users')
+                ->where('id', $user->id)
+                ->update(['status' => DB::raw('0')]);
+            $user->refresh();
+        } catch (\Exception $e) {
+            // If status update fails, log but continue (user is created)
+            Log::warning('Failed to set user status to false', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         $expires = Carbon::now()->addMinutes(1440);
         $verificationUrl = URL::temporarySignedRoute(
