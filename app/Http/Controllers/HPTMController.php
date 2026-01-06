@@ -469,7 +469,7 @@ class HPTMController extends Controller
             }
         } else {
             // Organisation users: calculate total happy users per day
-            $usersQuery = User::where('status', 1)->where('orgId', $orgId);
+            $usersQuery = User::where('status', true)->where('orgId', $orgId);
             if ($officeIds) $usersQuery->whereIn('officeId', $officeIds);
             if ($departmentIds) $usersQuery->whereIn('departmentId', $departmentIds);
             $filteredUserIds = $usersQuery->pluck('id')->toArray();
@@ -576,6 +576,7 @@ class HPTMController extends Controller
 
         // Year list
         $orgYearList = [];
+        $organisation = null; // Initialize organisation variable
         if ($user->hasRole('basecamp')) {
             $createdYear = (int) date('Y', strtotime($user->created_at));
         } else {
@@ -594,7 +595,12 @@ class HPTMController extends Controller
         if ($HI_include_sunday == 2) $notWorkingDays[] = 'sunday';
 
         $resultArray['notWorkingDays']    = $notWorkingDays;
-        $resultArray['appPaymentVersion'] = $organisation->appPaymentVersion ?? '';
+        // Get appPaymentVersion from organisation if exists, otherwise default to '1'
+        // For basecamp users, organisation might be null, so use default
+        if (!$organisation && $orgId) {
+            $organisation = Organisation::find($orgId);
+        }
+        $resultArray['appPaymentVersion'] = $organisation->appPaymentVersion ?? '1';
         $resultArray['leaveStatus']       = $user->onLeave ?? 0;
 		$resultArray['notificationCount'] = IotNotification::where('to_bubble_user_id', $userId)
             ->where('status', 'Active')
@@ -760,7 +766,7 @@ class HPTMController extends Controller
 
         $principleArray['principleData'] = $resultArray;
 
-        $user = \App\Models\User::where('id', $userId)->where('status', 1)->first();
+        $user = \App\Models\User::where('id', $userId)->where('status', true)->first();
 
         $userHptmScore = 0;
         if (! empty($user)) {
@@ -878,7 +884,7 @@ class HPTMController extends Controller
             $learningScore = $scoreModel->score ?? 0;
         }
 
-        $user = User::where('id', $userId)->where('status', 1)->first();
+        $user = User::where('id', $userId)->where('status', true)->first();
 
         if ($user) {
             $newHptmScore = ($readStatus == 1)
@@ -910,7 +916,7 @@ class HPTMController extends Controller
             ]);
         }
 
-        $updatedUser = User::where('id', $userId)->where('status', 1)->first();
+        $updatedUser = User::where('id', $userId)->where('status', true)->first();
 
         $userScore = 0;
         if ($updatedUser) {
