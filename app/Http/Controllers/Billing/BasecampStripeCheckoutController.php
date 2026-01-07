@@ -329,8 +329,9 @@ class BasecampStripeCheckoutController extends Controller
                 ]);
             }
             
-            // Send activation email after payment is completed
-            $this->sendActivationEmail($user);
+            // Send payment confirmation email (not activation email - that was already sent during registration)
+            // Only send payment confirmation to avoid duplicate activation emails
+            $this->sendPaymentConfirmationEmail($user, $payment);
             
             // Log the user in after successful payment
             Auth::login($user);
@@ -359,31 +360,29 @@ class BasecampStripeCheckoutController extends Controller
         }
     }
     
-    private function sendActivationEmail($user)
+    private function sendPaymentConfirmationEmail($user, $payment)
     {
         try {
-            $expires = Carbon::now()->addMinutes(1440);
-            $verificationUrl = URL::temporarySignedRoute(
-                'user.verify', $expires, ['id' => $user->id]
-            );
-            
-            $emailBody = view('emails.verify-user-inline', [
+            $emailBody = view('emails.payment-confirmation', [
                 'user' => $user,
-                'verificationUrl' => $verificationUrl,
+                'payment' => $payment,
+                'amount' => '£' . number_format($payment->amount, 2),
+                'date' => now()->format('d M Y'),
             ])->render();
             
             $oneSignalService = new OneSignalService();
             $oneSignalService->registerEmailUserFallback($user->email, $user->id, [
-                'subject' => 'Activate Your Tribe365 Account',
+                'subject' => 'Payment Confirmation - Tribe365',
                 'body' => $emailBody,
             ]);
             
-            Log::info('Activation email sent to basecamp user after payment', [
+            Log::info('Payment confirmation email sent to basecamp user', [
                 'user_id' => $user->id,
                 'email' => $user->email,
+                'payment_id' => $payment->id,
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to send activation email after payment: ' . $e->getMessage(), [
+            Log::error('Failed to send payment confirmation email: ' . $e->getMessage(), [
                 'user_id' => $user->id,
             ]);
         }

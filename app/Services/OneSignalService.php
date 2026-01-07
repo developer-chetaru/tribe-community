@@ -298,6 +298,20 @@ class OneSignalService
     public function registerEmailUserFallback(string $email, $userId = null, ?array $payload = null)
     {
         try {
+            // Duplicate email prevention - check if same email was sent in last 60 seconds
+            if ($payload && isset($payload['subject'])) {
+                $cacheKey = 'email_sent_' . md5($email . $payload['subject']);
+                if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
+                    Log::info('📧 Duplicate email prevented (sent within last 60 seconds)', [
+                        'email' => $email,
+                        'subject' => $payload['subject'],
+                    ]);
+                    return true; // Return true to not trigger error handling
+                }
+                // Mark email as sent for 60 seconds
+                \Illuminate\Support\Facades\Cache::put($cacheKey, true, 60);
+            }
+            
             Log::info('📧 registerEmailUserFallback() called', [
                 'email' => $email,
                 'user_id' => $userId,

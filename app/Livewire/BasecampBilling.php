@@ -459,8 +459,9 @@ class BasecampBilling extends Component
                 'next_billing_date' => now()->addMonth(),
             ]);
             
-            // Send activation email after payment is completed
-            $this->sendActivationEmail($user);
+            // Send payment confirmation email (not activation email - that was already sent during registration)
+            // Only send payment confirmation to avoid duplicate activation emails
+            $this->sendPaymentConfirmationEmail($user, $payment);
             
             Log::info("Stripe payment confirmed for basecamp invoice {$this->selectedInvoice->id}: {$paymentIntentId}");
             
@@ -493,6 +494,34 @@ class BasecampBilling extends Component
     public function closePaymentPage()
     {
         $this->showPaymentPage = false;
+    }
+    
+    private function sendPaymentConfirmationEmail($user, $payment)
+    {
+        try {
+            $emailBody = view('emails.payment-confirmation', [
+                'user' => $user,
+                'payment' => $payment,
+                'amount' => '£' . number_format($payment->amount, 2),
+                'date' => now()->format('d M Y'),
+            ])->render();
+            
+            $oneSignalService = new OneSignalService();
+            $oneSignalService->registerEmailUserFallback($user->email, $user->id, [
+                'subject' => 'Payment Confirmation - Tribe365',
+                'body' => $emailBody,
+            ]);
+            
+            Log::info('Payment confirmation email sent to basecamp user', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'payment_id' => $payment->id,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send payment confirmation email: ' . $e->getMessage(), [
+                'user_id' => $user->id,
+            ]);
+        }
     }
     
     public function render()
