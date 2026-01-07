@@ -77,10 +77,14 @@
                                 Renew Subscription
                             </button>
                         </div>
-                    @elseif($daysRemaining <= 7 && $daysRemaining > 0)
+                    @elseif($daysRemaining <= 7)
                         <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                             <p class="text-yellow-800 text-sm font-medium mb-2">
-                                ⚠️ Your subscription is expiring soon ({{ $daysRemaining }} days remaining). Please renew to continue.
+                                @if($daysRemaining === 0)
+                                    ⚠️ Your subscription expires today. Please renew to continue.
+                                @else
+                                    ⚠️ Your subscription is expiring soon ({{ $daysRemaining }} days remaining). Please renew to continue.
+                                @endif
                             </p>
                             <button wire:click="openRenewModal" type="button" class="mt-2 px-4 py-2 bg-[#EB1C24] text-white rounded-md hover:bg-red-700">
                                 Pay Now

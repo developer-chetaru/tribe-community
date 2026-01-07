@@ -266,65 +266,13 @@ class Billing extends Component
 
     public function openRenewModal()
     {
-        \Log::info('openRenewModal called');
-        $user = auth()->user();
+        \Log::info('openRenewModal called - redirecting directly to payment');
         
         // Close the subscription expired modal if it's open
         $this->showSubscriptionExpiredModal = false;
         
-        // For basecamp users, renewal is always £10/month for 1 user
-        if ($user->hasRole('basecamp')) {
-            $this->renewalUserCount = 1;
-            $this->renewalPricePerUser = 10.00;
-            $this->renewalPrice = 10.00;
-            $this->renewalExpiryDate = now()->addMonth()->format('M d, Y');
-            
-            // Get or create subscription
-            $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
-                ->where('tier', 'basecamp')
-                ->orderBy('created_at', 'desc')
-                ->first();
-        } else {
-            // For directors, get current user count
-            $this->renewalUserCount = \App\Models\User::where('orgId', $user->orgId)
-                ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
-                ->count();
-            
-            // Default price per user is £10
-            $this->renewalPricePerUser = 10.00;
-            $this->renewalPrice = $this->renewalUserCount * $this->renewalPricePerUser;
-            $this->renewalExpiryDate = now()->addMonth()->format('M d, Y');
-            
-            // Ensure subscription exists - create default if not
-            $subscription = \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
-                ->orderBy('created_at', 'desc')
-                ->first();
-            
-            if (!$subscription) {
-                // Auto-create subscription if it doesn't exist
-                $subscription = \App\Models\SubscriptionRecord::create([
-                    'organisation_id' => $user->orgId,
-                    'tier' => 'spark',
-                    'user_count' => $this->renewalUserCount,
-                    'status' => 'active',
-                    'next_billing_date' => now()->addMonth(),
-                    'current_period_start' => now(),
-                    'current_period_end' => now()->addMonth(),
-                    'activated_at' => now(),
-                ]);
-                \Log::info('Auto-created subscription for organisation: ' . $user->orgId);
-            }
-        }
-        
-        $this->showRenewModal = true;
-        
-        \Log::info('Renew modal opened', [
-            'user_count' => $this->renewalUserCount,
-            'price_per_user' => $this->renewalPricePerUser,
-            'price' => $this->renewalPrice,
-            'expiry' => $this->renewalExpiryDate,
-            'subscription_id' => $subscription->id ?? null
-        ]);
+        // Directly call renewSubscription to redirect to payment
+        $this->renewSubscription();
     }
 
     public function closeRenewModal()
@@ -340,10 +288,24 @@ class Billing extends Component
     {
         $user = auth()->user();
         
+        // Auto-calculate renewal data if not set
+        if ($user->hasRole('basecamp')) {
+            $this->renewalUserCount = 1;
+            $this->renewalPricePerUser = 10.00; // £10 excluding VAT
+            $this->renewalPrice = 10.00; // £10 excluding VAT
+        } else {
+            // For directors, get current user count
+            $this->renewalUserCount = \App\Models\User::where('orgId', $user->orgId)
+                ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+                ->count();
+            
+            $this->renewalPricePerUser = 10.00;
+            $this->renewalPrice = $this->renewalUserCount * $this->renewalPricePerUser;
+        }
+        
         // Check if we have valid renewal data
         if ($this->renewalPricePerUser <= 0 || $this->renewalPrice <= 0 || $this->renewalUserCount <= 0) {
             session()->flash('error', 'Invalid renewal data. Please contact admin.');
-            $this->closeRenewModal();
             return;
         }
         
@@ -464,16 +426,12 @@ class Billing extends Component
                 ]);
             });
             
-            // Open payment modal for this invoice (after transaction commits)
-            $this->selectedInvoice = $this->renewalInvoice;
-            $this->payment_amount = $this->renewalPrice;
-            $this->showRenewModal = false;
-            $this->showPaymentModal = true;
+            // Redirect directly to Stripe payment (no modal)
+            $this->openPaymentModal($this->renewalInvoice->id);
             
         } catch (\Exception $e) {
             \Log::error('Error creating renewal invoice: ' . $e->getMessage());
             session()->flash('error', 'Failed to create renewal invoice. Please try again.');
-            $this->closeRenewModal();
         }
     }
 

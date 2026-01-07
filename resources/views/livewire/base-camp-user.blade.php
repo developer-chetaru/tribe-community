@@ -232,11 +232,13 @@
                     @endif
                     <div>
                         <label class="text-sm font-semibold text-gray-600">Status</label>
-                        <p class="text-gray-900">
-                            <span class="px-3 py-1 rounded-full text-sm font-medium {{ $viewingUser->status == 1 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                {{ $viewingUser->status == 1 ? 'Verified' : 'Unverified' }}
-                            </span>
-                        </p>
+                            <p class="text-gray-900">
+                                <span class="px-3 py-1 rounded-full text-sm font-medium 
+                                    {{ $viewingUser->status == "active_verified" ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
+                                    
+                                    {{ Str::title(str_replace('_', ' ', $viewingUser->status)) }}
+                                </span>
+                            </p>
                     </div>
                     @if($viewingUser->created_at)
                     <div>
