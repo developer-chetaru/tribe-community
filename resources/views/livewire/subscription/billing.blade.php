@@ -104,7 +104,7 @@
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invoice #</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Due Date</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">End Date</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -115,7 +115,7 @@
                             <tr>
                                 <td class="px-6 py-4 whitespace-nowrap">{{ $invoice->invoice_number }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">{{ $invoice->invoice_date->format('M d, Y') }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap">{{ $invoice->due_date->format('M d, Y') }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">{{ $subscriptionStatus['end_date'] ? \Carbon\Carbon::parse($subscriptionStatus['end_date'])->format('M d, Y') : 'N/A' }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">£{{ number_format($invoice->total_amount, 2) }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <span class="px-2 py-1 text-xs rounded-full 
@@ -1092,8 +1092,8 @@
                             <p class="font-semibold text-gray-900">{{ $selectedInvoiceForView->invoice_date->format('M d, Y') }}</p>
                         </div>
                         <div>
-                            <span class="text-sm text-gray-600">Due Date:</span>
-                            <p class="font-semibold text-gray-900">{{ $selectedInvoiceForView->due_date->format('M d, Y') }}</p>
+                            <span class="text-sm text-gray-600">End Date:</span>
+                            <p class="font-semibold text-gray-900">{{ $subscriptionStatus['end_date'] ? \Carbon\Carbon::parse($subscriptionStatus['end_date'])->format('M d, Y') : 'N/A' }}</p>
                         </div>
                         <div>
                             <span class="text-sm text-gray-600">Status:</span>
