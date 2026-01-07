@@ -7,7 +7,7 @@
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-semibold">Current Subscription</h3>
                         @if($subscriptionStatus['active'] && $daysRemaining > 0)
-                            <div class="flex items-center space-x-2">
+                            <!-- <div class="flex items-center space-x-2">
                                 <span class="text-sm text-gray-600">Days Remaining:</span>
                                 <span class="text-2xl font-bold text-green-600" 
                                       x-data="{ days: {{ $daysRemaining }} }"
@@ -26,14 +26,16 @@
                                       }, 60000)">
                                     {{ number_format($daysRemaining, 0) }}
                                 </span>
-                            </div>
+                            </div> -->
                         @endif
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        @if($subscription->tier !== 'basecamp')
                         <div>
                             <p class="text-sm text-gray-600">User Count</p>
                             <p class="text-lg font-semibold">{{ $subscription->user_count }}</p>
                         </div>
+                        @endif
                         <div>
                             <p class="text-sm text-gray-600">Tier</p>
                             <p class="text-lg font-semibold capitalize">{{ $subscription->tier ?? 'N/A' }}</p>
@@ -47,7 +49,22 @@
                             <p class="text-lg font-semibold">£{{ number_format(($subscription->tier === 'basecamp' ? 10 : ($subscription->tier === 'spark' ? 10 : ($subscription->tier === 'momentum' ? 20 : 30))) * ($subscription->tier === 'basecamp' ? 1 : $subscription->user_count), 2) }}</p>
                         </div>
                         <div>
-                            <p class="text-sm text-gray-600">Subscription End</p>
+                            @php
+                                $isCancelled = false;
+                                // Check Stripe subscription status first (most accurate)
+                                if (isset($stripeDetails) && isset($stripeDetails['subscription']) && $stripeDetails['subscription']) {
+                                    $isCancelled = in_array(strtolower($stripeDetails['subscription']->status), ['canceled', 'cancelled']);
+                                }
+                                // Fallback to database subscription status
+                                if (!$isCancelled && isset($subscriptionStatus['status'])) {
+                                    $isCancelled = in_array(strtolower($subscriptionStatus['status']), ['canceled', 'cancelled']);
+                                }
+                                // Final fallback to subscription model status
+                                if (!$isCancelled && $subscription && $subscription->status) {
+                                    $isCancelled = in_array(strtolower($subscription->status), ['canceled', 'cancelled']);
+                                }
+                            @endphp
+                            <p class="text-sm text-gray-600">{{ $isCancelled ? 'Subscription End' : 'Next Billing Date' }}</p>
                             <p class="text-lg font-semibold {{ $daysRemaining <= 7 ? 'text-red-600' : '' }}">
                                 {{ $subscription->current_period_end ? $subscription->current_period_end->format('M d, Y') : 'N/A' }}
                             </p>
@@ -295,10 +312,12 @@
                                 <span class="text-sm text-gray-600">Invoice Number:</span>
                                 <p class="font-semibold text-gray-900">{{ $selectedInvoice->invoice_number }}</p>
                             </div>
+                            @if($selectedInvoice->tier !== 'basecamp')
                             <div>
                                 <span class="text-sm text-gray-600">User Count:</span>
                                 <p class="font-semibold text-gray-900">{{ $selectedInvoice->user_count }}</p>
                             </div>
+                            @endif
                             <div>
                                 <span class="text-sm text-gray-600">Price per User:</span>
                                 <p class="font-semibold text-gray-900">£{{ number_format($selectedInvoice->price_per_user, 2) }}</p>
@@ -770,10 +789,12 @@
                         <span class="text-gray-600">Invoice Number:</span>
                         <span class="font-semibold">{{ $selectedInvoice->invoice_number }}</span>
                     </div>
+                    @if($selectedInvoice->tier !== 'basecamp')
                     <div class="flex justify-between mb-2">
                         <span class="text-gray-600">User Count:</span>
                         <span class="font-semibold">{{ $selectedInvoice->user_count }}</span>
                     </div>
+                    @endif
                     <div class="flex justify-between mb-2">
                         <span class="text-gray-600">Price per User:</span>
                         <span class="font-semibold">£{{ number_format($selectedInvoice->price_per_user, 2) }}</span>
@@ -1220,12 +1241,14 @@
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
                             <span class="text-sm text-gray-600">Tier:</span>
-                            <p class="font-semibold text-gray-900 capitalize">{{ $selectedInvoiceForView->subscription->tier ?? 'N/A' }}</p>
+                            <p class="font-semibold text-gray-900 capitalize">{{ $selectedInvoiceForView->subscription->tier ?? ($selectedInvoiceForView->tier ?? 'N/A') }}</p>
                         </div>
+                        @if(($selectedInvoiceForView->tier ?? $selectedInvoiceForView->subscription->tier ?? '') !== 'basecamp')
                         <div>
                             <span class="text-sm text-gray-600">User Count:</span>
                             <p class="font-semibold text-gray-900">{{ $selectedInvoiceForView->user_count }}</p>
                         </div>
+                        @endif
                         <div>
                             <span class="text-sm text-gray-600">Price per User:</span>
                             <p class="font-semibold text-gray-900">£{{ number_format($selectedInvoiceForView->price_per_user, 2) }}</p>
