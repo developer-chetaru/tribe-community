@@ -143,10 +143,13 @@ class BasecampStripeCheckoutController extends Controller
                             'description' => 'Monthly subscription for Tribe365 Basecamp',
                         ],
                         'unit_amount' => $invoice->total_amount * 100, // Convert to cents
+                        'recurring' => [
+                            'interval' => 'month',
+                        ],
                     ],
                     'quantity' => 1,
                 ]],
-                'mode' => 'payment',
+                'mode' => 'subscription',
                 'success_url' => route('basecamp.billing.payment.success') . '?session_id={CHECKOUT_SESSION_ID}&invoice_id=' . $invoice->id . '&user_id=' . $user->id,
                 'cancel_url' => route('basecamp.billing') . '?user_id=' . $user->id,
                 'metadata' => [
@@ -283,7 +286,7 @@ class BasecampStripeCheckoutController extends Controller
             
             // Check if payment already exists
             $existingPayment = Payment::where('invoice_id', $invoiceId)
-                ->where('transaction_id', $session->payment_intent)
+                ->where('transaction_id', $session->payment_intent ?? $session->subscription)
                 ->first();
                 
             if ($existingPayment) {
@@ -295,6 +298,25 @@ class BasecampStripeCheckoutController extends Controller
                     ->with('status', 'Payment already processed.');
             }
             
+            // If Checkout Session mode is 'subscription', retrieve and save the subscription ID
+            $stripeSubscriptionId = null;
+            if ($session->mode === 'subscription' && $session->subscription) {
+                $stripeSubscriptionId = $session->subscription;
+                
+                // Retrieve full subscription details from Stripe
+                try {
+                    $stripeSubscription = \Stripe\Subscription::retrieve($stripeSubscriptionId);
+                    
+                    Log::info('Retrieved Stripe subscription for basecamp user', [
+                        'stripe_subscription_id' => $stripeSubscriptionId,
+                        'status' => $stripeSubscription->status,
+                        'customer' => $stripeSubscription->customer
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warning("Failed to retrieve Stripe subscription: " . $e->getMessage());
+                }
+            }
+            
             // Create payment record
             $payment = Payment::create([
                 'invoice_id' => $invoice->id,
@@ -302,7 +324,7 @@ class BasecampStripeCheckoutController extends Controller
                 'organisation_id' => null, // Basecamp users don't have organisation
                 'payment_method' => 'card',
                 'amount' => $invoice->total_amount,
-                'transaction_id' => $session->payment_intent,
+                'transaction_id' => $session->payment_intent ?? $session->subscription,
                 'status' => 'completed', // Payment is completed via Stripe
                 'payment_date' => now()->toDateString(),
                 'payment_notes' => 'Basecamp subscription payment via Stripe Checkout',
@@ -320,13 +342,42 @@ class BasecampStripeCheckoutController extends Controller
                 ->first();
                 
             if ($subscription) {
-                // Activate subscription
-                $subscription->update([
+                // Update subscription with Stripe subscription ID and details
+                $updateData = [
                     'status' => 'active',
                     'current_period_start' => now(),
                     'current_period_end' => now()->addMonth(),
                     'next_billing_date' => now()->addMonth(),
-                ]);
+                ];
+                
+                // If we have Stripe subscription ID, update with Stripe data
+                if ($stripeSubscriptionId) {
+                    try {
+                        $stripeSubscription = \Stripe\Subscription::retrieve($stripeSubscriptionId);
+                        $updateData['stripe_subscription_id'] = $stripeSubscriptionId;
+                        $updateData['stripe_customer_id'] = $stripeSubscription->customer ?? null;
+                        $updateData['status'] = $stripeSubscription->status ?? 'active';
+                        
+                        // Only update timestamps if they exist and are not null
+                        if (isset($stripeSubscription->current_period_start) && $stripeSubscription->current_period_start !== null) {
+                            $updateData['current_period_start'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_start);
+                        }
+                        if (isset($stripeSubscription->current_period_end) && $stripeSubscription->current_period_end !== null) {
+                            $updateData['current_period_end'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
+                            $updateData['next_billing_date'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
+                        }
+                        
+                        Log::info('Updated basecamp subscription with Stripe subscription ID', [
+                            'subscription_id' => $subscription->id,
+                            'stripe_subscription_id' => $stripeSubscriptionId
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::warning("Failed to update subscription with Stripe data: " . $e->getMessage());
+                    }
+                }
+                
+                // Activate subscription
+                $subscription->update($updateData);
             }
             
             // Send payment confirmation email (not activation email - that was already sent during registration)

@@ -1,9 +1,3 @@
-<x-slot name="header">
-    <h2 class="text-[24px] md:text-[30px] font-semibold capitalize text-[#EB1C24]">
-        Billing & Invoices
-    </h2>
-</x-slot>
-
 <div>
     <div class="flex-1 overflow-auto">
         <div class="max-w-8xl mx-auto p-4">
@@ -89,6 +83,102 @@
                             <button wire:click="openRenewModal" type="button" class="mt-2 px-4 py-2 bg-[#EB1C24] text-white rounded-md hover:bg-red-700">
                                 Pay Now
                             </button>
+                        </div>
+                    @endif
+
+                    <!-- Stripe Subscription Details & Payment Info -->
+                    @if($subscription && $subscriptionStatus['active'])
+                        <div class="mt-6 pt-6 border-t border-gray-200">
+                            <h4 class="text-md font-semibold mb-4 text-gray-900">Subscription & Payment Details</h4>
+                            
+                            @if($stripeDetails && $stripeDetails['subscription'])
+                            <!-- Stripe Subscription Details -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <p class="text-sm text-gray-600 mb-1">Subscription ID</p>
+                                    <p class="font-mono text-sm text-gray-900 break-all">{{ $stripeDetails['subscription']->id }}</p>
+                                </div>
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <p class="text-sm text-gray-600 mb-1">Status</p>
+                                    <p class="font-semibold text-gray-900 capitalize">
+                                        <span class="px-2 py-1 rounded text-xs 
+                                            {{ $stripeDetails['subscription']->status === 'active' ? 'bg-green-100 text-green-800' : 
+                                               ($stripeDetails['subscription']->status === 'canceled' ? 'bg-red-100 text-red-800' : 
+                                               ($stripeDetails['subscription']->status === 'past_due' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800')) }}">
+                                            {{ $stripeDetails['subscription']->status }}
+                                        </span>
+                                    </p>
+                                </div>
+                                @if($stripeDetails['subscription']->current_period_start)
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <p class="text-sm text-gray-600 mb-1">Billing Period Start</p>
+                                    <p class="font-semibold text-gray-900">{{ \Carbon\Carbon::createFromTimestamp($stripeDetails['subscription']->current_period_start)->format('M d, Y') }}</p>
+                                </div>
+                                @endif
+                                @if($stripeDetails['subscription']->current_period_end)
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <p class="text-sm text-gray-600 mb-1">Billing Period End</p>
+                                    <p class="font-semibold text-gray-900">{{ \Carbon\Carbon::createFromTimestamp($stripeDetails['subscription']->current_period_end)->format('M d, Y') }}</p>
+                                </div>
+                                @endif
+                                @if($stripeDetails['subscription']->cancel_at_period_end)
+                                <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                                    <p class="text-sm text-yellow-800 font-medium">⚠️ Subscription will cancel at period end</p>
+                                </div>
+                                @endif
+                            </div>
+                            @else
+                            <!-- Fallback: Show basic subscription info if Stripe details not available -->
+                            <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                                <p class="text-sm text-gray-600 mb-2">Subscription Status: <span class="font-semibold text-green-600">Active</span></p>
+                                @if($subscription->stripe_subscription_id)
+                                    <p class="text-sm text-gray-600">Stripe Subscription ID: <span class="font-mono text-xs">{{ $subscription->stripe_subscription_id }}</span></p>
+                                @else
+                                    <p class="text-sm text-yellow-600">⚠️ Stripe subscription details not available. This may be updated after your next payment.</p>
+                                @endif
+                            </div>
+                            @endif
+
+                            <!-- Payment Method Details -->
+                            @if($stripeDetails && $stripeDetails['payment_method'] && isset($stripeDetails['payment_method']->card))
+                            <div class="mt-4 bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                <h5 class="text-sm font-semibold mb-3 text-gray-900">Payment Method</h5>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div>
+                                        <p class="text-xs text-gray-600 mb-1">Card Brand</p>
+                                        <p class="font-semibold text-gray-900 capitalize">{{ $stripeDetails['payment_method']->card->brand ?? 'N/A' }}</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-600 mb-1">Last 4 Digits</p>
+                                        <p class="font-semibold text-gray-900">**** {{ $stripeDetails['payment_method']->card->last4 ?? 'N/A' }}</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-600 mb-1">Expiry Date</p>
+                                        <p class="font-semibold text-gray-900">
+                                            {{ $stripeDetails['payment_method']->card->exp_month ?? 'N/A' }}/{{ $stripeDetails['payment_method']->card->exp_year ?? 'N/A' }}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-600 mb-1">Card Type</p>
+                                        <p class="font-semibold text-gray-900 capitalize">{{ $stripeDetails['payment_method']->card->funding ?? 'N/A' }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            @endif
+
+                            <!-- Cancel Subscription Button - Always show if subscription is active -->
+                            @if($subscriptionStatus['active'] && (!$stripeDetails || !$stripeDetails['subscription'] || ($stripeDetails['subscription']->status === 'active' && !$stripeDetails['subscription']->cancel_at_period_end)))
+                            <div class="mt-4 flex justify-end">
+                                <button wire:click="openCancelModal" 
+                                        type="button"
+                                        class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-200 flex items-center">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                    Cancel Subscription
+                                </button>
+                            </div>
+                            @endif
                         </div>
                     @endif
                 </div>
@@ -1390,6 +1480,86 @@
         </div>
     </div>
     @endif
+    
+    <!-- Cancel Subscription Modal -->
+    <div x-data="{ show: @entangle('showCancelModal') }"
+         x-show="show"
+         x-cloak
+         @click.self="$wire.closeCancelModal()"
+         x-transition:enter="ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+         style="display: none;"
+         id="cancel-modal">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white z-50"
+             x-show="show"
+             x-transition:enter="ease-out duration-300"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="ease-in duration-200"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             @click.stop>
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Cancel Subscription</h3>
+                    <button wire:click="closeCancelModal" 
+                            @click="show = false"
+                            type="button" 
+                            class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="mb-4">
+                    <p class="text-sm text-gray-600 mb-3">
+                        Are you sure you want to cancel your subscription? Monthly payments will be stopped immediately.
+                    </p>
+                    @if($subscription && $subscription->current_period_end)
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        <p class="text-sm text-yellow-800">
+                            <strong>Note:</strong> Your subscription will be cancelled immediately and no further charges will be made.
+                        </p>
+                    </div>
+                    @endif
+                </div>
+                
+                <div class="flex items-center justify-end space-x-3">
+                    <button wire:click="closeCancelModal" 
+                            @click="show = false"
+                            type="button"
+                            class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors">
+                        Keep Subscription
+                    </button>
+                    <button wire:click="cancelSubscription" 
+                            wire:loading.attr="disabled"
+                            wire:target="cancelSubscription"
+                            type="button"
+                            class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center cursor-pointer">
+                        <span wire:loading.remove wire:target="cancelSubscription">
+                            <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                            Cancel Subscription
+                        </span>
+                        <span wire:loading wire:target="cancelSubscription" class="flex items-center">
+                            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Processing...
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>

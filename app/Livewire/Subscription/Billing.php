@@ -46,6 +46,11 @@ class Billing extends Component
     public $stripeClientSecret = null;
     public $stripePaymentIntentId = null;
     public $isProcessingStripePayment = false;
+    
+    // Stripe subscription details
+    public $stripeSubscriptionDetails = null;
+    public $stripePaymentMethod = null;
+    public $showCancelModal = false;
 
     public function mount()
     {
@@ -509,10 +514,13 @@ class Billing extends Component
                                 'description' => 'Monthly subscription for Basecamp tier - £10/month',
                             ],
                             'unit_amount' => $invoice->total_amount * 100, // Convert to cents
+                            'recurring' => [
+                                'interval' => 'month',
+                            ],
                         ],
                         'quantity' => 1,
                     ]],
-                    'mode' => 'payment',
+                    'mode' => 'subscription',
                     'success_url' => route('billing.payment.success') . '?session_id={CHECKOUT_SESSION_ID}&invoice_id=' . $invoice->id,
                     'cancel_url' => route('billing') . '?canceled=true',
                     'customer_email' => $user->email,
@@ -596,10 +604,13 @@ class Billing extends Component
                             'description' => "Payment for {$invoice->user_count} users - {$organisation->name}",
                         ],
                         'unit_amount' => $invoice->total_amount * 100, // Convert to cents
+                        'recurring' => [
+                            'interval' => 'month',
+                        ],
                     ],
                     'quantity' => 1,
                 ]],
-                'mode' => 'payment',
+                'mode' => 'subscription',
                 'success_url' => route('billing.payment.success') . '?session_id={CHECKOUT_SESSION_ID}&invoice_id=' . $invoice->id,
                 'cancel_url' => route('billing') . '?canceled=true',
                 'billing_address_collection' => 'auto', // Collect billing address
@@ -868,11 +879,181 @@ class Billing extends Component
             ->paginate(10);
     }
 
+    public function getStripeSubscriptionDetails()
+    {
+        if (!$this->subscription) {
+            Log::info('No subscription found in getStripeSubscriptionDetails');
+            return null;
+        }
+
+        $stripeSubscription = null;
+        $paymentMethod = null;
+
+        // If subscription doesn't have stripe_subscription_id, try to find it from Stripe customer
+        if (!$this->subscription->stripe_subscription_id) {
+            Log::info('Subscription found but no stripe_subscription_id', [
+                'subscription_id' => $this->subscription->id,
+                'user_id' => $this->subscription->user_id,
+                'organisation_id' => $this->subscription->organisation_id
+            ]);
+            
+            // Try to find subscription from Stripe customer if we have customer ID
+            $customerId = null;
+            if ($this->subscription->organisation_id) {
+                $organisation = Organisation::find($this->subscription->organisation_id);
+                $customerId = $organisation->stripe_customer_id ?? null;
+            } elseif ($this->subscription->user_id) {
+                $user = \App\Models\User::find($this->subscription->user_id);
+                // For basecamp users, check if subscription has customer ID
+                $customerId = $this->subscription->stripe_customer_id ?? null;
+            }
+            
+            if ($customerId) {
+                try {
+                    \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+                    $subscriptions = \Stripe\Subscription::all([
+                        'customer' => $customerId,
+                        'status' => 'all',
+                        'limit' => 10
+                    ]);
+                    
+                    if ($subscriptions->data && count($subscriptions->data) > 0) {
+                        // Use the most recent active subscription
+                        $stripeSubscription = $subscriptions->data[0];
+                        $this->subscription->update([
+                            'stripe_subscription_id' => $stripeSubscription->id,
+                            'stripe_customer_id' => $customerId,
+                        ]);
+                        Log::info('Found and saved Stripe subscription ID from customer', [
+                            'subscription_id' => $this->subscription->id,
+                            'stripe_subscription_id' => $stripeSubscription->id
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Failed to retrieve subscriptions from customer: ' . $e->getMessage());
+                }
+            }
+        } else {
+            // We have subscription ID, retrieve it
+            try {
+                \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+                $stripeSubscription = \Stripe\Subscription::retrieve($this->subscription->stripe_subscription_id);
+            } catch (\Exception $e) {
+                Log::error('Failed to retrieve Stripe subscription: ' . $e->getMessage());
+            }
+        }
+
+        // Get payment method from subscription or customer
+        if ($stripeSubscription) {
+            if ($stripeSubscription->default_payment_method) {
+                try {
+                    $paymentMethod = \Stripe\PaymentMethod::retrieve($stripeSubscription->default_payment_method);
+                } catch (\Exception $e) {
+                    Log::warning('Failed to retrieve payment method from subscription: ' . $e->getMessage());
+                }
+            } elseif ($stripeSubscription->customer) {
+                // Try to get default payment method from customer
+                try {
+                    $customer = \Stripe\Customer::retrieve($stripeSubscription->customer);
+                    if ($customer->invoice_settings->default_payment_method) {
+                        $paymentMethod = \Stripe\PaymentMethod::retrieve($customer->invoice_settings->default_payment_method);
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Failed to retrieve customer payment method: ' . $e->getMessage());
+                }
+            }
+        }
+
+        // Fallback: Try to get payment method from latest payment
+        if (!$paymentMethod) {
+            $user = auth()->user();
+            $latestPayment = null;
+            
+            if ($user->hasRole('basecamp')) {
+                $latestPayment = Payment::where('user_id', $user->id)
+                    ->where('payment_method', 'stripe')
+                    ->whereNotNull('transaction_id')
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+            } else {
+                $latestPayment = Payment::where('organisation_id', $user->orgId)
+                    ->where('payment_method', 'stripe')
+                    ->whereNotNull('transaction_id')
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+            }
+            
+            if ($latestPayment && $latestPayment->transaction_id) {
+                try {
+                    \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+                    $paymentIntent = \Stripe\PaymentIntent::retrieve($latestPayment->transaction_id);
+                    
+                    if ($paymentIntent->payment_method) {
+                        $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentIntent->payment_method);
+                        Log::info('Retrieved payment method from latest payment', [
+                            'payment_id' => $latestPayment->id
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Failed to retrieve payment method from payment: ' . $e->getMessage());
+                }
+            }
+        }
+        
+        return [
+            'subscription' => $stripeSubscription,
+            'payment_method' => $paymentMethod,
+        ];
+    }
+
+    public function openCancelModal()
+    {
+        $this->showCancelModal = true;
+    }
+
+    public function closeCancelModal()
+    {
+        $this->showCancelModal = false;
+    }
+
+    public function cancelSubscription()
+    {
+        if (!$this->subscription || !$this->subscription->stripe_subscription_id) {
+            session()->flash('error', 'No active subscription found to cancel.');
+            return;
+        }
+
+        try {
+            $stripeService = new StripeService();
+            // Cancel immediately to stop monthly payments
+            $result = $stripeService->cancelSubscription($this->subscription->stripe_subscription_id, false);
+            
+            if ($result['success']) {
+                // Refresh subscription status
+                $this->checkSubscriptionStatus();
+                $this->closeCancelModal();
+                session()->flash('success', 'Your subscription has been cancelled successfully. Monthly payments have been stopped.');
+            } else {
+                session()->flash('error', 'Failed to cancel subscription: ' . ($result['error'] ?? 'Unknown error'));
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to cancel subscription: ' . $e->getMessage());
+            session()->flash('error', 'Failed to cancel subscription. Please try again or contact support.');
+        }
+    }
+
     public function render()
     {
+        // Fetch Stripe subscription details if subscription exists
+        $stripeDetails = null;
+        if ($this->subscription && $this->subscription->stripe_subscription_id) {
+            $stripeDetails = $this->getStripeSubscriptionDetails();
+        }
+
         return view('livewire.subscription.billing', [
             'subscription' => $this->subscription,
             'invoices' => $this->invoices,
-        ])->layout('layouts.app');
+            'stripeDetails' => $stripeDetails,
+        ])->layout('layouts.app', ['header' => '<h2 class="text-[24px] md:text-[30px] font-semibold capitalize text-[#EB1C24]">Billing & Invoices</h2>']);
     }
 }

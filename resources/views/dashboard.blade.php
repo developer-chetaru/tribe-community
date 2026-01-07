@@ -231,7 +231,7 @@
                 @endif
             </div>
             {{-- Buttons --}}
-            <div class="flex gap-3">
+            <!-- <div class="flex gap-3">
                 <button type="button" class="bg-[#f6f8fa] border text-black px-5 py-2 rounded-sm border-gray-200 font-medium ml-3 flex items-center">
                     <svg class="mr-2" width="20" height="21" viewBox="0 0 20 21" fill="none" xmlns="http://www.w3.org/2000/svg">
                         {{-- SVG --}}
@@ -250,7 +250,7 @@
                     </svg>
                     Graphical Data
                 </button>
-            </div>
+            </div> -->
         </div>
         @livewire('dashboard-summary')
         @livewire('weekly-summary')

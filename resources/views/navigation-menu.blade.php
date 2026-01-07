@@ -4,7 +4,7 @@
     @if (isset($header))
         <header class="text-2xl font-bold text-[#ff2323]">
             <div>
-                {{ $header }}
+                {!! $header !!}
             </div>
         </header>
     @endif

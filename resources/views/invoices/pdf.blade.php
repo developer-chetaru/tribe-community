@@ -64,7 +64,7 @@
             <h2>INVOICE</h2>
             <p><strong>Invoice #:</strong> {{ $invoice->invoice_number }}</p>
             <p><strong>Date:</strong> {{ $invoice->invoice_date->format('M d, Y') }}</p>
-            <p><strong>Due Date:</strong> {{ $invoice->due_date->format('M d, Y') }}</p>
+            <!-- <p><strong>Due Date:</strong> {{ $invoice->due_date->format('M d, Y') }}</p> -->
         </div>
     </div>
 

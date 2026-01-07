@@ -427,6 +427,22 @@ class StripeService
 
     /**
      * Cancel a subscription
+     * 
+     * @param string $subscriptionId Stripe subscription ID
+     * @param bool $cancelAtPeriodEnd If true, cancels at period end. If false, cancels immediately.
+     * 
+     * When cancelAtPeriodEnd = false (immediate cancellation):
+     * - Uses Stripe API: DELETE /v1/subscriptions/{id}
+     * - Stops ALL future payments immediately
+     * - No future invoices will be created
+     * - Subscription status becomes "canceled"
+     * - Cannot be reactivated (requires new subscription)
+     * 
+     * When cancelAtPeriodEnd = true:
+     * - Uses Stripe API: POST /v1/subscriptions/{id} with cancel_at_period_end=true
+     * - Continues until current period ends
+     * - Final payment will be made at period end
+     * - Can be reactivated before period ends
      */
     public function cancelSubscription($subscriptionId, $cancelAtPeriodEnd = true)
     {
@@ -435,11 +451,30 @@ class StripeService
                 throw new \Exception('Stripe PHP package is not installed.');
             }
 
-            $subscription = \Stripe\Subscription::retrieve($subscriptionId);
+            \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+            
             if ($cancelAtPeriodEnd) {
-                $subscription->cancel(['at_period_end' => true]);
+                // Cancel at the end of the billing period
+                // API: POST /v1/subscriptions/{id} with cancel_at_period_end=true
+                $subscription = \Stripe\Subscription::update($subscriptionId, [
+                    'cancel_at_period_end' => true
+                ]);
+                Log::info('Subscription scheduled for cancellation at period end', [
+                    'subscription_id' => $subscriptionId,
+                    'period_end' => $subscription->current_period_end
+                ]);
             } else {
-                $subscription->cancel();
+                // Cancel immediately - stops all future payments
+                // API: DELETE /v1/subscriptions/{id}
+                // This permanently cancels the subscription and prevents all future charges
+                $subscription = \Stripe\Subscription::retrieve($subscriptionId);
+                $canceledSubscription = $subscription->cancel();
+                
+                Log::info('Subscription cancelled immediately - all future payments stopped', [
+                    'subscription_id' => $subscriptionId,
+                    'status' => $canceledSubscription->status,
+                    'canceled_at' => $canceledSubscription->canceled_at
+                ]);
             }
 
             // Update database
@@ -454,7 +489,12 @@ class StripeService
                 'subscription' => $subscription,
             ];
         } catch (\Exception $e) {
-            Log::error('Stripe Subscription Cancellation Failed: ' . $e->getMessage());
+            Log::error('Stripe Subscription Cancellation Failed: ' . $e->getMessage(), [
+                'subscription_id' => $subscriptionId,
+                'cancel_at_period_end' => $cancelAtPeriodEnd,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return [
                 'success' => false,
                 'error' => $e->getMessage(),

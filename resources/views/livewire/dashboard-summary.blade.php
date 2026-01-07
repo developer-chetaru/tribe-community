@@ -40,7 +40,7 @@
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4" x-data="{ openModal: false, modalData: { day: null, score: null, desc: null } }">
     <div class="flex flex-wrap border border-gray-100 rounded-md w-full">
         <div class="flex px-3 py-4">
-            <h3 class="text-[14px] sm:text-[20px] text-[#EB1C24] font-semibold">Sentiment Index</h3>
+            <h3 class="text-[14px] sm:text-[20px] text-[#EB1C24] font-semibold">``Sentiment Index</h3>
         </div>
 <div
   x-data="{ open: false,  selectedText: '',    selectedImage: '', showDatePicker: false, startDate: '', endDate: '' }"
@@ -258,19 +258,64 @@
                             @if($day)
                                 @php
                                     $dayData = $happyIndexMonthly[$day-1] ?? null;
-                                    $score = $dayData['score'] ?? null;
-                                    $desc  = $dayData['description'] ?? null;
-                                    $mood  = $dayData['mood_value'] ?? null;
-
                                     $dayDate = \Carbon\Carbon::createFromDate($year, $month, $day, 'Asia/Kolkata');
+                                    
+                                    // For today, use todayMoodData if available, otherwise use dayData
+                                    if ($dayDate->isSameDay($todayDate) && $todayMoodData) {
+                                        $score = $todayMoodData['score'] ?? null;
+                                        $desc  = $todayMoodData['description'] ?? null;
+                                        $mood  = $todayMoodData['mood_value'] ?? null;
+                                    } else {
+                                        $score = $dayData['score'] ?? null;
+                                        $desc  = $dayData['description'] ?? null;
+                                        $mood  = $dayData['mood_value'] ?? null;
+                                    }
+
                                     $img = null;
 
                                     // Determine emoji based on date and data
+                                    // Using score-based logic similar to app code:
+                                    // null or 0-50: red (sad), 51-80: yellow (avarge), 81+: green (happy)
                                     if ($dayDate->lt($todayDate)) {
-                                        $img = $dayData ? ($mood === 3 ? 'happy.svg' : ($mood === 2 ? 'avarge.svg' :  'sad.svg')) : 'sad.svg';
+                                        // Past dates: show mood if data exists, otherwise show red
+                                        if ($dayData && $mood !== null && $score !== null) {
+                                            // Use score-based logic (matching app code)
+                                            if ($score >= 0 && $score <= 50) {
+                                                $img = 'sad.svg';
+                                            } else if ($score >= 51 && $score <= 80) {
+                                                $img = 'avarge.svg';
+                                            } else if ($score > 80) {
+                                                $img = 'happy.svg';
+                                            } else {
+                                                $img = 'sad.svg';
+                                            }
+                                        } else {
+                                            // No data for past date - show red
+                                            $img = 'sad.svg';
+                                        }
                                     } elseif ($dayDate->isSameDay($todayDate)) {
-                                        $img = ($onLeaveToday ?? false) ? 'leave-office.svg' : ($dayData ? ($mood === 3 ? 'happy.svg' : ($mood === 2 ? 'sad.svg' : 'avarge.svg')) : 'sad.svg');
+                                        // Today: check leave status first, then check if data exists
+                                        if ($onLeaveToday ?? false) {
+                                            $img = 'leave-office.svg';
+                                        } elseif ($todayMoodData && isset($todayMoodData['mood_value']) && isset($todayMoodData['score'])) {
+                                            // Use today's actual mood data from database
+                                            $todayScore = $todayMoodData['score'];
+                                            // Use score-based logic (matching app code)
+                                            if ($todayScore >= 0 && $todayScore <= 50) {
+                                                $img = 'sad.svg';
+                                            } else if ($todayScore >= 51 && $todayScore <= 80) {
+                                                $img = 'avarge.svg';
+                                            } else if ($todayScore > 80) {
+                                                $img = 'happy.svg';
+                                            } else {
+                                                $img = 'sad.svg';
+                                            }
+                                        } else {
+                                            // Nothing filled today - show nothing (null)
+                                            $img = null;
+                                        }
                                     } else {
+                                        // Future dates: only show leave icon if applicable
                                         $isFutureLeave = false;
                                         if (!empty($userLeaves)) {
                                             foreach ($userLeaves as $leave) {

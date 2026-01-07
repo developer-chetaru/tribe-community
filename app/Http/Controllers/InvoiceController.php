@@ -268,10 +268,13 @@ class InvoiceController extends Controller
                             'description' => "Payment for {$invoice->user_count} users - {$organisation->name}",
                         ],
                         'unit_amount' => $invoice->total_amount * 100, // Convert to cents
+                        'recurring' => [
+                            'interval' => 'month',
+                        ],
                     ],
                     'quantity' => 1,
                 ]],
-                'mode' => 'payment',
+                'mode' => 'subscription',
                 'success_url' => route('invoices.shared.payment.success', ['token' => $token]) . '?session_id={CHECKOUT_SESSION_ID}',
                 'cancel_url' => route('invoices.shared', ['token' => $token]) . '?canceled=true',
                 'billing_address_collection' => 'auto',

@@ -37,6 +37,7 @@ class DashboardSummary extends Component
     public $showHappyIndex;
     public $showSubscriptionExpiredModal = false;
     public $subscriptionStatus = [];
+    public $todayMoodData = null; // Store today's actual mood data
 
     protected $service;
 
@@ -73,6 +74,29 @@ class DashboardSummary extends Component
         $this->userGivenFeedback = HappyIndex::where('user_id', $user->id)
             ->whereDate('created_at', $today)
             ->exists();
+        
+        // Fetch today's actual mood data if exists
+        $todayHappyIndex = HappyIndex::where('user_id', $user->id)
+            ->whereDate('created_at', $today)
+            ->first();
+        
+        if ($todayHappyIndex) {
+            $moodValue = $todayHappyIndex->mood_value;
+            $score = null;
+            if ($moodValue == 3) {
+                $score = 100;
+            } elseif ($moodValue == 2) {
+                $score = 51;
+            } else {
+                $score = 0;
+            }
+            
+            $this->todayMoodData = [
+                'mood_value' => $moodValue,
+                'score' => $score,
+                'description' => $todayHappyIndex->description,
+            ];
+        }
 
         // Show Happy Index only in allowed time (16:00 - 23:59)
         $now = Carbon::now($tz);
@@ -268,6 +292,35 @@ public function updatedSelectedDepartment($value)
         $this->orgYearList = $data['orgYearList'] ?? [];
         $this->departments = $this->service->getDepartmentList($filters);
         $this->offices = $this->service->getAllOfficenDepartments($filters);
+        
+        // Refresh today's mood data
+        $user = auth()->user();
+        $tz = $user->timezone ?? 'Asia/Kolkata';
+        $today = Carbon::now($tz)->startOfDay();
+        
+        $todayHappyIndex = HappyIndex::where('user_id', $user->id)
+            ->whereDate('created_at', $today)
+            ->first();
+        
+        if ($todayHappyIndex) {
+            $moodValue = $todayHappyIndex->mood_value;
+            $score = null;
+            if ($moodValue == 3) {
+                $score = 100;
+            } elseif ($moodValue == 2) {
+                $score = 51;
+            } else {
+                $score = 0;
+            }
+            
+            $this->todayMoodData = [
+                'mood_value' => $moodValue,
+                'score' => $score,
+                'description' => $todayHappyIndex->description,
+            ];
+        } else {
+            $this->todayMoodData = null;
+        }
     }
 
     public function applyLeave()
@@ -417,6 +470,14 @@ public function updatedSelectedDepartment($value)
 
         $todayEIScore = str_replace(',', '', number_format($user->EIScore + $userHptmScore, 2));
 
+        // Update today's mood data after submission
+        $this->userGivenFeedback = true;
+        $this->todayMoodData = [
+            'mood_value' => $moodValue,
+            'score' => $moodValue == 3 ? 100 : ($moodValue == 2 ? 51 : 0),
+            'description' => $description,
+        ];
+        
         $this->dispatch('close-leave-modal'); 
         return redirect()->route('dashboard')->with('success', "Sentiment submitted successfully! Today's EI Score: $todayEIScore");
     }

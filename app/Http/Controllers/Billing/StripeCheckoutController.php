@@ -70,6 +70,44 @@ class StripeCheckoutController extends Controller
             DB::beginTransaction();
             
             try {
+                // If Checkout Session mode is 'subscription', retrieve and save the subscription ID
+                $stripeSubscriptionId = null;
+                if ($session->mode === 'subscription' && $session->subscription) {
+                    $stripeSubscriptionId = $session->subscription;
+                    
+                    // Retrieve full subscription details from Stripe
+                    try {
+                        $stripeSubscription = \Stripe\Subscription::retrieve($stripeSubscriptionId);
+                        
+                        // Update or create subscription record with Stripe subscription ID
+                        if ($invoice->subscription) {
+                            $updateData = [
+                                'stripe_subscription_id' => $stripeSubscriptionId,
+                                'stripe_customer_id' => $stripeSubscription->customer ?? null,
+                                'status' => $stripeSubscription->status ?? 'active',
+                            ];
+                            
+                            // Only update timestamps if they exist and are not null
+                            if (isset($stripeSubscription->current_period_start) && $stripeSubscription->current_period_start !== null) {
+                                $updateData['current_period_start'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_start);
+                            }
+                            if (isset($stripeSubscription->current_period_end) && $stripeSubscription->current_period_end !== null) {
+                                $updateData['current_period_end'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
+                                $updateData['next_billing_date'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
+                            }
+                            
+                            $invoice->subscription->update($updateData);
+                            
+                            Log::info("Updated subscription with Stripe subscription ID", [
+                                'subscription_id' => $invoice->subscription->id,
+                                'stripe_subscription_id' => $stripeSubscriptionId
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning("Failed to retrieve Stripe subscription: " . $e->getMessage());
+                    }
+                }
+                
                 // Create payment record
                 $payment = Payment::create([
                     'invoice_id' => $invoice->id,
@@ -77,7 +115,7 @@ class StripeCheckoutController extends Controller
                     'amount' => $invoice->total_amount,
                     'payment_method' => 'stripe',
                     'status' => 'completed',
-                    'transaction_id' => $session->payment_intent,
+                    'transaction_id' => $session->payment_intent ?? $session->subscription,
                     'payment_date' => now(),
                     'payment_notes' => "Payment completed via Stripe Checkout - Session: {$sessionId}",
                     'paid_by_user_id' => $user->id,
@@ -88,10 +126,11 @@ class StripeCheckoutController extends Controller
                     'organisation_id' => $invoice->organisation_id,
                     'subscription_id' => $invoice->subscription_id,
                     'stripe_payment_intent_id' => $session->payment_intent,
+                    'stripe_subscription_id' => $stripeSubscriptionId,
                     'amount' => $invoice->total_amount,
                     'currency' => 'gbp',
                     'status' => 'succeeded',
-                    'type' => 'one_time_payment',
+                    'type' => $session->mode === 'subscription' ? 'subscription' : 'one_time_payment',
                     'paid_at' => now(),
                 ]);
                 
@@ -105,7 +144,8 @@ class StripeCheckoutController extends Controller
                 
                 Log::info("Invoice {$invoice->id} status updated to paid", [
                     'invoice_status' => $invoice->status,
-                    'paid_date' => $invoice->paid_date
+                    'paid_date' => $invoice->paid_date,
+                    'stripe_subscription_id' => $stripeSubscriptionId
                 ]);
                 
                 // Activate or renew subscription

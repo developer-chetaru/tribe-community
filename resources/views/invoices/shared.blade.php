@@ -217,10 +217,10 @@
                 <span class="meta-label">Invoice #:</span>
                 <span class="meta-value">{{ $invoice->invoice_number }}</span>
             </div>
-            <div class="meta-item">
+            <!-- <div class="meta-item">
                 <span class="meta-label">Due Date:</span>
                 <span class="meta-value">{{ $invoice->due_date->format('d/m/Y') }}</span>
-            </div>
+            </div> -->
         </div>
         <div class="action-buttons">
             <button class="action-btn print" onclick="window.print()" title="Print">
@@ -251,7 +251,7 @@
                 <h2>INVOICE</h2>
                 <p><strong>Invoice #:</strong> {{ $invoice->invoice_number }}</p>
                 <p><strong>Date:</strong> {{ $invoice->invoice_date->format('M d, Y') }}</p>
-                <p><strong>Due Date:</strong> {{ $invoice->due_date->format('M d, Y') }}</p>
+                <!-- <p><strong>Due Date:</strong> {{ $invoice->due_date->format('M d, Y') }}</p> -->
             </div>
         </div>
 
