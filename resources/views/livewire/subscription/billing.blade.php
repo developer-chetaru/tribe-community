@@ -17,14 +17,20 @@
                                 <span class="text-sm text-gray-600">Days Remaining:</span>
                                 <span class="text-2xl font-bold text-green-600" 
                                       x-data="{ days: {{ $daysRemaining }} }"
-                                      x-text="days"
+                                      x-text="Math.floor(days)"
                                       x-init="setInterval(() => { 
-                                          const endDate = new Date('{{ $subscriptionStatus['end_date'] ?? ($subscription->current_period_end ? $subscription->current_period_end->format('Y-m-d') : '') }}');
-                                          const now = new Date();
-                                          const diff = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
-                                          days = Math.max(0, diff);
-                                      }, 1000)">
-                                    {{ $daysRemaining }}
+                                          const endDateStr = '{{ $subscriptionStatus['end_date'] ?? ($subscription->current_period_end ? \Carbon\Carbon::parse($subscription->current_period_end)->format('Y-m-d') : '') }}';
+                                          if (endDateStr) {
+                                              const endDate = new Date(endDateStr + 'T23:59:59');
+                                              const now = new Date();
+                                              // Set both dates to start of day for accurate calculation
+                                              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                                              const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+                                              const diff = Math.floor((end - today) / (1000 * 60 * 60 * 24));
+                                              days = Math.max(0, diff);
+                                          }
+                                      }, 60000)">
+                                    {{ number_format($daysRemaining, 0) }}
                                 </span>
                             </div>
                         @endif

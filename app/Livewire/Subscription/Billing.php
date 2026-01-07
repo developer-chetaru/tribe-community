@@ -223,14 +223,18 @@ class Billing extends Component
                 ->first();
                 
             if ($subscription) {
-                $endDate = $subscription->current_period_end ?? now()->addMonth();
-                $daysRemaining = max(0, now()->diffInDays($endDate, false));
+                $endDate = $subscription->current_period_end ?? \Carbon\Carbon::today()->addMonth();
+                // Use today() for date-only calculation to avoid time-based decimals
+                $today = \Carbon\Carbon::today();
+                $endDateOnly = \Carbon\Carbon::parse($endDate)->startOfDay();
+                // Calculate whole days remaining (floor to ensure we don't show partial days)
+                $daysRemaining = max(0, (int) floor($today->diffInDays($endDateOnly, false)));
                 
                 $this->subscriptionStatus = [
                     'active' => $subscription->status === 'active',
                     'status' => $subscription->status,
                     'days_remaining' => $daysRemaining,
-                    'end_date' => $endDate,
+                    'end_date' => $endDateOnly->format('Y-m-d'),
                 ];
                 $this->daysRemaining = $daysRemaining;
             } else {

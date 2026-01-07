@@ -193,8 +193,10 @@ class SubscriptionService
 
         // Check if subscription is paused/suspended
         if ($subscription->status === 'suspended') {
-            $endDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end) : null;
-            $daysRemaining = $endDate ? Carbon::today()->diffInDays($endDate, false) : 0;
+            $endDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end)->startOfDay() : null;
+            $today = Carbon::today();
+            // Calculate whole days remaining (floor to ensure we don't show partial days)
+            $daysRemaining = $endDate ? max(0, (int) floor($today->diffInDays($endDate, false))) : 0;
             
             return [
                 'active' => false,
@@ -210,9 +212,10 @@ class SubscriptionService
         }
 
         // For active subscriptions, check expiry and invoices
-        $endDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end) : null;
+        $endDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end)->startOfDay() : null;
         $today = Carbon::today();
-        $daysRemaining = $endDate ? $today->diffInDays($endDate, false) : 0;
+        // Calculate whole days remaining (floor to ensure we don't show partial days)
+        $daysRemaining = $endDate ? max(0, (int) floor($today->diffInDays($endDate, false))) : 0;
 
         // Check for pending/overdue invoices
         $pendingInvoice = Invoice::where('subscription_id', $subscription->id)
