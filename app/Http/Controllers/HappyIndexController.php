@@ -80,7 +80,7 @@ class HappyIndexController extends Controller
         }
 
         $user = User::where('id', $userId)
-            ->whereIn('status', ['active_verified', 'active_unverified', true, '1', 1])
+            // ->whereIn('status', ['active_verified', 'active_unverified', true, '1', 1])
             ->first();
 
         if (! $user || $user->onLeave) {
