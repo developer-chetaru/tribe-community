@@ -70,7 +70,29 @@
                             </p>
                         </div>
                     </div>
-                    @if(isset($subscriptionStatus['status']) && $subscriptionStatus['status'] === 'suspended')
+                    @php
+                        // Check if subscription is cancelled
+                        $isSubscriptionCancelled = false;
+                        if (isset($stripeDetails) && isset($stripeDetails['subscription']) && $stripeDetails['subscription']) {
+                            $isSubscriptionCancelled = in_array(strtolower($stripeDetails['subscription']->status), ['canceled', 'cancelled']);
+                        }
+                        if (!$isSubscriptionCancelled && isset($subscriptionStatus['status'])) {
+                            $isSubscriptionCancelled = in_array(strtolower($subscriptionStatus['status']), ['canceled', 'cancelled']);
+                        }
+                        if (!$isSubscriptionCancelled && $subscription && $subscription->status) {
+                            $isSubscriptionCancelled = in_array(strtolower($subscription->status), ['canceled', 'cancelled']);
+                        }
+                    @endphp
+                    @if($isSubscriptionCancelled)
+                        <div class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                            <p class="text-red-800 text-sm font-medium mb-2">
+                                ⚠️ Your subscription has been cancelled. Monthly payments have been stopped. You can still use the service until {{ $subscription->current_period_end ? $subscription->current_period_end->format('M d, Y') : 'the end of your billing period' }}. To continue using the service after that date, please renew your subscription.
+                            </p>
+                            <button wire:click="openRenewModal" type="button" class="mt-2 px-4 py-2 bg-[#EB1C24] text-white rounded-md hover:bg-red-700">
+                                Renew Subscription
+                            </button>
+                        </div>
+                    @elseif(isset($subscriptionStatus['status']) && $subscriptionStatus['status'] === 'suspended')
                         <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                             <p class="text-yellow-800 text-sm font-medium mb-2">
                                 ⚠️ Your subscription is currently paused. Please contact your administrator or renew to activate it.

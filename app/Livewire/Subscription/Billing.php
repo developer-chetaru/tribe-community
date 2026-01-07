@@ -256,10 +256,28 @@ class Billing extends Component
             $this->daysRemaining = $this->subscriptionStatus['days_remaining'] ?? 0;
         }
 
-        // Show expired modal only if subscription is expired (not if it's just paused)
+        // Show expired modal only if subscription is expired (not if it's just paused or cancelled)
         // Directors should be able to access billing page even if paused
         $status = $this->subscriptionStatus['status'] ?? 'none';
-        if (!$this->subscriptionStatus['active'] && $status !== 'suspended') {
+        $isCancelled = in_array(strtolower($status), ['canceled', 'cancelled']);
+        
+        // Also check Stripe subscription status if available
+        if (!$isCancelled) {
+            $subscription = $this->subscription;
+            if ($subscription && $subscription->stripe_subscription_id) {
+                try {
+                    \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+                    $stripeSubscription = \Stripe\Subscription::retrieve($subscription->stripe_subscription_id);
+                    $isCancelled = in_array(strtolower($stripeSubscription->status ?? ''), ['canceled', 'cancelled']);
+                } catch (\Exception $e) {
+                    // If we can't check Stripe, continue with database status
+                    Log::debug('Could not check Stripe subscription status: ' . $e->getMessage());
+                }
+            }
+        }
+        
+        // Don't show modal if subscription is cancelled or suspended
+        if (!$this->subscriptionStatus['active'] && $status !== 'suspended' && !$isCancelled) {
             $this->showSubscriptionExpiredModal = true;
         }
     }
