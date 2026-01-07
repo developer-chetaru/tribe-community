@@ -20,8 +20,8 @@ class User extends Authenticatable implements JWTSubject
         'first_name', 'last_name', 'email', 'password', 'profile_photo_path', 'EIScore',
         'fcmToken', 'lastHIDate', 'onLeave', 'hptmEvaluationScore', 'HI_include_sunday',
         'HI_include_saturday', 'orgId', 'departmentId', 'officeId', 'first_login_at',
-        'deviceType', 'deviceId', 'contact', 'status', 'phone', 'hptmScore'  ,  'last_login_at',
-    'time_spent_on_app','country_code', 'timezone',
+        'deviceType', 'deviceId', 'contact', 'status', 'phone', 'hptmScore', 'last_login_at',
+        'time_spent_on_app', 'country_code', 'timezone', 'email_verified_at',
     ];
 
     protected $hidden = [

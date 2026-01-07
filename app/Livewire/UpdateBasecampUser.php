@@ -39,7 +39,17 @@ class UpdateBasecampUser extends Component
         $this->email = $user->email;
         $this->phone = $user->phone;
         $this->country_code = $user->country_code ?: '+1';
-        $this->status = $user->status;
+        
+        // Convert status to legacy format for dropdown (for backward compatibility)
+        // Check if user has verified email
+        $this->status = $user->email_verified_at ? '1' : '0';
+        
+        \Illuminate\Support\Facades\Log::info('UpdateBasecampUser - Mount', [
+            'user_id' => $user->id,
+            'db_status' => $user->status,
+            'db_email_verified_at' => $user->email_verified_at,
+            'dropdown_status' => $this->status,
+        ]);
 
         // Load existing photo
         $this->existingPhoto = $user->profile_photo_path ?? null;
@@ -59,10 +69,30 @@ class UpdateBasecampUser extends Component
             'email' => 'required|string|max:255|unique:users,email,' . $this->userId,
             'phone' => 'nullable|string|max:20',
             'country_code' => 'nullable|string|max:10',
-            'status' => 'required|integer|in:0,1',
+            'status' => 'required|in:0,1',
         ]);
 
         $user = User::findOrFail($this->userId);
+
+        // Convert legacy status (0/1) to new ENUM status
+        if ($this->status == '1') {
+            // Verified - set email_verified_at and status
+            $newStatus = 'active_verified';
+            $emailVerifiedAt = $user->email_verified_at ?: now();
+        } else {
+            // Unverified - remove email_verified_at and set status
+            $newStatus = 'active_unverified';
+            $emailVerifiedAt = null;
+        }
+
+        \Illuminate\Support\Facades\Log::info('UpdateBasecampUser - Status conversion', [
+            'user_id' => $this->userId,
+            'dropdown_status' => $this->status,
+            'new_status' => $newStatus,
+            'email_verified_at' => $emailVerifiedAt,
+            'old_status' => $user->status,
+            'old_email_verified_at' => $user->email_verified_at,
+        ]);
 
         // Update user
         $user->update([
@@ -71,7 +101,17 @@ class UpdateBasecampUser extends Component
             'email' => $this->email,
             'phone' => $this->phone,
             'country_code' => $this->country_code,
-            'status' => $this->status,
+            'status' => $newStatus,
+            'email_verified_at' => $emailVerifiedAt,
+        ]);
+        
+        // Refresh and verify update
+        $user->refresh();
+        
+        \Illuminate\Support\Facades\Log::info('UpdateBasecampUser - After update', [
+            'user_id' => $this->userId,
+            'updated_status' => $user->status,
+            'updated_email_verified_at' => $user->email_verified_at,
         ]);
 
         // Handle profile photo upload
