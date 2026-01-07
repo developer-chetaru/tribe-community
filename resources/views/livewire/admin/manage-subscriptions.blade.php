@@ -172,6 +172,15 @@
                                                 Resume
                                             </button>
                                         @endif
+                                        @if(isset($item['payment_status']) && $item['payment_status'] === 'unpaid')
+                                            <button 
+                                                wire:click="deleteUnpaidSubscription({{ $item['subscription']->id }})" 
+                                                wire:confirm="Are you sure you want to delete this unpaid subscription? This will also delete all unpaid invoices. This action cannot be undone."
+                                                type="button" 
+                                                class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-800 hover:bg-red-50 rounded border border-red-200 transition-all duration-200 cursor-pointer">
+                                                Delete
+                                            </button>
+                                        @endif
                                     @endif
                                 </div>
                             </td>

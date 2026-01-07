@@ -255,6 +255,48 @@ class ManageSubscriptions extends Component
         session()->flash('success', 'Subscription resumed successfully.');
     }
 
+    public function deleteUnpaidSubscription($subscriptionId)
+    {
+        try {
+            $subscription = SubscriptionRecord::findOrFail($subscriptionId);
+            
+            // Check if subscription has any paid invoices
+            $hasPaidInvoice = Invoice::where('subscription_id', $subscription->id)
+                ->where('status', 'paid')
+                ->exists();
+            
+            if ($hasPaidInvoice) {
+                session()->flash('error', 'Cannot delete subscription with paid invoices. Please contact support.');
+                return;
+            }
+            
+            // Delete unpaid invoices
+            Invoice::where('subscription_id', $subscription->id)
+                ->where('status', '!=', 'paid')
+                ->delete();
+            
+            // Delete payments related to this subscription
+            $invoiceIds = Invoice::where('subscription_id', $subscription->id)->pluck('id');
+            Payment::whereIn('invoice_id', $invoiceIds)->delete();
+            
+            // For basecamp users, also delete user-level invoices
+            if ($subscription->tier === 'basecamp' && $subscription->user_id) {
+                Invoice::where('user_id', $subscription->user_id)
+                    ->where('tier', 'basecamp')
+                    ->where('status', '!=', 'paid')
+                    ->delete();
+            }
+            
+            // Delete the subscription
+            $subscription->delete();
+            
+            session()->flash('success', 'Unpaid subscription deleted successfully.');
+        } catch (\Exception $e) {
+            \Log::error('Error deleting unpaid subscription: ' . $e->getMessage());
+            session()->flash('error', 'Failed to delete subscription: ' . $e->getMessage());
+        }
+    }
+
     public function getSubscriptionsProperty()
     {
         $combined = collect();
