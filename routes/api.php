@@ -40,11 +40,15 @@ Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     Route::post('/submit-payment', [PaymentController::class, 'submitPayment']);
     Route::get('/payments', [PaymentController::class, 'getPayments']);
 
+    // Organisation Subscription APIs (for directors/organisation users)
+    Route::post('/billing/subscription/cancel', [\App\Http\Controllers\Billing\StripeSubscriptionController::class, 'cancelSubscription']);
+
     // Basecamp Billing APIs
     Route::get('/basecamp/invoices', [BasecampBillingController::class, 'getInvoices']);
     Route::get('/basecamp/subscription', [BasecampBillingController::class, 'getSubscription']);
     Route::post('/basecamp/payment-intent', [BasecampBillingController::class, 'createPaymentIntent']);
     Route::post('/basecamp/confirm-payment', [BasecampBillingController::class, 'confirmPayment']);
+    Route::post('/basecamp/cancel-subscription', [BasecampBillingController::class, 'cancelSubscription']);
     Route::get('/basecamp/invoice/{id}/view', [BasecampBillingController::class, 'viewInvoice']);
     Route::get('/basecamp/invoices/{id}/view', [BasecampBillingController::class, 'viewInvoice']); // Alias for mobile app compatibility
     Route::get('/basecamp/invoice/{id}/download', [BasecampBillingController::class, 'downloadInvoice']);

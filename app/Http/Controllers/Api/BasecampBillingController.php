@@ -1015,5 +1015,162 @@ class BasecampBillingController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * @OA\Post(
+     *     path="/api/basecamp/cancel-subscription",
+     *     tags={"Basecamp Billing", "Basecamp Users"},
+     *     summary="Cancel basecamp user subscription",
+     *     description="Cancel the subscription for the authenticated basecamp user. This immediately stops all future monthly payments. The subscription will be cancelled permanently and no further charges will be made.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=false,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="cancel_at_period_end", type="boolean", example=false, description="If true, cancels at end of billing period. If false (default), cancels immediately. For basecamp users, immediate cancellation is recommended.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Subscription cancelled successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Your subscription has been cancelled successfully. Monthly payments have been stopped."),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="subscription_id", type="integer", example=1),
+     *                 @OA\Property(property="stripe_subscription_id", type="string", nullable=true, example="sub_1234567890"),
+     *                 @OA\Property(property="status", type="string", example="canceled", enum={"canceled", "cancel_at_period_end"}),
+     *                 @OA\Property(property="canceled_at", type="string", format="date-time", example="2025-01-07T10:30:00.000000Z"),
+     *                 @OA\Property(property="user_id", type="integer", example=1)
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Bad request - No active subscription found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="No active subscription found to cancel.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthorized. Please login.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Forbidden - User is not a basecamp user",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Only basecamp users can access this endpoint.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Server error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Failed to cancel subscription."),
+     *             @OA\Property(property="error", type="string", example="Error message")
+     *         )
+     *     )
+     * )
+     */
+    public function cancelSubscription(Request $request)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized. Please login.',
+                ], 401);
+            }
+
+            // Check if user is basecamp user
+            if (!$user->hasRole('basecamp')) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Only basecamp users can access this endpoint.',
+                ], 403);
+            }
+
+            // Get user's subscription
+            $subscription = SubscriptionRecord::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->first();
+
+            if (!$subscription || !$subscription->stripe_subscription_id) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No active subscription found to cancel.',
+                ], 400);
+            }
+
+            // Get cancel_at_period_end from request (default: false for immediate cancellation)
+            $cancelAtPeriodEnd = $request->input('cancel_at_period_end', false);
+
+            // Initialize Stripe Service
+            $stripeService = new \App\Services\Billing\StripeService();
+            
+            // Cancel subscription
+            $result = $stripeService->cancelSubscription(
+                $subscription->stripe_subscription_id,
+                $cancelAtPeriodEnd
+            );
+
+            if ($result['success']) {
+                // Refresh subscription from database
+                $subscription->refresh();
+
+                Log::info('Basecamp subscription cancelled successfully via API', [
+                    'user_id' => $user->id,
+                    'subscription_id' => $subscription->id,
+                    'stripe_subscription_id' => $subscription->stripe_subscription_id,
+                    'cancel_at_period_end' => $cancelAtPeriodEnd,
+                ]);
+
+                return response()->json([
+                    'status' => true,
+                    'message' => $cancelAtPeriodEnd 
+                        ? 'Your subscription will be cancelled at the end of the billing period.' 
+                        : 'Your subscription has been cancelled successfully. Monthly payments have been stopped.',
+                    'data' => [
+                        'subscription_id' => $subscription->id,
+                        'stripe_subscription_id' => $subscription->stripe_subscription_id,
+                        'status' => $subscription->status,
+                        'canceled_at' => $subscription->canceled_at ? $subscription->canceled_at->toIso8601String() : null,
+                        'user_id' => $user->id,
+                        'cancel_at_period_end' => $cancelAtPeriodEnd,
+                    ],
+                ], 200);
+            } else {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Failed to cancel subscription: ' . ($result['error'] ?? 'Unknown error'),
+                    'error' => $result['error'] ?? 'Unknown error',
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Failed to cancel basecamp subscription via API: ' . $e->getMessage(), [
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to cancel subscription. Please try again or contact support.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }
 

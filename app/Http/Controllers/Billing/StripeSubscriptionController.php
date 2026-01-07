@@ -268,17 +268,17 @@ class StripeSubscriptionController extends Controller
 
     /**
      * @OA\Post(
-     *     path="/billing/stripe/subscription/cancel",
-     *     tags={"Billing - Stripe Subscriptions"},
-     *     summary="Cancel subscription",
-     *     description="Cancels a Stripe subscription. By default, cancellation occurs at the end of the current billing period. Requires director or super_admin role.",
+     *     path="/api/billing/subscription/cancel",
+     *     tags={"Billing - Stripe Subscriptions", "Organisation Billing"},
+     *     summary="Cancel organisation subscription",
+     *     description="Cancels a Stripe subscription for an organisation. Can cancel immediately or at the end of the billing period. Requires director or super_admin role. This endpoint is available for mobile apps via API.",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
      *         required=true,
      *         @OA\JsonContent(
      *             required={"subscription_id"},
-     *             @OA\Property(property="subscription_id", type="string", example="sub_1234567890", description="Stripe subscription ID"),
-     *             @OA\Property(property="cancel_at_period_end", type="boolean", example=true, description="Cancel at end of billing period (default: true). If false, cancels immediately.")
+     *             @OA\Property(property="subscription_id", type="string", example="sub_1234567890", description="Stripe subscription ID (stripe_subscription_id from subscription_records table)"),
+     *             @OA\Property(property="cancel_at_period_end", type="boolean", example=false, description="If true, cancels at end of billing period. If false (default), cancels immediately and stops all future payments.")
      *         )
      *     ),
      *     @OA\Response(
@@ -286,40 +286,168 @@ class StripeSubscriptionController extends Controller
      *         description="Subscription canceled successfully",
      *         @OA\JsonContent(
      *             @OA\Property(property="success", type="boolean", example=true),
-     *             @OA\Property(property="message", type="string", example="Subscription canceled successfully")
+     *             @OA\Property(property="message", type="string", example="Subscription canceled successfully. Monthly payments have been stopped."),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="subscription_id", type="integer", example=1),
+     *                 @OA\Property(property="stripe_subscription_id", type="string", example="sub_1234567890"),
+     *                 @OA\Property(property="status", type="string", example="canceled", enum={"canceled", "cancel_at_period_end"}),
+     *                 @OA\Property(property="canceled_at", type="string", format="date-time", example="2025-01-07T10:30:00.000000Z"),
+     *                 @OA\Property(property="organisation_id", type="integer", nullable=true, example=1),
+     *                 @OA\Property(property="cancel_at_period_end", type="boolean", example=false)
+     *             )
      *         )
      *     ),
-     *     @OA\Response(response=400, description="Bad request - Failed to cancel subscription"),
-     *     @OA\Response(response=401, description="Unauthorized"),
-     *     @OA\Response(response=403, description="Forbidden"),
-     *     @OA\Response(response=404, description="Subscription not found"),
-     *     @OA\Response(response=500, description="Server error")
+     *     @OA\Response(
+     *         response=400,
+     *         description="Bad request - Failed to cancel subscription",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="error", type="string", example="Error message")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthorized")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Forbidden - User is not a director or super_admin",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Only directors or super admins can cancel subscriptions.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Subscription not found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Subscription not found.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Server error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="error", type="string", example="Error message")
+     *         )
+     *     )
      * )
      * Cancel subscription
      */
     public function cancelSubscription(Request $request)
     {
-        $validated = $request->validate([
-            'subscription_id' => 'required|string',
-            'cancel_at_period_end' => 'boolean',
-        ]);
-
-        $result = $this->stripeService->cancelSubscription(
-            $validated['subscription_id'],
-            $validated['cancel_at_period_end'] ?? true
-        );
-
-        if ($result['success']) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Subscription canceled successfully',
+        try {
+            $validated = $request->validate([
+                'subscription_id' => 'required|string',
+                'cancel_at_period_end' => 'boolean',
             ]);
-        }
 
-        return response()->json([
-            'success' => false,
-            'error' => $result['error'],
-        ], 400);
+            // Get subscription from database to verify ownership
+            $subscription = SubscriptionRecord::where('stripe_subscription_id', $validated['subscription_id'])->first();
+
+            if (!$subscription) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Subscription not found.',
+                ], 404);
+            }
+
+            // Check authorization - user must be director of the organisation or super_admin
+            $user = auth()->user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized',
+                ], 401);
+            }
+
+            // Super admin can cancel any subscription
+            if (!$user->hasRole('super_admin')) {
+                // Check if user is director of the organisation
+                if ($subscription->organisation_id) {
+                    $organisation = Organisation::find($subscription->organisation_id);
+                    if (!$organisation || $organisation->director_id !== $user->id) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Only directors or super admins can cancel subscriptions.',
+                        ], 403);
+                    }
+                } else {
+                    // For basecamp users, they should use the basecamp API endpoint
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Please use /api/basecamp/cancel-subscription endpoint for basecamp users.',
+                    ], 403);
+                }
+            }
+
+            // Get cancel_at_period_end from request (default: false for immediate cancellation)
+            $cancelAtPeriodEnd = $validated['cancel_at_period_end'] ?? false;
+
+            $result = $this->stripeService->cancelSubscription(
+                $validated['subscription_id'],
+                $cancelAtPeriodEnd
+            );
+
+            if ($result['success']) {
+                // Refresh subscription from database
+                $subscription->refresh();
+
+                Log::info('Organisation subscription cancelled successfully via API', [
+                    'user_id' => $user->id,
+                    'subscription_id' => $subscription->id,
+                    'organisation_id' => $subscription->organisation_id,
+                    'stripe_subscription_id' => $validated['subscription_id'],
+                    'cancel_at_period_end' => $cancelAtPeriodEnd,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => $cancelAtPeriodEnd 
+                        ? 'Subscription will be cancelled at the end of the billing period.' 
+                        : 'Subscription canceled successfully. Monthly payments have been stopped.',
+                    'data' => [
+                        'subscription_id' => $subscription->id,
+                        'stripe_subscription_id' => $validated['subscription_id'],
+                        'status' => $subscription->status,
+                        'canceled_at' => $subscription->canceled_at ? $subscription->canceled_at->toIso8601String() : null,
+                        'organisation_id' => $subscription->organisation_id,
+                        'cancel_at_period_end' => $cancelAtPeriodEnd,
+                    ],
+                ], 200);
+            }
+
+            return response()->json([
+                'success' => false,
+                'error' => $result['error'] ?? 'Failed to cancel subscription',
+            ], 400);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Failed to cancel organisation subscription via API: ' . $e->getMessage(), [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to cancel subscription. Please try again or contact support.',
+            ], 500);
+        }
     }
 
     /**
