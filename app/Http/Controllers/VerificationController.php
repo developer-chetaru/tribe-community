@@ -105,9 +105,13 @@ class VerificationController extends Controller
         $user->email_verified_at = now();
         
         // Update status - activate user after email verification
-        // Status is boolean: true = active, false = inactive
-        if (!$user->status) {
-            $user->status = true;
+        // Status should be 'active_verified' after email verification
+        // Handle both old boolean status and new string status for backward compatibility
+        if (!in_array($user->status, ['active_verified', 'active_unverified'])) {
+            $user->status = 'active_verified';
+        } elseif ($user->status === true || $user->status === '1' || $user->status === 1) {
+            // Convert old boolean/string status to new string status
+            $user->status = 'active_verified';
         }
         $user->save();
         

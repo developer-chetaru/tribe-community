@@ -10,11 +10,11 @@
     @if (session()->has('message'))
         <div 
             x-data="{ show: true }" 
-            x-init="setTimeout(() => show = false, 3000)" 
+            x-init="setTimeout(() => show = false, 5000)" 
             x-show="show"
             x-transition.duration.500ms
             class="mb-8 px-6 py-4 text-white text-base font-medium rounded-xl shadow-lg
-            {{ session('type') === 'success' ? 'bg-green-600' : 'bg-red-600' }}">
+            {{ session('type') === 'success' ? 'bg-green-600' : (session('type') === 'info' ? 'bg-blue-600' : 'bg-red-600') }}">
             
             {{ session('message') }}
         </div>
