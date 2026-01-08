@@ -338,16 +338,16 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <div class="flex items-center space-x-3">
-                                        <button wire:click="openInvoiceModal({{ $invoice->id }})" 
+                                        <!-- <button wire:click="openInvoiceModal({{ $invoice->id }})" 
                                                 type="button"
                                                 class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded border border-blue-200 transition-all duration-200">
                                             View Invoice
-                                        </button>
-                                        <a href="{{ route('invoices.download', $invoice->id) }}" 
+                                        </button> -->
+                                        <!-- <a href="{{ route('invoices.download', $invoice->id) }}" 
                                            download 
                                            class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded border border-green-200 transition-all duration-200">
                                             Download
-                                        </a>
+                                        </a> -->
                                         
                                         <!-- Share Invoice Button -->
                                         <button wire:click="openShareModal({{ $invoice->id }})" 
@@ -357,6 +357,17 @@
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
                                             </svg>
                                             Share
+                                        </button>
+                                        
+                                        <!-- Payment Invoice (Stripe) Button -->
+                                        <button wire:click="redirectToStripeInvoice({{ $invoice->id }})" 
+                                                type="button"
+                                                wire:loading.attr="disabled"
+                                                class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded border border-orange-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                            <span wire:loading.remove wire:target="redirectToStripeInvoice({{ $invoice->id }})">
+                                                View Invoice
+                                            </span>
+                                            <span wire:loading wire:target="redirectToStripeInvoice({{ $invoice->id }})">Loading...</span>
                                         </button>
                                         
                                         @if($invoice->status === 'pending')
@@ -1669,9 +1680,194 @@
             </div>
         </div>
     </div>
+    
+    <!-- Stripe Invoice Modal -->
+    @if($showStripeInvoiceModal && $selectedStripeInvoice && $stripeInvoiceData)
+    <div x-data="{ show: @entangle('showStripeInvoiceModal') }"
+         x-show="show"
+         x-cloak
+         @click.self="$wire.closeStripeInvoiceModal()"
+         x-transition:enter="ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+         style="display: none;"
+         id="stripe-invoice-modal">
+        <div class="relative top-10 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white z-50"
+             x-show="show"
+             x-transition:enter="ease-out duration-300"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="ease-in duration-200"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             @click.stop>
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-semibold text-gray-900">Stripe Payment Invoice</h3>
+                    <button wire:click="closeStripeInvoiceModal" 
+                            @click="show = false"
+                            type="button" 
+                            class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="overflow-y-auto max-h-[70vh]">
+                    <!-- Invoice Details -->
+                    <div class="bg-gray-50 rounded-lg p-6 mb-4">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4">Invoice Information</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <span class="text-sm text-gray-600">Stripe Invoice ID:</span>
+                                <p class="font-semibold text-gray-900 break-all">{{ $stripeInvoiceData['id'] ?? 'N/A' }}</p>
+                            </div>
+                            <div>
+                                <span class="text-sm text-gray-600">Invoice Number:</span>
+                                <p class="font-semibold text-gray-900">{{ $stripeInvoiceData['number'] ?? 'N/A' }}</p>
+                            </div>
+                            <div>
+                                <span class="text-sm text-gray-600">Status:</span>
+                                <p>
+                                    <span class="px-2 py-1 text-xs rounded-full font-semibold
+                                        {{ ($stripeInvoiceData['status'] ?? '') === 'paid' ? 'bg-green-100 text-green-800' : 
+                                           (($stripeInvoiceData['status'] ?? '') === 'open' ? 'bg-yellow-100 text-yellow-800' : 
+                                           (($stripeInvoiceData['status'] ?? '') === 'void' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800')) }}">
+                                        {{ ucfirst($stripeInvoiceData['status'] ?? 'Unknown') }}
+                                    </span>
+                                </p>
+                            </div>
+                            <div>
+                                <span class="text-sm text-gray-600">Amount:</span>
+                                <p class="font-semibold text-gray-900">
+                                    {{ isset($stripeInvoiceData['amount_due']) ? '£' . number_format($stripeInvoiceData['amount_due'] / 100, 2) : 'N/A' }}
+                                    {{ isset($stripeInvoiceData['currency']) ? strtoupper($stripeInvoiceData['currency']) : '' }}
+                                </p>
+                            </div>
+                            <div>
+                                <span class="text-sm text-gray-600">Created:</span>
+                                <p class="font-semibold text-gray-900">
+                                    {{ isset($stripeInvoiceData['created']) ? \Carbon\Carbon::createFromTimestamp($stripeInvoiceData['created'])->format('M d, Y H:i') : 'N/A' }}
+                                </p>
+                            </div>
+                            <div>
+                                <span class="text-sm text-gray-600">Due Date:</span>
+                                <p class="font-semibold text-gray-900">
+                                    {{ isset($stripeInvoiceData['due_date']) ? \Carbon\Carbon::createFromTimestamp($stripeInvoiceData['due_date'])->format('M d, Y') : 'N/A' }}
+                                </p>
+                            </div>
+                            @if(isset($stripeInvoiceData['hosted_invoice_url']))
+                            <div class="col-span-2">
+                                <span class="text-sm text-gray-600">Hosted Invoice URL:</span>
+                                <p class="break-all">
+                                    <a href="{{ $stripeInvoiceData['hosted_invoice_url'] }}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">
+                                        {{ $stripeInvoiceData['hosted_invoice_url'] }}
+                                    </a>
+                                </p>
+                            </div>
+                            @endif
+                            @if(isset($stripeInvoiceData['invoice_pdf']))
+                            <div class="col-span-2">
+                                <span class="text-sm text-gray-600">Invoice PDF:</span>
+                                <p>
+                                    <a href="{{ $stripeInvoiceData['invoice_pdf'] }}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">
+                                        Download PDF
+                                    </a>
+                                </p>
+                            </div>
+                            @endif
+                        </div>
+                    </div>
+                    
+                    <!-- Line Items -->
+                    @if(isset($stripeInvoiceData['lines']['data']) && count($stripeInvoiceData['lines']['data']) > 0)
+                    <div class="bg-white rounded-lg p-6 mb-4 border">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4">Line Items</h4>
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                @foreach($stripeInvoiceData['lines']['data'] as $line)
+                                <tr>
+                                    <td class="px-4 py-3 text-sm text-gray-900">{{ $line['description'] ?? 'N/A' }}</td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">
+                                        £{{ isset($line['amount']) ? number_format($line['amount'] / 100, 2) : '0.00' }}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-900">{{ $line['quantity'] ?? 1 }}</td>
+                                    <td class="px-4 py-3 text-sm font-semibold text-gray-900">
+                                        £{{ isset($line['amount']) ? number_format($line['amount'] / 100, 2) : '0.00' }}
+                                    </td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                    @endif
+                    
+                    <!-- Payment Details -->
+                    @if(isset($stripeInvoiceData['payment_intent']))
+                    <div class="bg-white rounded-lg p-6 mb-4 border">
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4">Payment Details</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <span class="text-sm text-gray-600">Payment Intent ID:</span>
+                                <p class="font-semibold text-gray-900 break-all">{{ $stripeInvoiceData['payment_intent'] ?? 'N/A' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+                </div>
+                
+                <div class="flex items-center justify-end space-x-3 mt-6 pt-4 border-t">
+                    @if(isset($stripeInvoiceData['hosted_invoice_url']))
+                    <a href="{{ $stripeInvoiceData['hosted_invoice_url'] }}" 
+                       target="_blank"
+                       class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                        View on Stripe
+                    </a>
+                    @endif
+                    @if(isset($stripeInvoiceData['invoice_pdf']))
+                    <a href="{{ $stripeInvoiceData['invoice_pdf'] }}" 
+                       target="_blank"
+                       class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
+                        Download PDF
+                    </a>
+                    @endif
+                    <button wire:click="closeStripeInvoiceModal" 
+                            @click="show = false"
+                            type="button"
+                            class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
 </div>
 
 <script>
+    // Handle Stripe invoice redirect to open in new tab
+    document.addEventListener('livewire:init', () => {
+        Livewire.on('open-stripe-invoice', (event) => {
+            const url = event.url || event[0]?.url;
+            if (url) {
+                window.open(url, '_blank');
+            }
+        });
+    });
+    
     // Handle reactivate subscription button click (for cancelled but not expired)
     function handleReactivateSubscription() {
         console.log('Reactivate subscription initiated');

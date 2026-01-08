@@ -8,6 +8,7 @@ use Livewire\WithFileUploads;
 use App\Models\SubscriptionRecord;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\PaymentRecord;
 use App\Models\Organisation;
 use App\Services\SubscriptionService;
 use App\Services\Billing\StripeService;
@@ -30,6 +31,10 @@ class Billing extends Component
     public $showShareModal = false;
     public $selectedInvoiceForShare = null;
     public $shareLink = '';
+    public $showStripeInvoiceModal = false;
+    public $selectedStripeInvoice = null;
+    public $stripeInvoiceData = null;
+    public $stripeInvoiceError = null;
     
     protected $listeners = [
         'refreshPayments' => '$refresh',
@@ -218,6 +223,144 @@ class Billing extends Component
         $this->selectedInvoiceForView = null;
     }
 
+    public function redirectToStripeInvoice($invoiceId)
+    {
+        try {
+            $invoice = Invoice::findOrFail($invoiceId);
+            
+            // Check permissions
+            $user = auth()->user();
+            if (!$user->hasRole('super_admin') && !$user->hasRole('director') && !$user->hasRole('basecamp')) {
+                session()->flash('error', 'You do not have permission to view Stripe invoices.');
+                return;
+            }
+            
+            // For basecamp users, check if invoice belongs to them
+            if ($user->hasRole('basecamp') && $invoice->user_id !== $user->id) {
+                session()->flash('error', 'You can only view your own invoices.');
+                return;
+            }
+            
+            // For directors, check if invoice belongs to their organisation
+            if ($user->hasRole('director') && $invoice->organisation_id !== $user->orgId) {
+                session()->flash('error', 'You can only view invoices from your organisation.');
+                return;
+            }
+            
+            $stripeInvoiceId = null;
+            $hostedInvoiceUrl = null;
+            
+            // Find PaymentRecord with stripe_invoice_id
+            $paymentRecord = \App\Models\PaymentRecord::where('subscription_id', $invoice->subscription_id)
+                ->whereNotNull('stripe_invoice_id')
+                ->orderBy('created_at', 'desc')
+                ->first();
+            
+            if ($paymentRecord && $paymentRecord->stripe_invoice_id) {
+                $stripeInvoiceId = $paymentRecord->stripe_invoice_id;
+            } else {
+                // Check Payment model for stripe payment intent/invoice
+                $payment = Payment::where('invoice_id', $invoice->id)
+                    ->where('payment_method', 'stripe')
+                    ->whereNotNull('transaction_id')
+                    ->first();
+                
+                // Try to get invoice from subscription if available
+                $subscription = $invoice->subscription;
+                if ($subscription && $subscription->stripe_subscription_id) {
+                    try {
+                        if (!class_exists(\Stripe\Stripe::class)) {
+                            session()->flash('error', 'Stripe PHP package is not installed.');
+                            return;
+                        }
+                        
+                        \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+                        $stripeInvoices = \Stripe\Invoice::all([
+                            'subscription' => $subscription->stripe_subscription_id,
+                            'limit' => 100,
+                        ]);
+                        
+                        // Find matching invoice by amount and date
+                        foreach ($stripeInvoices->data as $stripeInvoice) {
+                            $stripeAmount = $stripeInvoice->amount_due / 100; // Convert from cents
+                            $invoiceDate = \Carbon\Carbon::parse($invoice->invoice_date)->startOfDay();
+                            $stripeInvoiceDate = \Carbon\Carbon::createFromTimestamp($stripeInvoice->created)->startOfDay();
+                            
+                            if (abs($stripeAmount - $invoice->total_amount) < 0.01 && 
+                                abs($invoiceDate->diffInDays($stripeInvoiceDate)) <= 1) {
+                                $stripeInvoiceId = $stripeInvoice->id;
+                                // If we found it, check if it has hosted URL
+                                if (isset($stripeInvoice->hosted_invoice_url)) {
+                                    $hostedInvoiceUrl = $stripeInvoice->hosted_invoice_url;
+                                }
+                                break;
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        Log::error('Failed to find Stripe invoice: ' . $e->getMessage());
+                    }
+                }
+                
+                // If still not found, try to get from payment intent if available
+                if (!$stripeInvoiceId && $payment && $payment->transaction_id) {
+                    try {
+                        if (class_exists(\Stripe\Stripe::class)) {
+                            \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+                            $paymentIntent = \Stripe\PaymentIntent::retrieve($payment->transaction_id);
+                            if ($paymentIntent->invoice) {
+                                $stripeInvoiceId = $paymentIntent->invoice;
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to get invoice from payment intent: ' . $e->getMessage());
+                    }
+                }
+                
+                if (!$stripeInvoiceId) {
+                    session()->flash('error', 'No Stripe invoice found for this invoice. This invoice may not have been paid through Stripe or the Stripe invoice ID is not available.');
+                    return;
+                }
+            }
+            
+            // If we already have the hosted URL, dispatch to frontend to open in new tab
+            if ($hostedInvoiceUrl) {
+                $this->dispatch('open-stripe-invoice', ['url' => $hostedInvoiceUrl]);
+                return;
+            }
+            
+            // Retrieve invoice from Stripe to get hosted URL
+            $stripeService = new StripeService();
+            $result = $stripeService->retrieveInvoice($stripeInvoiceId);
+            
+            if (!$result['success']) {
+                session()->flash('error', 'Failed to retrieve Stripe invoice: ' . ($result['error'] ?? 'Unknown error'));
+                return;
+            }
+            
+            $stripeInvoice = $result['invoice'];
+            
+            // Get hosted invoice URL and dispatch to frontend to open in new tab
+            if (isset($stripeInvoice->hosted_invoice_url) && $stripeInvoice->hosted_invoice_url) {
+                $this->dispatch('open-stripe-invoice', ['url' => $stripeInvoice->hosted_invoice_url]);
+                return;
+            }
+            
+            // If hosted URL is not available, try to construct it
+            // Stripe hosted invoice URL format: https://invoice.stripe.com/i/acct_xxx/xxx
+            // We can construct it using the invoice ID if needed
+            // But better to use the actual hosted_invoice_url from API
+            
+            session()->flash('error', 'Stripe hosted invoice URL is not available for this invoice.');
+            
+        } catch (\Exception $e) {
+            Log::error('Failed to redirect to Stripe invoice: ' . $e->getMessage(), [
+                'invoice_id' => $invoiceId,
+                'trace' => $e->getTraceAsString()
+            ]);
+            session()->flash('error', 'Failed to load Stripe invoice: ' . $e->getMessage());
+        }
+    }
+    
     public function openShareModal($invoiceId)
     {
         $invoice = Invoice::findOrFail($invoiceId);
