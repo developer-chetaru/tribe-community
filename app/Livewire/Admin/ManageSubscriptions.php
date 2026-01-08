@@ -29,6 +29,7 @@ class ManageSubscriptions extends Component
     public $tier = 'spark';
     public $user_count = 0;
     public $status = 'active';
+    public $payment_status = 'paid';
     public $current_period_start;
     public $current_period_end;
     public $next_billing_date;
@@ -120,6 +121,20 @@ class ManageSubscriptions extends Component
         $this->current_period_end = $subscription->current_period_end?->toDateString();
         $this->next_billing_date = $subscription->next_billing_date?->toDateString();
         
+        // Get payment status from latest invoice
+        $latestInvoice = Invoice::where(function($q) use ($subscription) {
+            if ($subscription->organisation_id) {
+                $q->where('subscription_id', $subscription->id);
+            } else {
+                $q->where('user_id', $subscription->user_id)
+                  ->where('tier', 'basecamp');
+            }
+        })
+        ->orderBy('created_at', 'desc')
+        ->first();
+        
+        $this->payment_status = $latestInvoice && $latestInvoice->status === 'paid' ? 'paid' : 'unpaid';
+        
         // Reset all modals first
         $this->showCreateModal = false;
         
@@ -147,6 +162,7 @@ class ManageSubscriptions extends Component
         $this->tier = 'spark';
         $this->user_count = 0;
         $this->status = 'active';
+        $this->payment_status = 'paid';
         $this->current_period_start = null;
         $this->current_period_end = null;
         $this->next_billing_date = null;
@@ -228,6 +244,24 @@ class ManageSubscriptions extends Component
         if ($this->tier !== 'basecamp' && $this->organisation_id) {
             Organisation::where('id', $this->organisation_id)->update([
                 'subscription_tier' => $this->tier,
+            ]);
+        }
+
+        // Update payment status in latest invoice
+        $latestInvoice = Invoice::where(function($q) {
+            if ($this->selectedSubscription->organisation_id) {
+                $q->where('subscription_id', $this->selectedSubscription->id);
+            } else {
+                $q->where('user_id', $this->selectedSubscription->user_id)
+                  ->where('tier', 'basecamp');
+            }
+        })
+        ->orderBy('created_at', 'desc')
+        ->first();
+
+        if ($latestInvoice) {
+            $latestInvoice->update([
+                'status' => $this->payment_status === 'paid' ? 'paid' : 'unpaid',
             ]);
         }
 

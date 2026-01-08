@@ -264,9 +264,15 @@
                     <label class="block text-sm font-medium text-gray-700">Status</label>
                     <select wire:model="status" class="mt-1 block w-full border-gray-300 rounded-md">
                         <option value="active">Active</option>
-                        <option value="past_due">Past Due</option>
-                        <option value="suspended">Suspended</option>
                         <option value="canceled">Canceled</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Payment Status</label>
+                    <select wire:model="payment_status" class="mt-1 block w-full border-gray-300 rounded-md">
+                        <option value="paid">Paid</option>
+                        <option value="unpaid">Unpaid</option>
                     </select>
                 </div>
             </div>
@@ -346,9 +352,15 @@
                     <label class="block text-sm font-medium text-gray-700">Status</label>
                     <select wire:model="status" class="mt-1 block w-full border-gray-300 rounded-md">
                         <option value="active">Active</option>
-                        <option value="past_due">Past Due</option>
-                        <option value="suspended">Suspended</option>
                         <option value="canceled">Canceled</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Payment Status</label>
+                    <select wire:model="payment_status" class="mt-1 block w-full border-gray-300 rounded-md">
+                        <option value="paid">Paid</option>
+                        <option value="unpaid">Unpaid</option>
                     </select>
                 </div>
             </div>
