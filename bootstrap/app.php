@@ -21,9 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'check.basecamp.payment' => \App\Http\Middleware\CheckBasecampPayment::class,
         ]);
         
-        // Apply basecamp payment check globally to all web routes (including Jetstream routes)
+        // Apply basecamp payment check and subscription check globally to all web routes
         $middleware->web(append: [
             \App\Http\Middleware\CheckBasecampPayment::class,
+            \App\Http\Middleware\CheckSubscription::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

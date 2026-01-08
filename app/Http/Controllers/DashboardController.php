@@ -8,8 +8,10 @@ use App\Models\Invoice;
 use App\Models\SubscriptionRecord;
 use App\Services\DashboardService;
 use App\Services\OneSignalService;
+use App\Services\SubscriptionService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
@@ -33,30 +35,110 @@ class DashboardController extends Controller
     	$needsPayment = false;
     	$paymentMessage = '';
     	
-    	// Check if basecamp user needs to complete payment or email verification
-    	if ($user && $user->hasRole('basecamp')) {
-    	    // Check if user has active subscription or paid invoice
-            $hasActiveSubscription = SubscriptionRecord::where('user_id', $user->id)
-                ->where('tier', 'basecamp')
-                ->where('status', 'active')
-                ->where('current_period_end', '>', now())
-                ->exists();
+    	// Check if subscription has expired (from session first, then direct check)
+    	if (session('subscription_expired')) {
+    	    $needsPayment = true;
+    	    $subscriptionStatus = session('subscription_status', []);
+    	    $isBasecamp = $user && $user->hasRole('basecamp');
+    	    
+    	    if ($isBasecamp) {
+    	        $paymentMessage = 'Please complete your payment of £12.00 (incl. VAT) to activate your account.';
+    	    } else {
+    	        $userCount = $user && $user->orgId ? \App\Models\User::where('orgId', $user->orgId)
+                    ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+                    ->count() : 0;
+    	        $totalAmount = $userCount * 10.00;
+    	        $paymentMessage = "Please complete your payment of £" . number_format($totalAmount, 2) . " to activate your account.";
+    	    }
+    	} elseif ($user && !$user->hasRole('super_admin')) {
+    	    $isExpired = false;
+    	    
+    	    // Check for basecamp users
+    	    if ($user->hasRole('basecamp')) {
+    	        // Get LATEST subscription to ensure we check the most recent payment
+    	        $subscription = SubscriptionRecord::where('user_id', $user->id)
+                    ->where('tier', 'basecamp')
+                    ->orderBy('id', 'desc') // Use ID for better ordering - gets latest payment
+                    ->first();
+                    
+                if ($subscription) {
+                    $endDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end)->startOfDay() : null;
+                    $today = Carbon::today();
+                    
+                    // Check if expired
+                    // Important: Cancelled subscriptions are still active until end date passes
+                    if ($endDate && $today->greaterThan($endDate)) {
+                        // End date has passed - subscription is expired regardless of status
+                        $isExpired = true;
+                    } elseif ($endDate && $endDate->isFuture()) {
+                        // End date is in future - subscription is active (even if cancelled)
+                        // User can access until the end date
+                        $isExpired = false;
+                    } elseif (!$endDate) {
+                        // No end date - check status
+                        if ($subscription->status !== 'active') {
+                            $isExpired = true;
+                        } else {
+                            $isExpired = false;
+                        }
+                    } else {
+                        $isExpired = false;
+                    }
+                } else {
+                    // No subscription = expired
+                    $isExpired = true;
+                }
                 
-            $hasPaidInvoice = Invoice::where('user_id', $user->id)
-                ->where('tier', 'basecamp')
-                ->where('status', 'paid')
-                ->exists();
-            
-            // If no payment completed, show payment popup
-            if (!$hasActiveSubscription && !$hasPaidInvoice) {
-                $needsPayment = true;
-                $paymentMessage = 'Please complete your payment of £12.00 (incl. VAT) to activate your account.';
+                if ($isExpired) {
+                    $needsPayment = true;
+                    $paymentMessage = 'Please complete your payment of £12.00 (incl. VAT) to activate your account.';
+                } else {
+                    // Subscription is active - clear any expired flags
+                    session()->forget('subscription_expired');
+                    session()->forget('subscription_status');
+                }
             }
             
-            // If payment completed but account not activated, show verification message
-            if (!$user->status) {
-                $needsPayment = true;
-                $paymentMessage = 'Payment completed! Please check your email to activate your account.';
+            // Check for organization users
+            if ($user->orgId) {
+                $subscriptionService = new SubscriptionService();
+                $subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId);
+                
+                // Check if subscription has expired (end_date is in the past)
+                // Important: Cancelled subscriptions are still active until end date passes
+                if (isset($subscriptionStatus['end_date']) && $subscriptionStatus['end_date']) {
+                    $endDate = Carbon::parse($subscriptionStatus['end_date'])->startOfDay();
+                    $today = Carbon::today();
+                    // Only expired if end date has passed
+                    $isExpired = $today->greaterThan($endDate);
+                } elseif (!($subscriptionStatus['active'] ?? false)) {
+                    // Only mark as expired if there's no end date or it's truly inactive
+                    // Check if we have end date in subscription object
+                    if (isset($subscriptionStatus['subscription']) && $subscriptionStatus['subscription']->current_period_end) {
+                        $endDate = Carbon::parse($subscriptionStatus['subscription']->current_period_end)->startOfDay();
+                        $today = Carbon::today();
+                        $isExpired = $today->greaterThan($endDate);
+                    } else {
+                        $isExpired = true;
+                    }
+                }
+                
+                // Only show payment popup if expired AND not suspended (suspended has different handling)
+                if ($isExpired && $subscriptionStatus['status'] !== 'suspended') {
+                    $needsPayment = true;
+                    
+                    // Calculate amount based on user count
+                    $userCount = \App\Models\User::where('orgId', $user->orgId)
+                        ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+                        ->count();
+                    $totalAmount = $userCount * 10.00;
+                    
+                    $paymentMessage = "Please complete your payment of £" . number_format($totalAmount, 2) . " to activate your account.";
+                } else {
+                    // Subscription is active - clear any expired flags
+                    session()->forget('subscription_expired');
+                    session()->forget('subscription_status');
+                }
             }
     	}
     	

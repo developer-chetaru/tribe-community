@@ -9,6 +9,7 @@ use App\Models\SubscriptionRecord;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use Carbon\Carbon;
@@ -49,16 +50,19 @@ class BasecampStripeCheckoutController extends Controller
                 );
                 
                 // Check if invoice already exists for today (avoid duplicates)
+                // Check for ANY invoice for today (not just unpaid) to prevent duplicates
+                $invoiceDate = now()->toDateString();
                 $existingInvoice = Invoice::where('user_id', $user->id)
                     ->where('subscription_id', $subscription->id)
-                    ->whereDate('invoice_date', today())
-                    ->where('status', 'unpaid')
+                    ->whereDate('invoice_date', $invoiceDate)
                     ->first();
                 
                 if ($existingInvoice) {
-                    Log::info('Using existing unpaid invoice for today', [
+                    Log::info('Using existing invoice for today', [
                         'invoice_id' => $existingInvoice->id,
                         'user_id' => $user->id,
+                        'status' => $existingInvoice->status,
+                        'invoice_date' => $invoiceDate
                     ]);
                     $invoiceId = $existingInvoice->id;
                 } else {
@@ -69,24 +73,66 @@ class BasecampStripeCheckoutController extends Controller
                     $taxAmount = $subtotal * 0.20; // 20% VAT = £2.00
                     $totalAmount = $subtotal + $taxAmount; // £12.00
                     
-                    // Create new invoice
-                    $invoice = Invoice::create([
-                        'user_id' => $user->id,
-                        'organisation_id' => null,
-                        'subscription_id' => $subscription->id,
-                        'invoice_number' => Invoice::generateInvoiceNumber(),
-                        'tier' => 'basecamp',
-                        'user_count' => 1,
-                        'price_per_user' => $monthlyPrice, // Base price without VAT
-                        'subtotal' => $subtotal,
-                        'tax_amount' => $taxAmount,
-                        'total_amount' => $totalAmount,
-                        'status' => 'unpaid',
-                        'due_date' => now()->addDays(7),
-                        'invoice_date' => now(),
-                    ]);
-                    
-                    $invoiceId = $invoice->id;
+                    try {
+                        // Create new invoice
+                        $invoice = Invoice::create([
+                            'user_id' => $user->id,
+                            'organisation_id' => null,
+                            'subscription_id' => $subscription->id,
+                            'invoice_number' => Invoice::generateInvoiceNumber(),
+                            'tier' => 'basecamp',
+                            'user_count' => 1,
+                            'price_per_user' => $monthlyPrice, // Base price without VAT
+                            'subtotal' => $subtotal,
+                            'tax_amount' => $taxAmount,
+                            'total_amount' => $totalAmount,
+                            'status' => 'unpaid',
+                            'due_date' => now()->addDays(7),
+                            'invoice_date' => $invoiceDate,
+                        ]);
+                        
+                        $invoiceId = $invoice->id;
+                        
+                        Log::info('New invoice created successfully', [
+                            'invoice_id' => $invoiceId,
+                            'user_id' => $user->id,
+                            'invoice_date' => $invoiceDate
+                        ]);
+                    } catch (\Illuminate\Database\QueryException $e) {
+                        // Handle duplicate entry error - invoice was created by another request
+                        if ($e->getCode() == 23000 && str_contains($e->getMessage(), 'Duplicate entry')) {
+                            Log::warning('Duplicate invoice detected, fetching existing invoice', [
+                                'user_id' => $user->id,
+                                'subscription_id' => $subscription->id,
+                                'invoice_date' => $invoiceDate,
+                                'error' => $e->getMessage()
+                            ]);
+                            
+                            // Fetch the existing invoice that was just created
+                            $existingInvoice = Invoice::where('user_id', $user->id)
+                                ->where('subscription_id', $subscription->id)
+                                ->whereDate('invoice_date', $invoiceDate)
+                                ->first();
+                            
+                            if ($existingInvoice) {
+                                $invoiceId = $existingInvoice->id;
+                                Log::info('Using existing invoice after duplicate error', [
+                                    'invoice_id' => $invoiceId,
+                                    'status' => $existingInvoice->status
+                                ]);
+                            } else {
+                                Log::error('Failed to find existing invoice after duplicate error', [
+                                    'user_id' => $user->id,
+                                    'subscription_id' => $subscription->id,
+                                    'invoice_date' => $invoiceDate
+                                ]);
+                                throw new \Exception('Failed to create or find invoice after duplicate error');
+                            }
+                        } else {
+                            // Re-throw if it's a different database error
+                            throw $e;
+                        }
+                    }
                 }
             }
             
@@ -317,24 +363,37 @@ class BasecampStripeCheckoutController extends Controller
                 }
             }
             
-            // Create payment record
-            $payment = Payment::create([
-                'invoice_id' => $invoice->id,
-                'user_id' => $userId,
-                'organisation_id' => null, // Basecamp users don't have organisation
-                'payment_method' => 'card',
-                'amount' => $invoice->total_amount,
-                'transaction_id' => $session->payment_intent ?? $session->subscription,
-                'status' => 'completed', // Payment is completed via Stripe
-                'payment_date' => now()->toDateString(),
-                'payment_notes' => 'Basecamp subscription payment via Stripe Checkout',
-            ]);
+            // Use transaction to ensure all updates happen atomically
+            DB::beginTransaction();
             
-            // Update invoice status
-            $invoice->update([
-                'status' => 'paid',
-                'paid_at' => now(),
-            ]);
+            try {
+                // Create payment record
+                $payment = Payment::create([
+                    'invoice_id' => $invoice->id,
+                    'user_id' => $userId,
+                    'organisation_id' => null, // Basecamp users don't have organisation
+                    'payment_method' => 'card',
+                    'amount' => $invoice->total_amount,
+                    'transaction_id' => $session->payment_intent ?? $session->subscription,
+                    'status' => 'completed', // Payment is completed via Stripe
+                    'payment_date' => now()->toDateString(),
+                    'payment_notes' => 'Basecamp subscription payment via Stripe Checkout',
+                ]);
+                
+                // Update invoice status - use save() to ensure it's saved
+                $invoice->status = 'paid';
+                $invoice->paid_date = now();
+                $invoice->save();
+                
+                // Refresh invoice to verify update
+                $invoice->refresh();
+                
+                Log::info('Invoice updated to paid in basecamp payment', [
+                    'invoice_id' => $invoice->id,
+                    'status' => $invoice->status,
+                    'paid_date' => $invoice->paid_date,
+                    'total_amount' => $invoice->total_amount
+                ]);
             
             // Get or create subscription
             $subscription = SubscriptionRecord::where('user_id', $userId)
@@ -342,12 +401,41 @@ class BasecampStripeCheckoutController extends Controller
                 ->first();
                 
             if ($subscription) {
+                // Determine start date: if subscription is expired, start from today, otherwise extend from end date
+                $existingEndDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end)->startOfDay() : null;
+                $existingStartDate = $subscription->current_period_start ? Carbon::parse($subscription->current_period_start)->startOfDay() : null;
+                
+                // Check if subscription is expired
+                $isExpired = !$existingEndDate || $existingEndDate->isPast();
+                
+                // If expired or end date is same as start date (broken record), start from today
+                // Otherwise extend from end date
+                if ($existingEndDate && $existingEndDate->isFuture() && $existingEndDate->greaterThan($existingStartDate ?? Carbon::today())) {
+                    $startDate = $existingEndDate;
+                } else {
+                    $startDate = Carbon::today()->startOfDay();
+                }
+                
+                // Ensure end date is always 1 month after start date
+                $endDate = $startDate->copy()->addMonth();
+                
+                Log::info('Calculating subscription dates for basecamp', [
+                    'subscription_id' => $subscription->id,
+                    'existing_start' => $existingStartDate ? $existingStartDate->format('Y-m-d') : null,
+                    'existing_end' => $existingEndDate ? $existingEndDate->format('Y-m-d') : null,
+                    'is_expired' => $isExpired,
+                    'new_start' => $startDate->format('Y-m-d'),
+                    'new_end' => $endDate->format('Y-m-d')
+                ]);
+                
                 // Update subscription with Stripe subscription ID and details
                 $updateData = [
                     'status' => 'active',
-                    'current_period_start' => now(),
-                    'current_period_end' => now()->addMonth(),
-                    'next_billing_date' => now()->addMonth(),
+                    'current_period_start' => $startDate,
+                    'current_period_end' => $endDate,
+                    'next_billing_date' => $endDate,
+                    'last_payment_date' => Carbon::today(),
+                    'canceled_at' => null, // Remove cancellation if any
                 ];
                 
                 // If we have Stripe subscription ID, update with Stripe data
@@ -360,25 +448,136 @@ class BasecampStripeCheckoutController extends Controller
                         
                         // Only update timestamps if they exist and are not null
                         if (isset($stripeSubscription->current_period_start) && $stripeSubscription->current_period_start !== null) {
-                            $updateData['current_period_start'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_start);
+                            $stripeStart = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_start)->startOfDay();
+                            $updateData['current_period_start'] = $stripeStart;
+                            // Always extend 1 month from start date
+                            $updateData['current_period_end'] = $stripeStart->copy()->addMonth();
+                            $updateData['next_billing_date'] = $stripeStart->copy()->addMonth();
+                        } else {
+                            // If Stripe doesn't provide start date, use today
+                            $updateData['current_period_start'] = Carbon::today()->startOfDay();
+                            $updateData['current_period_end'] = Carbon::today()->startOfDay()->addMonth();
+                            $updateData['next_billing_date'] = Carbon::today()->startOfDay()->addMonth();
                         }
                         if (isset($stripeSubscription->current_period_end) && $stripeSubscription->current_period_end !== null) {
-                            $updateData['current_period_end'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
-                            $updateData['next_billing_date'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
+                            $stripeEnd = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
+                            // Only use Stripe end date if it's in future and more than start date
+                            if ($stripeEnd->isFuture() && $stripeEnd->greaterThan($updateData['current_period_start'])) {
+                                $updateData['current_period_end'] = $stripeEnd;
+                                $updateData['next_billing_date'] = $stripeEnd;
+                            } else {
+                                // Ensure end date is always set - use start date + 1 month
+                                if (isset($updateData['current_period_start'])) {
+                                    $updateData['current_period_end'] = $updateData['current_period_start']->copy()->addMonth();
+                                    $updateData['next_billing_date'] = $updateData['current_period_start']->copy()->addMonth();
+                                }
+                            }
+                        } else {
+                            // If Stripe doesn't provide end date, ensure we set it from start date
+                            if (isset($updateData['current_period_start'])) {
+                                $updateData['current_period_end'] = $updateData['current_period_start']->copy()->addMonth();
+                                $updateData['next_billing_date'] = $updateData['current_period_start']->copy()->addMonth();
+                            }
                         }
                         
                         Log::info('Updated basecamp subscription with Stripe subscription ID', [
                             'subscription_id' => $subscription->id,
-                            'stripe_subscription_id' => $stripeSubscriptionId
+                            'stripe_subscription_id' => $stripeSubscriptionId,
+                            'start_date' => $updateData['current_period_start']->format('Y-m-d H:i:s'),
+                            'end_date' => $updateData['current_period_end']->format('Y-m-d H:i:s')
                         ]);
                     } catch (\Exception $e) {
                         Log::warning("Failed to update subscription with Stripe data: " . $e->getMessage());
                     }
                 }
                 
-                // Activate subscription
-                $subscription->update($updateData);
+                // Activate subscription - update within transaction
+                // Recalculate dates to ensure they're correct (in case updateData was modified by Stripe logic above)
+                $finalStartDate = $updateData['current_period_start'] ?? $startDate;
+                $finalEndDate = $updateData['current_period_end'] ?? $endDate;
+                
+                // Ensure end date is always 1 month after start date
+                if ($finalStartDate && $finalEndDate) {
+                    $finalStartDateCarbon = Carbon::parse($finalStartDate)->startOfDay();
+                    $finalEndDateCarbon = $finalStartDateCarbon->copy()->addMonth();
+                    
+                    // Only use Stripe end date if it's properly set and in future
+                    if (isset($updateData['current_period_end']) && $updateData['current_period_end'] instanceof Carbon) {
+                        $stripeEnd = $updateData['current_period_end'];
+                        if ($stripeEnd->isFuture() && $stripeEnd->greaterThan($finalStartDateCarbon)) {
+                            $finalEndDateCarbon = $stripeEnd;
+                        }
+                    }
+                } else {
+                    $finalStartDateCarbon = Carbon::today()->startOfDay();
+                    $finalEndDateCarbon = $finalStartDateCarbon->copy()->addMonth();
+                }
+                
+                // Update subscription with explicit date setting
+                $subscription->status = 'active';
+                $subscription->current_period_start = $finalStartDateCarbon;
+                $subscription->current_period_end = $finalEndDateCarbon;
+                $subscription->next_billing_date = $finalEndDateCarbon;
+                $subscription->last_payment_date = Carbon::today();
+                $subscription->canceled_at = null;
+                
+                if (isset($updateData['stripe_subscription_id'])) {
+                    $subscription->stripe_subscription_id = $updateData['stripe_subscription_id'];
+                }
+                if (isset($updateData['stripe_customer_id'])) {
+                    $subscription->stripe_customer_id = $updateData['stripe_customer_id'];
+                }
+                
+                // Force save
+                $saved = $subscription->save();
+                
+                if (!$saved) {
+                    Log::error('Failed to save subscription update', [
+                        'subscription_id' => $subscription->id
+                    ]);
+                }
+                
+                Log::info('Basecamp subscription activated/renewed', [
+                    'subscription_id' => $subscription->id,
+                    'start_date' => $finalStartDateCarbon->format('Y-m-d H:i:s'),
+                    'end_date' => $finalEndDateCarbon->format('Y-m-d H:i:s'),
+                    'status' => 'active',
+                    'is_expired' => $isExpired,
+                    'saved' => $saved
+                ]);
+                
+                // Refresh subscription to verify update
+                $subscription->refresh();
+                Log::info('Subscription after update', [
+                    'subscription_id' => $subscription->id,
+                    'current_period_start' => $subscription->current_period_start,
+                    'current_period_end' => $subscription->current_period_end,
+                    'status' => $subscription->status,
+                    'end_date_is_future' => $subscription->current_period_end ? Carbon::parse($subscription->current_period_end)->isFuture() : false,
+                    'end_date_formatted' => $subscription->current_period_end ? Carbon::parse($subscription->current_period_end)->format('Y-m-d H:i:s') : null
+                ]);
+            } else {
+                // Create new subscription if it doesn't exist
+                $subscription = SubscriptionRecord::create([
+                    'user_id' => $userId,
+                    'organisation_id' => null,
+                    'tier' => 'basecamp',
+                    'user_count' => 1,
+                    'status' => 'active',
+                    'current_period_start' => Carbon::today(),
+                    'current_period_end' => Carbon::today()->addMonth(),
+                    'next_billing_date' => Carbon::today()->addMonth(),
+                    'last_payment_date' => Carbon::today(),
+                ]);
+                
+                Log::info('Created new basecamp subscription', [
+                    'subscription_id' => $subscription->id,
+                    'end_date' => $subscription->current_period_end->format('Y-m-d')
+                ]);
             }
+            
+            // Commit transaction
+            DB::commit();
             
             // Send payment confirmation email (not activation email - that was already sent during registration)
             // Only send payment confirmation to avoid duplicate activation emails
@@ -391,14 +590,30 @@ class BasecampStripeCheckoutController extends Controller
                 'invoice_id' => $invoiceId,
                 'user_id' => $userId,
                 'payment_id' => $payment->id,
+                'subscription_id' => $subscription->id ?? null,
             ]);
             
-            // Clear session data
+            // Clear session data IMMEDIATELY after successful update
             session()->forget('basecamp_user_id');
             session()->forget('basecamp_invoice_id');
+            session()->forget('subscription_expired');
+            session()->forget('subscription_status');
+            
+            // Regenerate session to clear cached data
+            session()->regenerate();
+            
+            Log::info('Session cleared and regenerated after payment');
             
             return redirect()->route('dashboard')
-                ->with('status', 'Payment processed successfully! Please check your email to activate your account.');
+                ->with('status', 'Payment processed successfully! Your subscription has been activated.');
+                
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Error in payment processing transaction: ' . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString()
+                ]);
+                throw $e;
+            }
                 
         } catch (\Exception $e) {
             Log::error('Failed to process basecamp payment success: ' . $e->getMessage(), [

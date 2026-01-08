@@ -1,4 +1,24 @@
 <div>
+    @php
+        // Check if subscription has expired
+        $isExpired = false;
+        $endDate = $subscriptionStatus['end_date'] ?? null;
+        if ($endDate) {
+            $endDateCarbon = \Carbon\Carbon::parse($endDate)->startOfDay();
+            $today = \Carbon\Carbon::today();
+            $isExpired = $today->greaterThan($endDateCarbon);
+        }
+        
+        // If expired, hide all content and show only payment modal
+        if ($isExpired) {
+            $showRenewModal = true;
+        }
+    @endphp
+    
+    @if($isExpired)
+        <!-- When expired, hide all content - only payment modal will show -->
+        <div style="display: none;"></div>
+    @else
     <div class="flex-1 overflow-auto">
         <div class="max-w-8xl mx-auto p-4">
             @if($subscription)
@@ -51,17 +71,29 @@
                         <div>
                             @php
                                 $isCancelled = false;
-                                // Check Stripe subscription status first (most accurate)
-                                if (isset($stripeDetails) && isset($stripeDetails['subscription']) && $stripeDetails['subscription']) {
-                                    $isCancelled = in_array(strtolower($stripeDetails['subscription']->status), ['canceled', 'cancelled']);
+                                // Priority: 1. subscriptionStatus array (refreshed from database), 2. subscription model, 3. Stripe (may be outdated)
+                                // Check subscriptionStatus first (most reliable - refreshed from database)
+                                if (isset($subscriptionStatus['status'])) {
+                                    $isCancelled = in_array(strtolower($subscriptionStatus['status']), ['canceled', 'cancelled', 'cancel_at_period_end']);
                                 }
-                                // Fallback to database subscription status
-                                if (!$isCancelled && isset($subscriptionStatus['status'])) {
-                                    $isCancelled = in_array(strtolower($subscriptionStatus['status']), ['canceled', 'cancelled']);
-                                }
-                                // Final fallback to subscription model status
+                                // Fallback to subscription model status
                                 if (!$isCancelled && $subscription && $subscription->status) {
-                                    $isCancelled = in_array(strtolower($subscription->status), ['canceled', 'cancelled']);
+                                    try {
+                                        $subscription->refresh(); // Refresh to get latest from database
+                                    } catch (\Exception $e) {
+                                        // Ignore refresh errors
+                                    }
+                                    $isCancelled = in_array(strtolower($subscription->status), ['canceled', 'cancelled', 'cancel_at_period_end']);
+                                }
+                                // Final fallback to Stripe (may show canceled even if database is active due to immediate cancellation)
+                                if (!$isCancelled && isset($stripeDetails) && isset($stripeDetails['subscription']) && $stripeDetails['subscription']) {
+                                    // Only use Stripe status if database doesn't have status or if Stripe says active
+                                    // Don't trust Stripe if it says canceled but database says active
+                                    $stripeStatus = strtolower($stripeDetails['subscription']->status);
+                                    if ($stripeStatus === 'active') {
+                                        $isCancelled = false; // Trust Stripe if it says active
+                                    }
+                                    // If Stripe says canceled but database is active, trust database (already set above)
                                 }
                             @endphp
                             <p class="text-sm text-gray-600">{{ $isCancelled ? 'Subscription End' : 'Next Billing Date' }}</p>
@@ -72,24 +104,49 @@
                     </div>
                     @php
                         // Check if subscription is cancelled
+                        // Priority: 1. subscriptionStatus array (refreshed in checkSubscriptionStatus), 2. Stripe details, 3. subscription model
                         $isSubscriptionCancelled = false;
-                        if (isset($stripeDetails) && isset($stripeDetails['subscription']) && $stripeDetails['subscription']) {
+                        
+                        // FIRST check subscriptionStatus array (this is refreshed and most reliable after activation)
+                        if (isset($subscriptionStatus['status'])) {
+                            $isSubscriptionCancelled = in_array(strtolower($subscriptionStatus['status']), ['canceled', 'cancelled', 'cancel_at_period_end']);
+                        }
+                        
+                        // Don't check Stripe status if database says active (Stripe may show canceled for immediately cancelled subscriptions)
+                        // Only trust Stripe if database doesn't have status
+                        if (!$isSubscriptionCancelled && !isset($subscriptionStatus['status']) && isset($stripeDetails) && isset($stripeDetails['subscription']) && $stripeDetails['subscription']) {
                             $isSubscriptionCancelled = in_array(strtolower($stripeDetails['subscription']->status), ['canceled', 'cancelled']);
                         }
-                        if (!$isSubscriptionCancelled && isset($subscriptionStatus['status'])) {
-                            $isSubscriptionCancelled = in_array(strtolower($subscriptionStatus['status']), ['canceled', 'cancelled']);
-                        }
+                        
+                        // Final fallback to subscription model (refresh it first to get latest status)
                         if (!$isSubscriptionCancelled && $subscription && $subscription->status) {
-                            $isSubscriptionCancelled = in_array(strtolower($subscription->status), ['canceled', 'cancelled']);
+                            try {
+                                $subscription->refresh(); // Refresh to get latest status from database
+                                $isSubscriptionCancelled = in_array(strtolower($subscription->status), ['canceled', 'cancelled', 'cancel_at_period_end']);
+                            } catch (\Exception $e) {
+                                // If refresh fails, use existing status
+                                $isSubscriptionCancelled = in_array(strtolower($subscription->status), ['canceled', 'cancelled', 'cancel_at_period_end']);
+                            }
                         }
                     @endphp
                     @if($isSubscriptionCancelled)
+                        @php
+                            // Check if subscription end date has passed (expired) or is still active
+                            $endDate = $subscription->current_period_end ? \Carbon\Carbon::parse($subscription->current_period_end)->startOfDay() : null;
+                            $today = \Carbon\Carbon::today();
+                            $isExpired = $endDate && $today->greaterThan($endDate);
+                        @endphp
                         <div class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
                             <p class="text-red-800 text-sm font-medium mb-2">
-                                ⚠️ Your subscription has been cancelled. Monthly payments have been stopped. You can still use the service until {{ $subscription->current_period_end ? $subscription->current_period_end->format('M d, Y') : 'the end of your billing period' }}. To continue using the service after that date, please renew your subscription.
+                                ⚠️ Your subscription has been cancelled. Monthly payments have been stopped. 
+                                @if(!$isExpired)
+                                    You can still use the service until {{ $subscription->current_period_end ? $subscription->current_period_end->format('M d, Y') : 'the end of your billing period' }}. To continue using the service after that date, please activate your subscription.
+                                @else
+                                    Your subscription has expired. To continue using the service, please renew your subscription.
+                                @endif
                             </p>
-                            <button wire:click="openRenewModal" type="button" class="mt-2 px-4 py-2 bg-[#EB1C24] text-white rounded-md hover:bg-red-700">
-                                Renew Subscription
+                            <button onclick="{{ $isExpired ? 'handleRenewSubscription()' : 'handleReactivateSubscription()' }}" type="button" class="mt-2 px-4 py-2 bg-[#EB1C24] text-white rounded-md hover:bg-red-700">
+                                {{ $isExpired ? 'Renew Subscription' : 'Activate Subscription' }}
                             </button>
                         </div>
                     @elseif(isset($subscriptionStatus['status']) && $subscriptionStatus['status'] === 'suspended')
@@ -97,7 +154,7 @@
                             <p class="text-yellow-800 text-sm font-medium mb-2">
                                 ⚠️ Your subscription is currently paused. Please contact your administrator or renew to activate it.
                             </p>
-                            <button wire:click="openRenewModal" type="button" class="mt-2 px-4 py-2 bg-[#EB1C24] text-white rounded-md hover:bg-red-700">
+                            <button onclick="handleRenewSubscription()" type="button" class="mt-2 px-4 py-2 bg-[#EB1C24] text-white rounded-md hover:bg-red-700">
                                 Renew Subscription
                             </button>
                         </div>
@@ -106,7 +163,7 @@
                             <p class="text-red-800 text-sm font-medium mb-2">
                                 ⚠️ Your subscription has expired or is inactive. Please renew to continue using the service.
                             </p>
-                            <button wire:click="openRenewModal" type="button" class="mt-2 px-4 py-2 bg-[#EB1C24] text-white rounded-md hover:bg-red-700">
+                            <button onclick="handleRenewSubscription()" type="button" class="mt-2 px-4 py-2 bg-[#EB1C24] text-white rounded-md hover:bg-red-700">
                                 Renew Subscription
                             </button>
                         </div>
@@ -140,11 +197,21 @@
                                 <div class="bg-gray-50 rounded-lg p-4">
                                     <p class="text-sm text-gray-600 mb-1">Status</p>
                                     <p class="font-semibold text-gray-900 capitalize">
-                                        <span class="px-2 py-1 rounded text-xs 
-                                            {{ $stripeDetails['subscription']->status === 'active' ? 'bg-green-100 text-green-800' : 
-                                               ($stripeDetails['subscription']->status === 'canceled' ? 'bg-red-100 text-red-800' : 
-                                               ($stripeDetails['subscription']->status === 'past_due' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800')) }}">
-                                            {{ $stripeDetails['subscription']->status }}
+                                        @php
+                                            // Prioritize database status over Stripe status
+                                            // Database status is source of truth after activation
+                                            $displayStatus = $subscriptionStatus['status'] ?? ($subscription->status ?? ($stripeDetails['subscription']->status ?? 'unknown'));
+                                            $statusColor = 'bg-gray-100 text-gray-800';
+                                            if ($displayStatus === 'active') {
+                                                $statusColor = 'bg-green-100 text-green-800';
+                                            } elseif (in_array(strtolower($displayStatus), ['canceled', 'cancelled', 'cancel_at_period_end'])) {
+                                                $statusColor = 'bg-red-100 text-red-800';
+                                            } elseif ($displayStatus === 'past_due') {
+                                                $statusColor = 'bg-yellow-100 text-yellow-800';
+                                            }
+                                        @endphp
+                                        <span class="px-2 py-1 rounded text-xs {{ $statusColor }}">
+                                            {{ ucfirst($displayStatus) }}
                                         </span>
                                     </p>
                                 </div>
@@ -205,8 +272,22 @@
                             </div>
                             @endif
 
-                            <!-- Cancel Subscription Button - Always show if subscription is active -->
-                            @if($subscriptionStatus['active'] && (!$stripeDetails || !$stripeDetails['subscription'] || ($stripeDetails['subscription']->status === 'active' && !$stripeDetails['subscription']->cancel_at_period_end)))
+                            <!-- Cancel Subscription Button - Show if subscription is active (prioritize database status over Stripe) -->
+                            @php
+                                // Check if subscription is active - prioritize database status
+                                $isActiveForCancel = false;
+                                $dbStatus = strtolower($subscriptionStatus['status'] ?? ($subscription->status ?? ''));
+                                
+                                // If database status is active, allow cancel regardless of Stripe status
+                                if ($dbStatus === 'active') {
+                                    $isActiveForCancel = true;
+                                } elseif ($stripeDetails && $stripeDetails['subscription']) {
+                                    // Fallback to Stripe status if database doesn't have status
+                                    $stripeStatus = strtolower($stripeDetails['subscription']->status ?? '');
+                                    $isActiveForCancel = ($stripeStatus === 'active' && !($stripeDetails['subscription']->cancel_at_period_end ?? false));
+                                }
+                            @endphp
+                            @if($isActiveForCancel)
                             <div class="mt-4 flex justify-end">
                                 <button wire:click="openCancelModal" 
                                         type="button"
@@ -237,7 +318,6 @@
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invoice #</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">End Date</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -248,7 +328,6 @@
                             <tr>
                                 <td class="px-6 py-4 whitespace-nowrap">{{ $invoice->invoice_number }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">{{ $invoice->invoice_date->format('M d, Y') }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap">{{ $subscriptionStatus['end_date'] ? \Carbon\Carbon::parse($subscriptionStatus['end_date'])->format('M d, Y') : 'N/A' }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">£{{ number_format($invoice->total_amount, 2) }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <span class="px-2 py-1 text-xs rounded-full 
@@ -1058,83 +1137,68 @@
         </div>
     </div>
     @endif
+    @endif
 
-    <!-- Renew Subscription Modal -->
-    @if($showRenewModal)
-    <div x-data="{ show: true }" 
-         x-show="show" 
-         @click.self="$wire.closeRenewModal()"
-         x-transition:enter="ease-out duration-300"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="ease-in duration-200"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0"
-         class="fixed inset-0 bg-black bg-opacity-50 z-[10000] flex items-center justify-center">
-        <div x-show="show"
-             x-transition:enter="ease-out duration-300"
-             x-transition:enter-start="opacity-0 scale-95"
-             x-transition:enter-end="opacity-100 scale-100"
-             x-transition:leave="ease-in duration-200"
-             x-transition:leave-start="opacity-100 scale-100"
-             x-transition:leave-end="opacity-0 scale-95"
-             class="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl m-4">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold">Renew Subscription</h2>
-                <button wire:click="closeRenewModal" type="button" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
-            </div>
-            
-            <div class="space-y-4">
-                @if(session()->has('error'))
-                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                        <p class="text-red-800 text-sm font-medium">{{ session('error') }}</p>
-                    </div>
-                @endif
+    <!-- Payment Required Modal - Exactly like first time login -->
+    @if($showRenewModal || $isExpired)
+    @php
+        $user = auth()->user();
+        $isBasecamp = $user ? $user->hasRole('basecamp') : false;
+        
+        // Calculate amounts
+        if ($showRenewModal && $renewalPrice > 0) {
+            $subtotal = $renewalPrice;
+            $vatAmount = $isBasecamp ? ($subtotal * 0.20) : 0;
+            $totalAmount = $subtotal + $vatAmount;
+        } else {
+            // Default amounts
+            if ($isBasecamp) {
+                $subtotal = 10.00;
+                $vatAmount = 2.00; // 20% VAT
+                $totalAmount = 12.00;
+            } else {
+                $userCount = $user && $user->orgId ? \App\Models\User::where('orgId', $user->orgId)
+                    ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+                    ->count() : 0;
+                $subtotal = $userCount * 10.00;
+                $vatAmount = 0;
+                $totalAmount = $subtotal;
+            }
+        }
+    @endphp
+    <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.75); z-index: 99999; display: flex; align-items: center; justify-content: center;"
+         @if(!$isExpired)
+         onclick="if(event.target === this) @this.closeRenewModal()"
+         @endif>
+        <div class="bg-white rounded-lg p-8 w-full max-w-md shadow-2xl m-4">
+            <div class="text-center">
+                <h2 class="text-2xl font-bold text-gray-900 mb-2">Payment Required</h2>
+                <p class="text-gray-600 mb-6">
+                    Please complete your payment of <strong>£{{ number_format($totalAmount, 2) }}</strong> @if($isBasecamp)(incl. VAT)@endif to activate your account.
+                </p>
                 
-                @if($renewalUserCount > 0)
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <h3 class="font-semibold text-blue-900 mb-2">Renewal Details</h3>
-                        <div class="space-y-2 text-sm">
-                            <div class="flex justify-between">
-                                <span class="text-gray-600">Number of Users:</span>
-                                <span class="font-semibold">{{ $renewalUserCount }}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-600">Price per User:</span>
-                                <span class="font-semibold">${{ number_format($renewalPricePerUser, 2) }}</span>
-                            </div>
-                            <div class="flex justify-between border-t pt-2">
-                                <span class="text-gray-600 font-semibold">Total Amount:</span>
-                                <span class="font-bold text-lg text-[#EB1C24]">${{ number_format($renewalPrice, 2) }}</span>
-                            </div>
-                            <div class="flex justify-between mt-2">
-                                <span class="text-gray-600">Subscription Expiry:</span>
-                                <span class="font-semibold">{{ $renewalExpiryDate ?? 'N/A' }}</span>
-                            </div>
-                        </div>
+                <!-- Amount Display -->
+                <div class="mb-6">
+                    <p class="text-sm text-gray-600 mb-2">Amount to Pay</p>
+                    <div class="text-4xl font-bold text-[#EB1C24] mb-2">
+                        £{{ number_format($totalAmount, 2) }}
                     </div>
-
-                    <p class="text-sm text-gray-600">
-                        By clicking "Proceed to Payment", you will be redirected to submit your payment. Your subscription will be activated immediately after successful payment.
-                    </p>
-
-                    <div class="flex justify-end space-x-2">
-                        <button wire:click="closeRenewModal" type="button" class="px-4 py-2 border rounded-md hover:bg-gray-50">Cancel</button>
-                        <button wire:click="renewSubscription" type="button" class="px-4 py-2 bg-[#EB1C24] text-white rounded-md hover:bg-red-700">
-                            <span wire:loading.remove wire:target="renewSubscription">Proceed to Payment</span>
-                            <span wire:loading wire:target="renewSubscription">Processing...</span>
-                        </button>
-                    </div>
-                @else
-                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                        <p class="text-yellow-800 text-sm font-medium">
-                            No users found in your organisation. Please contact your administrator to add users first.
+                    @if($isBasecamp)
+                        <p class="text-sm text-gray-500">
+                            (£{{ number_format($subtotal, 2) }} + 20% VAT)
                         </p>
-                    </div>
-                    <div class="flex justify-end">
-                        <button wire:click="closeRenewModal" type="button" class="px-4 py-2 border rounded-md hover:bg-gray-50">Close</button>
-                    </div>
-                @endif
+                    @endif
+                </div>
+
+                <!-- Pay Now Button -->
+                <div class="flex justify-center">
+                    <button wire:click="renewSubscription" 
+                            type="button" 
+                            class="px-8 py-3 bg-[#EB1C24] text-white rounded-md hover:bg-red-700 font-semibold text-lg shadow-lg transition-colors w-full">
+                        <span wire:loading.remove wire:target="renewSubscription">Pay Now</span>
+                        <span wire:loading wire:target="renewSubscription">Processing...</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1608,12 +1672,206 @@
 </div>
 
 <script>
+    // Handle reactivate subscription button click (for cancelled but not expired)
+    function handleReactivateSubscription() {
+        console.log('Reactivate subscription initiated');
+        
+        // Disable button to prevent multiple clicks
+        const btn = event.target;
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+        }
+        
+        const formData = new FormData();
+        formData.append('_token', '{{ csrf_token() }}');
+        
+        const reactivateUrl = '{{ route("billing.reactivate") }}';
+        console.log('Making request to:', reactivateUrl);
+        
+        fetch(reactivateUrl, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+            },
+            credentials: 'same-origin'
+        })
+        .then(response => {
+            console.log('Response received', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok
+            });
+            
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Failed to reactivate subscription');
+                });
+            }
+            
+            return response.json();
+        })
+        .then(data => {
+            console.log('Reactivate success:', data);
+            if (data.success) {
+                // Force full page reload immediately (don't wait for Livewire)
+                // Add timestamp to prevent browser cache
+                window.location.href = window.location.pathname + '?refresh=' + Date.now();
+            } else {
+                throw new Error(data.error || 'Failed to reactivate subscription');
+            }
+        })
+        .catch(error => {
+            console.error('Reactivate error:', error);
+            alert('Failed to reactivate subscription: ' + error.message);
+            // Re-enable button on error
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Activate Subscription';
+            }
+        });
+    }
+    
+    // Handle renew subscription button click (for expired subscriptions)
+    function handleRenewSubscription() {
+        console.log('Renew subscription initiated');
+        
+        // Disable button to prevent multiple clicks
+        const btn = event.target;
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+        }
+        
+        // Use FormData for better compatibility
+        const formData = new FormData();
+        formData.append('_token', '{{ csrf_token() }}');
+        
+        const checkoutUrl = '{{ route("billing.renewal.checkout") }}';
+        console.log('Making request to:', checkoutUrl);
+        
+        fetch(checkoutUrl, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+            },
+            redirect: 'manual',
+            credentials: 'same-origin'
+        })
+        .then(response => {
+            console.log('Response received', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok
+            });
+            
+            if (response.status === 0) {
+                console.error('Status 0 - Network error or CORS issue');
+                throw new Error('Network error: Request may have been blocked. Check CORS settings or try again.');
+            }
+            
+            // Check for custom redirect header
+            const redirectHeader = response.headers.get('X-Redirect-URL');
+            if (redirectHeader) {
+                console.log('Found redirect header:', redirectHeader);
+                window.location.replace(redirectHeader);
+                return;
+            }
+            
+            if (!response.ok && response.status !== 200) {
+                const contentType = response.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    return response.json().then(data => {
+                        console.error('Response error (JSON):', data);
+                        throw new Error(data.error || data.message || 'Response not OK: ' + response.status);
+                    });
+                } else {
+                    return response.text().then(text => {
+                        console.error('Response error (text):', text);
+                        throw new Error('Response not OK: ' + response.status + ' ' + response.statusText);
+                    });
+                }
+            }
+            
+            // Try to get JSON response
+            const contentType = response.headers.get('content-type') || '';
+            console.log('Content-Type:', contentType);
+            
+            if (contentType.includes('application/json')) {
+                return response.json().then(data => {
+                    console.log('Received JSON:', data);
+                    if (data.redirect_url) {
+                        console.log('Redirecting to Stripe:', data.redirect_url);
+                        window.location.replace(data.redirect_url);
+                    } else {
+                        console.error('No redirect_url in JSON:', data);
+                        throw new Error('No redirect URL in JSON response');
+                    }
+                });
+            }
+            
+            return response.text().then(html => {
+                console.log('Received HTML response, length:', html.length);
+                // Try to extract redirect URL from HTML
+                const patterns = [
+                    /var url = [^;]+['"](https?:\/\/[^'"]+)['"]/,
+                    /window\.location\.replace\(['"](https?:\/\/[^'"]+)['"]\)/,
+                    /window\.location\.href\s*=\s*['"](https?:\/\/[^'"]+)['"]/,
+                ];
+                
+                let found = false;
+                for (const pattern of patterns) {
+                    const match = html.match(pattern);
+                    if (match && match[1] && match[1].includes('checkout.stripe.com')) {
+                        console.log('Extracted Stripe URL from HTML:', match[1]);
+                        window.location.replace(match[1]);
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (!found) {
+                    document.open();
+                    document.write(html);
+                    document.close();
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Renewal error:', error);
+            alert('Failed to process renewal: ' + error.message);
+            // Re-enable button on error
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Renew Subscription';
+            }
+        });
+        
+        return false; // Prevent any default behavior
+    }
+    
     // Handle redirect to Stripe Checkout
     document.addEventListener('livewire:init', () => {
         Livewire.on('redirect-to-stripe', (event) => {
             const url = event.url || event[0]?.url;
             if (url) {
                 window.location.href = url;
+            }
+        });
+        
+        // Handle direct Stripe checkout redirect
+        Livewire.on('redirect-to-stripe-checkout', (event) => {
+            const url = event.url || event[0]?.url || event.detail?.url;
+            console.log('Redirecting to Stripe checkout:', url);
+            if (url) {
+                // Use replace to avoid adding to browser history
+                window.location.replace(url);
+            } else {
+                console.error('No URL provided for Stripe redirect');
             }
         });
         
@@ -1643,21 +1901,31 @@
         });
         
         // Refresh billing page after payment success
-        @if(session()->has('refresh_billing'))
+        @if(session()->has('refresh_billing') || session()->has('payment_completed'))
+            // Force full page reload to ensure all data is fresh
             setTimeout(() => {
-                @this.call('refreshBilling');
-            }, 500);
+                window.location.reload(true); // Force reload from server
+            }, 1000);
         @endif
     });
     
     // Also refresh on page load if payment was successful
-    @if(session()->has('refresh_billing'))
+    @if(session()->has('refresh_billing') || session()->has('payment_completed'))
         // Force full page reload to ensure all data is fresh
         window.addEventListener('load', () => {
             setTimeout(() => {
-                window.location.reload();
+                window.location.reload(true); // Force reload from server
             }, 500);
         });
     @endif
+    
+    // Check URL parameter for payment completion
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('payment_completed')) {
+        // Force reload after payment
+        setTimeout(() => {
+            window.location.href = window.location.pathname; // Remove query params and reload
+        }, 500);
+    }
 </script>
 

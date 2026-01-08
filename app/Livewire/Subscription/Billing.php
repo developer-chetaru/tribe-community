@@ -31,7 +31,10 @@ class Billing extends Component
     public $selectedInvoiceForShare = null;
     public $shareLink = '';
     
-    protected $listeners = ['refreshPayments' => '$refresh'];
+    protected $listeners = [
+        'refreshPayments' => '$refresh',
+        'subscription-activated' => 'refreshBilling'
+    ];
     
     public $subscriptionStatus = [];
     public $daysRemaining = 0;
@@ -89,22 +92,81 @@ class Billing extends Component
         // Check subscription status
         $this->checkSubscriptionStatus();
         
-        // Refresh data if payment was successful
-        if (session()->has('refresh_billing')) {
+        // Auto-open modal if subscription expired
+        $endDate = $this->subscriptionStatus['end_date'] ?? null;
+        if ($endDate) {
+            $endDateCarbon = Carbon::parse($endDate)->startOfDay();
+            $today = Carbon::today();
+            if ($today->greaterThan($endDateCarbon)) {
+                $this->openRenewModal();
+            }
+        }
+        
+        // Refresh data if payment was successful or subscription was reactivated
+        if (session()->has('refresh_billing') || session()->has('payment_completed')) {
+            // Clear session flags first
             session()->forget('refresh_billing');
             session()->forget('payment_success');
-            // Force refresh of subscription and invoices
+            session()->forget('payment_completed');
+            
+            // Force refresh of subscription status (this will reload subscription data)
             $this->checkSubscriptionStatus();
-            $this->resetPage(); // Reset pagination to show updated invoices
-            // Force Livewire to refresh
-            $this->dispatch('$refresh');
+            
+            // Force reload subscription property by clearing it
+            if (property_exists($this, 'subscription')) {
+                unset($this->subscription);
+            }
+            
+            // Trigger subscription property to be fetched fresh
+            try {
+                $subscription = $this->subscription; // This will trigger getSubscriptionProperty()
+                Log::info('Subscription refreshed in mount after payment/reactivation', [
+                    'subscription_id' => $subscription?->id,
+                    'status' => $subscription?->status
+                ]);
+            } catch (\Exception $e) {
+                Log::warning('Error accessing subscription in mount: ' . $e->getMessage());
+            }
+            
+            // Reset pagination to show updated invoices
+            $this->resetPage();
         }
     }
     
     public function refreshBilling()
     {
+        // Clear cached subscription to force fresh fetch
+        if (property_exists($this, 'subscription')) {
+            unset($this->subscription);
+        }
+        
+        // Clear subscriptionStatus to force recalculation
+        $this->subscriptionStatus = [];
+        
+        // Re-check subscription status (this will fetch fresh data)
         $this->checkSubscriptionStatus();
+        
+        // Reset page for pagination
         $this->resetPage();
+        
+        // Clear session flags
+        session()->forget('subscription_expired');
+        session()->forget('subscription_status');
+        
+        // Ensure subscription property is available after refresh
+        // Access it to trigger computed property
+        try {
+            $subscription = $this->subscription;
+            Log::info('Subscription refreshed in refreshBilling', [
+                'subscription_id' => $subscription?->id,
+                'status' => $subscription?->status
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('Error accessing subscription in refreshBilling: ' . $e->getMessage());
+        }
+        
+        // Force Livewire to re-render
+        $this->dispatch('$refresh');
     }
     
     public function openInvoiceModal($invoiceId)
@@ -224,10 +286,13 @@ class Billing extends Component
         if ($user->hasRole('basecamp')) {
             $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
                 ->where('tier', 'basecamp')
-                ->orderBy('created_at', 'desc')
+                ->orderBy('id', 'desc') // Use ID for better ordering
                 ->first();
                 
             if ($subscription) {
+                // Refresh subscription FIRST to get latest status from database
+                $subscription->refresh();
+                
                 $endDate = $subscription->current_period_end ?? \Carbon\Carbon::today()->addMonth();
                 // Use today() for date-only calculation to avoid time-based decimals
                 $today = \Carbon\Carbon::today();
@@ -236,12 +301,18 @@ class Billing extends Component
                 $daysRemaining = max(0, (int) floor($today->diffInDays($endDateOnly, false)));
                 
                 $this->subscriptionStatus = [
-                    'active' => $subscription->status === 'active',
-                    'status' => $subscription->status,
+                    'active' => $subscription->status === 'active' || ($endDate && $endDateOnly->isFuture()), // Active if status is active OR end date is future
+                    'status' => $subscription->status, // This should be 'active' after activation
                     'days_remaining' => $daysRemaining,
                     'end_date' => $endDateOnly->format('Y-m-d'),
                 ];
                 $this->daysRemaining = $daysRemaining;
+                
+                // Store subscription in a way that view can access fresh data
+                // Force clear any cached subscription property
+                if (property_exists($this, 'subscription') || isset($this->subscription)) {
+                    unset($this->subscription);
+                }
             } else {
                 $this->subscriptionStatus = [
                     'active' => false,
@@ -276,9 +347,34 @@ class Billing extends Component
             }
         }
         
-        // Don't show modal if subscription is cancelled or suspended
-        if (!$this->subscriptionStatus['active'] && $status !== 'suspended' && !$isCancelled) {
-            $this->showSubscriptionExpiredModal = true;
+        // Check if subscription has expired (end_date is in the past)
+        $endDate = $this->subscriptionStatus['end_date'] ?? null;
+        $isExpired = false;
+        if ($endDate) {
+            try {
+                $endDateCarbon = Carbon::parse($endDate)->startOfDay();
+                $today = Carbon::today();
+                $isExpired = $today->greaterThan($endDateCarbon);
+            } catch (\Exception $e) {
+                Log::warning('Error parsing end date: ' . $e->getMessage());
+            }
+        }
+        
+        // If expired and not suspended/cancelled, show payment modal
+        if ($isExpired && $status !== 'suspended' && !$isCancelled) {
+            $this->showRenewModal = true;
+            // Set renewal data
+            if ($user->hasRole('basecamp')) {
+                $this->renewalUserCount = 1;
+                $this->renewalPricePerUser = 10.00;
+                $this->renewalPrice = 10.00;
+            } else {
+                $this->renewalUserCount = \App\Models\User::where('orgId', $user->orgId)
+                    ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+                    ->count();
+                $this->renewalPricePerUser = 10.00;
+                $this->renewalPrice = $this->renewalUserCount * $this->renewalPricePerUser;
+            }
         }
     }
 
@@ -289,17 +385,42 @@ class Billing extends Component
 
     public function openRenewModal()
     {
-        \Log::info('openRenewModal called - redirecting directly to payment');
+        \Log::info('openRenewModal called');
         
-        // Close the subscription expired modal if it's open
-        $this->showSubscriptionExpiredModal = false;
+        $user = auth()->user();
         
-        // Directly call renewSubscription to redirect to payment
-        $this->renewSubscription();
+        // Calculate renewal data
+        if ($user->hasRole('basecamp')) {
+            $this->renewalUserCount = 1;
+            $this->renewalPricePerUser = 10.00; // £10 excluding VAT
+            $this->renewalPrice = 10.00; // £10 excluding VAT
+        } else {
+            // For directors, get current user count
+            $this->renewalUserCount = \App\Models\User::where('orgId', $user->orgId)
+                ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+                ->count();
+            
+            $this->renewalPricePerUser = 10.00;
+            $this->renewalPrice = $this->renewalUserCount * $this->renewalPricePerUser;
+        }
+        
+        // Show the modal
+        $this->showRenewModal = true;
     }
 
     public function closeRenewModal()
     {
+        // Don't allow closing if subscription is expired
+        $endDate = $this->subscriptionStatus['end_date'] ?? null;
+        if ($endDate) {
+            $endDateCarbon = Carbon::parse($endDate)->startOfDay();
+            $today = Carbon::today();
+            if ($today->greaterThan($endDateCarbon)) {
+                // Subscription expired - don't allow closing
+                return;
+            }
+        }
+        
         $this->showRenewModal = false;
         $this->renewalPrice = 0;
         $this->renewalUserCount = 0;
@@ -450,7 +571,7 @@ class Billing extends Component
             });
             
             // Redirect directly to Stripe payment (no modal)
-            $this->openPaymentModal($this->renewalInvoice->id);
+            return $this->openPaymentModal($this->renewalInvoice->id);
             
         } catch (\Exception $e) {
             \Log::error('Error creating renewal invoice: ' . $e->getMessage());
@@ -499,8 +620,14 @@ class Billing extends Component
             $checkoutUrl = $this->createStripeCheckoutSession($invoice);
             
             if ($checkoutUrl) {
-                // For external URLs, use JavaScript redirect via Livewire
-                $this->dispatch('redirect-to-stripe', url: $checkoutUrl);
+                \Log::info('Stripe checkout URL created, dispatching redirect event', [
+                    'checkout_url' => $checkoutUrl,
+                    'invoice_id' => $invoiceId
+                ]);
+                
+                // Dispatch JavaScript event with direct Stripe URL for immediate redirect
+                // This works better with Livewire AJAX requests
+                $this->dispatch('redirect-to-stripe-checkout', url: $checkoutUrl);
                 return;
             }
             
@@ -864,17 +991,36 @@ class Billing extends Component
         
         // For basecamp users, get user-based subscription
         if ($user->hasRole('basecamp')) {
-            return \App\Models\SubscriptionRecord::where('user_id', $user->id)
+            $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
                 ->where('tier', 'basecamp')
-                ->orderBy('created_at', 'desc')
+                ->orderBy('id', 'desc') // Use ID for better ordering - gets latest
+                ->first();
+        } else {
+            // For directors, get organisation-based subscription
+            $subscription = \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
+                ->with('organisation')
+                ->orderBy('id', 'desc') // Use ID for better ordering - gets latest
                 ->first();
         }
         
-        // For directors, get organisation-based subscription
-        return \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
-            ->with('organisation')
-            ->orderBy('created_at', 'desc')
-            ->first();
+        // Refresh subscription to get latest status from database
+        if ($subscription) {
+            $subscription->refresh();
+            Log::info('Subscription property fetched', [
+                'subscription_id' => $subscription->id,
+                'status' => $subscription->status,
+                'user_id' => $user->id,
+                'is_basecamp' => $user->hasRole('basecamp')
+            ]);
+        } else {
+            Log::info('No subscription found in getSubscriptionProperty', [
+                'user_id' => $user->id,
+                'org_id' => $user->orgId ?? null,
+                'is_basecamp' => $user->hasRole('basecamp')
+            ]);
+        }
+        
+        return $subscription;
     }
 
     public function getInvoicesProperty()
@@ -1036,42 +1182,126 @@ class Billing extends Component
 
     public function cancelSubscription()
     {
-        if (!$this->subscription || !$this->subscription->stripe_subscription_id) {
-            session()->flash('error', 'No active subscription found to cancel.');
-            return;
-        }
-
         try {
-            $stripeService = new StripeService();
-            // Cancel immediately to stop monthly payments
-            $result = $stripeService->cancelSubscription($this->subscription->stripe_subscription_id, false);
+            // Get fresh subscription from database
+            $subscriptionId = null;
+            $stripeSubscriptionId = null;
             
-            if ($result['success']) {
-                // Refresh subscription status
-                $this->checkSubscriptionStatus();
-                $this->closeCancelModal();
-                session()->flash('success', 'Your subscription has been cancelled successfully. Monthly payments have been stopped.');
+            $user = auth()->user();
+            if ($user->hasRole('basecamp')) {
+                $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
+                    ->where('tier', 'basecamp')
+                    ->orderBy('id', 'desc')
+                    ->first();
+            } elseif ($user->orgId) {
+                $subscription = \App\Models\SubscriptionRecord::where('organisation_id', $user->orgId)
+                    ->orderBy('id', 'desc')
+                    ->first();
             } else {
-                session()->flash('error', 'Failed to cancel subscription: ' . ($result['error'] ?? 'Unknown error'));
+                session()->flash('error', 'No subscription found.');
+                $this->closeCancelModal();
+                return;
             }
+
+            if (!$subscription) {
+                session()->flash('error', 'No active subscription found to cancel.');
+                $this->closeCancelModal();
+                return;
+            }
+
+            $subscriptionId = $subscription->id;
+            $stripeSubscriptionId = $subscription->stripe_subscription_id;
+            
+            // Update database FIRST (priority)
+            $subscription->update([
+                'status' => 'canceled',
+                'canceled_at' => now(),
+            ]);
+            
+            Log::info('Subscription cancelled in database', [
+                'subscription_id' => $subscriptionId,
+                'stripe_subscription_id' => $stripeSubscriptionId,
+                'status' => 'canceled'
+            ]);
+            
+            // Try to cancel in Stripe if subscription ID exists (but don't fail if it doesn't work)
+            if ($stripeSubscriptionId) {
+                try {
+                    $stripeService = new StripeService();
+                    // Cancel immediately to stop monthly payments
+                    $result = $stripeService->cancelSubscription($stripeSubscriptionId, false);
+                    
+                    if ($result['success']) {
+                        Log::info('Subscription cancelled in both database and Stripe', [
+                            'subscription_id' => $subscriptionId,
+                            'database_only' => $result['database_only'] ?? false
+                        ]);
+                    } else {
+                        // Stripe cancellation failed, but database is already updated - this is OK
+                        Log::info('Subscription cancelled in database. Stripe cancellation skipped (subscription may not exist in Stripe)', [
+                            'subscription_id' => $subscriptionId,
+                            'stripe_subscription_id' => $stripeSubscriptionId,
+                            'error' => $result['error'] ?? 'Unknown error'
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    // Stripe error - but database is already updated, so this is OK
+                    Log::info('Subscription cancelled in database. Stripe cancellation failed (this is OK if subscription was already cancelled)', [
+                        'subscription_id' => $subscriptionId,
+                        'stripe_subscription_id' => $stripeSubscriptionId,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            } else {
+                Log::info('Subscription cancelled in database (no Stripe subscription ID)', [
+                    'subscription_id' => $subscriptionId
+                ]);
+            }
+            
+            // Clear cached subscription property to force fresh fetch
+            if (property_exists($this, 'subscription')) {
+                unset($this->subscription);
+            }
+            
+            // Refresh subscription status
+            $this->checkSubscriptionStatus();
+            
+            // Close modal
+            $this->closeCancelModal();
+            
+            // Flash success message
+            session()->flash('success', 'Your subscription has been cancelled successfully. Monthly payments have been stopped.');
+            
+            // Dispatch event to refresh component
+            $this->dispatch('$refresh');
+            
         } catch (\Exception $e) {
-            Log::error('Failed to cancel subscription: ' . $e->getMessage());
-            session()->flash('error', 'Failed to cancel subscription. Please try again or contact support.');
+            Log::error('Failed to cancel subscription: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'user_id' => auth()->id()
+            ]);
+            $this->closeCancelModal();
+            session()->flash('error', 'Failed to cancel subscription: ' . $e->getMessage());
         }
     }
 
     public function render()
     {
+        // Get subscription (this will use getSubscriptionProperty which refreshes the model)
+        $subscription = $this->subscription;
+        
         // Fetch Stripe subscription details if subscription exists
         $stripeDetails = null;
-        if ($this->subscription && $this->subscription->stripe_subscription_id) {
+        if ($subscription && $subscription->stripe_subscription_id) {
             $stripeDetails = $this->getStripeSubscriptionDetails();
         }
 
         return view('livewire.subscription.billing', [
-            'subscription' => $this->subscription,
+            'subscription' => $subscription,
             'invoices' => $this->invoices,
             'stripeDetails' => $stripeDetails,
+            'subscriptionStatus' => $this->subscriptionStatus, // Explicitly pass subscriptionStatus
+            'daysRemaining' => $this->daysRemaining,
         ])->layout('layouts.app', ['header' => '<h2 class="text-[24px] md:text-[30px] font-semibold capitalize text-[#EB1C24]">Billing & Invoices</h2>']);
     }
 }

@@ -158,8 +158,20 @@ Route::middleware([
         
         // Stripe Checkout Routes with rate limiting (10 requests per minute)
         Route::middleware(['throttle:10,1'])->group(function () {
+            Route::post('/billing/renewal/checkout', [\App\Http\Controllers\Billing\StripeCheckoutController::class, 'createRenewalCheckout'])
+                ->name('billing.renewal.checkout');
+            Route::post('/billing/reactivate', [\App\Http\Controllers\Billing\StripeCheckoutController::class, 'reactivateSubscription'])
+                ->name('billing.reactivate');
             Route::get('/billing/payment/success', [\App\Http\Controllers\Billing\StripeCheckoutController::class, 'handleSuccess'])
                 ->name('billing.payment.success');
+            Route::get('/billing/stripe/redirect', function() {
+                $checkoutUrl = session()->get('stripe_checkout_url');
+                if (!$checkoutUrl) {
+                    return redirect()->route('billing')->with('error', 'Payment session expired. Please try again.');
+                }
+                session()->forget('stripe_checkout_url');
+                return view('stripe-redirect', ['url' => $checkoutUrl]);
+            })->name('billing.stripe.redirect');
         });
         
         Route::get('/invoices/{id}/download', [InvoiceController::class, 'download'])->name('invoices.download');

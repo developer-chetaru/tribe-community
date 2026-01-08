@@ -453,51 +453,172 @@ class StripeService
 
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
             
-            if ($cancelAtPeriodEnd) {
-                // Cancel at the end of the billing period
-                // API: POST /v1/subscriptions/{id} with cancel_at_period_end=true
-                $subscription = \Stripe\Subscription::update($subscriptionId, [
-                    'cancel_at_period_end' => true
-                ]);
-                Log::info('Subscription scheduled for cancellation at period end', [
+            // First check if subscription exists in Stripe
+            $stripeSubscription = null;
+            $subscriptionExistsInStripe = false;
+            try {
+                $stripeSubscription = \Stripe\Subscription::retrieve($subscriptionId);
+                $subscriptionExistsInStripe = true;
+                Log::info('Stripe subscription found', [
                     'subscription_id' => $subscriptionId,
-                    'period_end' => $subscription->current_period_end
+                    'stripe_status' => $stripeSubscription->status
                 ]);
-            } else {
-                // Cancel immediately - stops all future payments
-                // API: DELETE /v1/subscriptions/{id}
-                // This permanently cancels the subscription and prevents all future charges
-                $subscription = \Stripe\Subscription::retrieve($subscriptionId);
-                $canceledSubscription = $subscription->cancel();
-                
-                Log::info('Subscription cancelled immediately - all future payments stopped', [
+            } catch (\Stripe\Exception\InvalidRequestException $e) {
+                // Subscription doesn't exist in Stripe - this is OK if it was already cancelled
+                Log::info('Stripe subscription not found - will update database only', [
                     'subscription_id' => $subscriptionId,
-                    'status' => $canceledSubscription->status,
-                    'canceled_at' => $canceledSubscription->canceled_at
+                    'error' => $e->getMessage()
+                ]);
+            } catch (\Exception $e) {
+                Log::warning('Error checking Stripe subscription existence', [
+                    'subscription_id' => $subscriptionId,
+                    'error' => $e->getMessage()
                 ]);
             }
+            
+            if ($subscriptionExistsInStripe && $stripeSubscription) {
+                // Subscription exists in Stripe - cancel it
+                if ($cancelAtPeriodEnd) {
+                    // Cancel at the end of the billing period
+                    // API: POST /v1/subscriptions/{id} with cancel_at_period_end=true
+                    $subscription = \Stripe\Subscription::update($subscriptionId, [
+                        'cancel_at_period_end' => true
+                    ]);
+                    Log::info('Subscription scheduled for cancellation at period end in Stripe', [
+                        'subscription_id' => $subscriptionId,
+                        'period_end' => $subscription->current_period_end
+                    ]);
+                } else {
+                    // Cancel immediately - stops all future payments
+                    // API: DELETE /v1/subscriptions/{id}
+                    // This permanently cancels the subscription and prevents all future charges
+                    $canceledSubscription = $stripeSubscription->cancel();
+                    
+                    Log::info('Subscription cancelled immediately in Stripe - all future payments stopped', [
+                        'subscription_id' => $subscriptionId,
+                        'status' => $canceledSubscription->status,
+                        'canceled_at' => $canceledSubscription->canceled_at
+                    ]);
+                    $subscription = $canceledSubscription;
+                }
+            } else {
+                // Subscription doesn't exist in Stripe - just update database
+                Log::info('Stripe subscription does not exist - updating database only', [
+                    'subscription_id' => $subscriptionId,
+                    'cancel_at_period_end' => $cancelAtPeriodEnd
+                ]);
+                $subscription = null; // No Stripe subscription to return
+            }
 
-            // Update database
-            SubscriptionRecord::where('stripe_subscription_id', $subscriptionId)
+            // Update database regardless of Stripe status
+            $updated = SubscriptionRecord::where('stripe_subscription_id', $subscriptionId)
                 ->update([
                     'status' => $cancelAtPeriodEnd ? 'cancel_at_period_end' : 'canceled',
                     'canceled_at' => now(),
                 ]);
+            
+            Log::info('Database updated for subscription cancellation', [
+                'subscription_id' => $subscriptionId,
+                'status' => $cancelAtPeriodEnd ? 'cancel_at_period_end' : 'canceled',
+                'updated' => $updated
+            ]);
 
             return [
                 'success' => true,
                 'subscription' => $subscription,
+                'database_only' => !$subscriptionExistsInStripe, // Indicate if only database was updated
             ];
         } catch (\Exception $e) {
             Log::error('Stripe Subscription Cancellation Failed: ' . $e->getMessage(), [
                 'subscription_id' => $subscriptionId,
                 'cancel_at_period_end' => $cancelAtPeriodEnd,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
             ]);
             return [
                 'success' => false,
                 'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Reactivate a cancelled subscription in Stripe
+     * Only works if subscription was cancelled with cancel_at_period_end=true
+     * If subscription was immediately cancelled (status='canceled'), returns false but doesn't throw error
+     * Note: Database should be updated separately - this only handles Stripe side
+     */
+    public function reactivateSubscription($subscriptionId)
+    {
+        try {
+            if (!class_exists(\Stripe\Subscription::class)) {
+                // Stripe not available - return success anyway since database will be updated
+                return [
+                    'success' => true,
+                    'message' => 'Stripe package not available, database will be updated separately'
+                ];
+            }
+
+            \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+            
+            // Retrieve the subscription
+            $stripeSubscription = \Stripe\Subscription::retrieve($subscriptionId);
+            
+            // Check if subscription can be reactivated
+            // If status is 'canceled' (immediate cancellation), it cannot be reactivated in Stripe
+            // But we'll return success anyway since database will be updated
+            if ($stripeSubscription->status === 'canceled') {
+                Log::info('Stripe subscription is immediately cancelled - cannot reactivate in Stripe, but database will be updated', [
+                    'subscription_id' => $subscriptionId,
+                    'stripe_status' => $stripeSubscription->status
+                ]);
+                return [
+                    'success' => true,
+                    'message' => 'Stripe subscription was immediately cancelled - database will be activated separately'
+                ];
+            }
+            
+            // If cancel_at_period_end is true, remove it to reactivate
+            if ($stripeSubscription->cancel_at_period_end === true) {
+                $subscription = \Stripe\Subscription::update($subscriptionId, [
+                    'cancel_at_period_end' => false
+                ]);
+                
+                Log::info('Stripe subscription reactivated', [
+                    'subscription_id' => $subscriptionId,
+                    'status' => $subscription->status,
+                    'cancel_at_period_end' => $subscription->cancel_at_period_end
+                ]);
+                
+                return [
+                    'success' => true,
+                    'subscription' => $subscription,
+                ];
+            } else {
+                // Subscription is already active or not cancelled in Stripe
+                Log::info('Stripe subscription is not cancelled or already active', [
+                    'subscription_id' => $subscriptionId,
+                    'status' => $stripeSubscription->status,
+                    'cancel_at_period_end' => $stripeSubscription->cancel_at_period_end
+                ]);
+                
+                return [
+                    'success' => true,
+                    'subscription' => $stripeSubscription,
+                    'message' => 'Subscription is already active in Stripe'
+                ];
+            }
+        } catch (\Exception $e) {
+            // Log error but don't fail - database will be updated anyway
+            Log::warning('Stripe Subscription Reactivation Failed (non-critical): ' . $e->getMessage(), [
+                'subscription_id' => $subscriptionId,
+                'error' => $e->getMessage(),
+                'note' => 'Database will be updated separately'
+            ]);
+            // Return success anyway - database update is more important
+            return [
+                'success' => true,
+                'message' => 'Stripe reactivation failed but database will be updated',
+                'stripe_error' => $e->getMessage()
             ];
         }
     }

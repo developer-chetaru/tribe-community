@@ -211,7 +211,7 @@ class SubscriptionService
             ];
         }
 
-        // For active subscriptions, check expiry and invoices
+        // For all subscriptions (including cancelled), check expiry and invoices
         $endDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end)->startOfDay() : null;
         $today = Carbon::today();
         // Calculate whole days remaining (floor to ensure we don't show partial days)
@@ -227,8 +227,23 @@ class SubscriptionService
             $overdue = true;
         }
 
+        // Important: Cancelled subscriptions are still active until end date passes
+        // If end date is in future, subscription is active (even if cancelled)
+        $isActive = false;
+        if ($endDate && $endDate->isFuture()) {
+            // End date is in future - subscription is active (even if cancelled)
+            // Only mark as inactive if there's an overdue invoice
+            $isActive = !$overdue;
+        } elseif ($endDate && $today->greaterThan($endDate)) {
+            // End date has passed - subscription is expired
+            $isActive = false;
+        } elseif (!$endDate) {
+            // No end date - check status
+            $isActive = $subscription->status === 'active' && !$overdue;
+        }
+
         return [
-            'active' => $daysRemaining > 0 && !$overdue && $subscription->status === 'active',
+            'active' => $isActive,
             'subscription' => $subscription,
             'status' => $subscription->status,
             'days_remaining' => max(0, $daysRemaining),
@@ -267,13 +282,15 @@ class SubscriptionService
 
         // Update or create subscription with ACTIVE status
         if ($subscription) {
-            // If subscription is expired, extend it from today
+            // If subscription is expired or doesn't have valid end date, extend it from today
             // If subscription is still active, extend from current end date
-            $startDate = $subscription->current_period_end && Carbon::parse($subscription->current_period_end)->isFuture() 
-                ? Carbon::parse($subscription->current_period_end) 
+            $endDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end) : null;
+            $startDate = ($endDate && $endDate->isFuture()) 
+                ? $endDate 
                 : $today;
             
             // Update existing subscription to ACTIVE and extend period
+            // Remove cancellation status when renewing
             $subscription->update([
                 'status' => 'active',
                 'current_period_start' => $startDate,
@@ -281,9 +298,17 @@ class SubscriptionService
                 'next_billing_date' => $startDate->copy()->addMonth(),
                 'user_count' => $invoice->user_count, // Update user count from invoice
                 'last_payment_date' => $today,
+                'canceled_at' => null, // Remove cancellation timestamp when renewing
             ]);
             
-            Log::info("Subscription {$subscription->id} renewed - Period: {$startDate->format('Y-m-d')} to {$startDate->copy()->addMonth()->format('Y-m-d')}");
+            Log::info("Subscription renewed via activateSubscription", [
+                'subscription_id' => $subscription->id,
+                'start_date' => $startDate->format('Y-m-d'),
+                'end_date' => $startDate->copy()->addMonth()->format('Y-m-d'),
+                'status' => 'active'
+            ]);
+            
+            Log::info("Subscription {$subscription->id} renewed - Period: {$startDate->format('Y-m-d')} to {$startDate->copy()->addMonth()->format('Y-m-d')}, Status: active, Cancellation removed");
         } else {
             // Get tier from organisation or default to spark
             $org = Organisation::find($invoice->organisation_id);

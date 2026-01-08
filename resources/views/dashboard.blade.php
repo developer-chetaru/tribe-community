@@ -21,25 +21,57 @@
 <body class="font-sans antialiased bg-gray-100 min-h-screen flex items-center justify-center p-4">
     <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
         <div class="flex justify-between items-center mb-4">
-            <h3 class="text-xl font-semibold">Payment Required</h3>
+            <h2 class="text-2xl font-bold text-gray-900">Payment Required</h2>
         </div>
 
-        <div class="mb-4">
-            <p class="text-gray-700">{{ $paymentMessage ?? 'Please complete your payment to access all features.' }}</p>
+        <div class="mb-6">
+            <p class="text-gray-600">{{ $paymentMessage ?? 'Please complete your payment to access all features.' }}</p>
         </div>
 
-        <div class="mb-4">
+        <div class="mb-6">
             <p class="text-sm text-gray-600">Amount to Pay</p>
-            <p class="text-2xl font-bold text-[#EB1C24]">£12.00</p>
-            <p class="text-sm text-gray-600 mt-1">(£10.00 + 20% VAT)</p>
+            @php
+                $isBasecamp = $user && $user->hasRole('basecamp');
+                $totalAmount = 12.00; // Default for basecamp
+                $subtotal = 10.00;
+                
+                if (!$isBasecamp && $user && $user->orgId) {
+                    $userCount = \App\Models\User::where('orgId', $user->orgId)
+                        ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+                        ->count();
+                    $totalAmount = $userCount * 10.00;
+                    $subtotal = $totalAmount;
+                }
+            @endphp
+            <p class="text-4xl font-bold text-[#EB1C24] mb-2">£{{ number_format($totalAmount, 2) }}</p>
+            @if($isBasecamp)
+                <p class="text-sm text-gray-600 mt-1">(£{{ number_format($subtotal, 2) }} + 20% VAT)</p>
+            @else
+                @php
+                    $userCount = $user && $user->orgId ? \App\Models\User::where('orgId', $user->orgId)
+                        ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+                        ->count() : 0;
+                @endphp
+                @if($userCount > 0)
+                    <p class="text-sm text-gray-600 mt-1">{{ $userCount }} user(s) × £10.00</p>
+                @endif
+            @endif
         </div>
 
-            <div class="flex gap-3">
-            <button type="button" 
-                    onclick="handleDashboardPayment({{ $user->id ?? 0 }})"
-                    class="w-full bg-[#EB1C24] text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition">
-                Pay Now
-            </button>
+        <div class="flex gap-3">
+            @if($isBasecamp)
+                <button type="button" 
+                        onclick="handleDashboardPayment({{ $user->id ?? 0 }})"
+                        class="w-full bg-[#EB1C24] text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 transition">
+                    Pay Now
+                </button>
+            @else
+                <button type="button" 
+                        onclick="window.location.href='{{ route('billing') }}'"
+                        class="w-full bg-[#EB1C24] text-white font-semibold py-3 px-4 rounded-lg hover:bg-red-600 transition text-lg">
+                    Pay Now
+                </button>
+            @endif
         </div>
         
         <script>
