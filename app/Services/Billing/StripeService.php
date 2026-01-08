@@ -544,10 +544,14 @@ class StripeService
     /**
      * Reactivate a cancelled subscription in Stripe
      * Only works if subscription was cancelled with cancel_at_period_end=true
-     * If subscription was immediately cancelled (status='canceled'), returns false but doesn't throw error
+     * If subscription was immediately cancelled (status='canceled'), creates a new subscription
      * Note: Database should be updated separately - this only handles Stripe side
+     * 
+     * @param string $subscriptionId The Stripe subscription ID
+     * @param SubscriptionRecord|null $subscriptionRecord Optional subscription record for creating new subscription
+     * @return array
      */
-    public function reactivateSubscription($subscriptionId)
+    public function reactivateSubscription($subscriptionId, $subscriptionRecord = null)
     {
         try {
             if (!class_exists(\Stripe\Subscription::class)) {
@@ -564,17 +568,259 @@ class StripeService
             $stripeSubscription = \Stripe\Subscription::retrieve($subscriptionId);
             
             // Check if subscription can be reactivated
-            // If status is 'canceled' (immediate cancellation), it cannot be reactivated in Stripe
-            // But we'll return success anyway since database will be updated
+            // If status is 'canceled' (immediate cancellation), we need to create a new subscription
             if ($stripeSubscription->status === 'canceled') {
-                Log::info('Stripe subscription is immediately cancelled - cannot reactivate in Stripe, but database will be updated', [
-                    'subscription_id' => $subscriptionId,
+                Log::info('Stripe subscription is immediately cancelled - creating new subscription', [
+                    'old_subscription_id' => $subscriptionId,
                     'stripe_status' => $stripeSubscription->status
                 ]);
-                return [
-                    'success' => true,
-                    'message' => 'Stripe subscription was immediately cancelled - database will be activated separately'
-                ];
+                
+                // Try to create a new subscription if we have the necessary information
+                if ($subscriptionRecord && $stripeSubscription->customer) {
+                    try {
+                        // Get customer to find default payment method
+                        $customer = \Stripe\Customer::retrieve($stripeSubscription->customer);
+                        $paymentMethodId = null;
+                        
+                        // Try to get default payment method from multiple sources
+                        $paymentMethodId = null;
+                        
+                        // First, try customer's invoice settings default payment method
+                        if (isset($customer->invoice_settings) && isset($customer->invoice_settings->default_payment_method)) {
+                            $paymentMethodId = $customer->invoice_settings->default_payment_method;
+                            Log::info('Found payment method from customer invoice settings', [
+                                'payment_method_id' => $paymentMethodId,
+                                'customer_id' => $customer->id
+                            ]);
+                        }
+                        
+                        // Second, try the cancelled subscription's default payment method
+                        if (!$paymentMethodId && isset($stripeSubscription->default_payment_method)) {
+                            $paymentMethodId = $stripeSubscription->default_payment_method;
+                            Log::info('Found payment method from cancelled subscription', [
+                                'payment_method_id' => $paymentMethodId,
+                                'subscription_id' => $subscriptionId
+                            ]);
+                        }
+                        
+                        // Third, try to get payment methods from customer
+                        if (!$paymentMethodId) {
+                            try {
+                                $paymentMethods = \Stripe\PaymentMethod::all([
+                                    'customer' => $customer->id,
+                                    'type' => 'card',
+                                ]);
+                                if ($paymentMethods->data && count($paymentMethods->data) > 0) {
+                                    $paymentMethodId = $paymentMethods->data[0]->id;
+                                    Log::info('Found payment method from customer payment methods list', [
+                                        'payment_method_id' => $paymentMethodId,
+                                        'customer_id' => $customer->id,
+                                        'total_methods' => count($paymentMethods->data)
+                                    ]);
+                                }
+                            } catch (\Exception $e) {
+                                Log::warning('Failed to retrieve payment methods from customer', [
+                                    'customer_id' => $customer->id,
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
+                        }
+                        
+                        // Fourth, try to get from subscription's payment intent or latest invoice
+                        if (!$paymentMethodId) {
+                            try {
+                                // Get latest invoice from subscription
+                                $invoices = \Stripe\Invoice::all([
+                                    'subscription' => $subscriptionId,
+                                    'limit' => 1,
+                                ]);
+                                if ($invoices->data && count($invoices->data) > 0) {
+                                    $latestInvoice = $invoices->data[0];
+                                    if (isset($latestInvoice->payment_intent)) {
+                                        $paymentIntent = \Stripe\PaymentIntent::retrieve($latestInvoice->payment_intent);
+                                        if (isset($paymentIntent->payment_method)) {
+                                            $paymentMethodId = $paymentIntent->payment_method;
+                                            Log::info('Found payment method from latest invoice payment intent', [
+                                                'payment_method_id' => $paymentMethodId,
+                                                'invoice_id' => $latestInvoice->id
+                                            ]);
+                                        }
+                                    }
+                                }
+                            } catch (\Exception $e) {
+                                Log::warning('Failed to retrieve payment method from invoice', [
+                                    'subscription_id' => $subscriptionId,
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
+                        }
+                        
+                        if (!$paymentMethodId) {
+                            Log::error('No payment method found for customer - cannot create new subscription', [
+                                'customer_id' => $customer->id,
+                                'subscription_id' => $subscriptionRecord->id,
+                                'subscription_record_id' => $subscriptionRecord->id,
+                                'customer_email' => $customer->email ?? null,
+                                'has_invoice_settings' => isset($customer->invoice_settings),
+                                'has_default_payment_method' => isset($customer->invoice_settings->default_payment_method),
+                                'old_subscription_default_pm' => $stripeSubscription->default_payment_method ?? null
+                            ]);
+                            return [
+                                'success' => false,
+                                'error' => 'No payment method found. Please add a payment method first.',
+                                'message' => 'Stripe subscription was immediately cancelled - new subscription requires payment method. Please contact support to add a payment method.',
+                                'debug_info' => [
+                                    'customer_id' => $customer->id,
+                                    'has_customer_invoice_settings' => isset($customer->invoice_settings),
+                                ]
+                            ];
+                        }
+                        
+                        Log::info('Payment method found for reactivation', [
+                            'payment_method_id' => $paymentMethodId,
+                            'customer_id' => $customer->id,
+                            'subscription_record_id' => $subscriptionRecord->id
+                        ]);
+                        
+                        // Determine price based on tier
+                        $amount = 1200; // Default: £12.00 (basecamp with VAT) in cents
+                        if ($subscriptionRecord->tier === 'basecamp') {
+                            $amount = 1200; // £12.00 with VAT (£10 + 20% VAT)
+                        } else {
+                            // For organisation subscriptions, calculate based on user count
+                            $pricePerUser = 1000; // £10 per user in cents
+                            $amount = ($pricePerUser * $subscriptionRecord->user_count) * 1.2; // Add 20% VAT
+                        }
+                        
+                        // For Subscription::create(), we need to create product and price first
+                        // Then use the price ID (price_data with product_data is not supported)
+                        $productName = $subscriptionRecord->tier === 'basecamp' ? 'Basecamp Subscription' : 'Organisation Subscription';
+                        
+                        // Create or get product
+                        $products = \Stripe\Product::all([
+                            'limit' => 100,
+                            'active' => true,
+                        ]);
+                        $product = null;
+                        foreach ($products->data as $p) {
+                            if ($p->name === $productName) {
+                                $product = $p;
+                                break;
+                            }
+                        }
+                        
+                        if (!$product) {
+                            $product = \Stripe\Product::create([
+                                'name' => $productName,
+                                'description' => 'Monthly subscription for Tribe365',
+                            ]);
+                            Log::info('Created new Stripe product', [
+                                'product_id' => $product->id,
+                                'product_name' => $productName
+                            ]);
+                        }
+                        
+                        // Create or get price for this product
+                        $prices = \Stripe\Price::all([
+                            'product' => $product->id,
+                            'active' => true,
+                            'limit' => 100,
+                        ]);
+                        $price = null;
+                        foreach ($prices->data as $p) {
+                            if ($p->unit_amount == (int)$amount && 
+                                $p->currency === 'gbp' && 
+                                $p->recurring && 
+                                $p->recurring->interval === 'month') {
+                                $price = $p;
+                                break;
+                            }
+                        }
+                        
+                        if (!$price) {
+                            $price = \Stripe\Price::create([
+                                'product' => $product->id,
+                                'unit_amount' => (int)$amount,
+                                'currency' => 'gbp',
+                                'recurring' => [
+                                    'interval' => 'month',
+                                ],
+                            ]);
+                            Log::info('Created new Stripe price', [
+                                'price_id' => $price->id,
+                                'amount' => $amount,
+                                'product_id' => $product->id
+                            ]);
+                        }
+                        
+                        // Create new subscription using price ID
+                        Log::info('Creating new Stripe subscription for reactivation', [
+                            'customer_id' => $customer->id,
+                            'payment_method_id' => $paymentMethodId,
+                            'price_id' => $price->id,
+                            'amount' => $amount,
+                            'tier' => $subscriptionRecord->tier,
+                            'user_count' => $subscriptionRecord->user_count,
+                            'old_subscription_id' => $subscriptionId
+                        ]);
+                        
+                        $newSubscription = \Stripe\Subscription::create([
+                            'customer' => $customer->id,
+                            'items' => [[
+                                'price' => $price->id,
+                            ]],
+                            'default_payment_method' => $paymentMethodId,
+                            'metadata' => [
+                                'subscription_record_id' => $subscriptionRecord->id,
+                                'tier' => $subscriptionRecord->tier,
+                                'user_count' => $subscriptionRecord->user_count,
+                                'reactivated_from' => $subscriptionId,
+                            ],
+                            'collection_method' => 'charge_automatically',
+                        ]);
+                        
+                        Log::info('New Stripe subscription created successfully', [
+                            'new_subscription_id' => $newSubscription->id,
+                            'status' => $newSubscription->status,
+                            'customer_id' => $customer->id
+                        ]);
+                        
+                        Log::info('New Stripe subscription created for reactivation', [
+                            'old_subscription_id' => $subscriptionId,
+                            'new_subscription_id' => $newSubscription->id,
+                            'customer_id' => $customer->id,
+                            'subscription_record_id' => $subscriptionRecord->id
+                        ]);
+                        
+                        return [
+                            'success' => true,
+                            'subscription' => $newSubscription,
+                            'new_subscription_id' => $newSubscription->id,
+                            'message' => 'New subscription created successfully'
+                        ];
+                    } catch (\Exception $e) {
+                        Log::error('Failed to create new subscription for reactivation: ' . $e->getMessage(), [
+                            'old_subscription_id' => $subscriptionId,
+                            'subscription_record_id' => $subscriptionRecord->id,
+                            'error' => $e->getMessage()
+                        ]);
+                        return [
+                            'success' => false,
+                            'error' => 'Failed to create new subscription: ' . $e->getMessage(),
+                            'message' => 'Stripe subscription was immediately cancelled - could not create new subscription'
+                        ];
+                    }
+                } else {
+                    Log::warning('Cannot create new subscription - missing subscription record or customer', [
+                        'subscription_id' => $subscriptionId,
+                        'has_subscription_record' => $subscriptionRecord !== null
+                    ]);
+                    return [
+                        'success' => false,
+                        'error' => 'Cannot create new subscription - missing required information',
+                        'message' => 'Stripe subscription was immediately cancelled - database will be activated separately'
+                    ];
+                }
             }
             
             // If cancel_at_period_end is true, remove it to reactivate

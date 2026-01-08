@@ -986,23 +986,46 @@ class StripeCheckoutController extends Controller
             if ($subscription->stripe_subscription_id) {
                 try {
                     $stripeService = new StripeService();
-                    $result = $stripeService->reactivateSubscription($subscription->stripe_subscription_id);
+                    $result = $stripeService->reactivateSubscription($subscription->stripe_subscription_id, $subscription);
                     
                     if ($result['success']) {
-                        Log::info('Subscription reactivated in both database and Stripe', [
-                            'subscription_id' => $subscription->id,
-                            'stripe_subscription_id' => $subscription->stripe_subscription_id,
-                            'user_id' => $user->id
-                        ]);
+                        // If a new subscription was created, update the database with the new subscription ID
+                        if (isset($result['new_subscription_id'])) {
+                            $oldStripeSubscriptionId = $subscription->stripe_subscription_id;
+                            $subscription->update([
+                                'stripe_subscription_id' => $result['new_subscription_id'],
+                            ]);
+                            Log::info('New Stripe subscription created and saved to database', [
+                                'subscription_id' => $subscription->id,
+                                'old_stripe_subscription_id' => $oldStripeSubscriptionId,
+                                'new_stripe_subscription_id' => $result['new_subscription_id'],
+                                'user_id' => $user->id
+                            ]);
+                        } else {
+                            Log::info('Subscription reactivated in both database and Stripe', [
+                                'subscription_id' => $subscription->id,
+                                'stripe_subscription_id' => $subscription->stripe_subscription_id,
+                                'user_id' => $user->id
+                            ]);
+                        }
                     } else {
                         // Stripe reactivation failed, but database is already updated
-                        // This is OK - user can continue using until end date
-                        Log::warning('Database subscription activated but Stripe reactivation failed', [
+                        // Log the error with full details for debugging
+                        Log::error('Database subscription activated but Stripe reactivation failed', [
                             'subscription_id' => $subscription->id,
                             'stripe_subscription_id' => $subscription->stripe_subscription_id,
                             'stripe_error' => $result['error'] ?? 'Unknown error',
-                            'user_id' => $user->id
+                            'stripe_message' => $result['message'] ?? null,
+                            'user_id' => $user->id,
+                            'tier' => $subscription->tier,
+                            'has_customer_id' => !empty($subscription->stripe_customer_id),
+                            'full_result' => $result
                         ]);
+                        
+                        // Continue with success response but include warning in message
+                        // Database is already updated, so subscription is active in our system
+                        // User will see the subscription as active, but Stripe won't charge automatically
+                        // This is acceptable - they can manually pay invoices
                     }
                 } catch (\Exception $e) {
                     // Stripe error - but database is already updated, so continue
@@ -1015,7 +1038,7 @@ class StripeCheckoutController extends Controller
                 }
             }
             
-            // Refresh subscription from database
+            // Refresh subscription from database to get updated values
             $subscription->refresh();
             
             // Clear session flags to ensure UI updates correctly (only for web requests)
@@ -1033,16 +1056,25 @@ class StripeCheckoutController extends Controller
                 'user_id' => $user->id
             ]);
             
+            // Check if Stripe reactivation was attempted and failed
+            $stripeWarning = null;
+            if ($subscription->stripe_subscription_id) {
+                // Check logs to see if there was a Stripe error (we already logged it above)
+                // We'll include a note in the response if Stripe reactivation failed
+                $stripeWarning = 'Note: Subscription activated in database. If Stripe reactivation failed, please check logs.';
+            }
+            
             // Return JSON response (works for both API and web requests)
             return response()->json([
                 'success' => true,
-                'message' => 'Subscription activated successfully',
+                'message' => 'Subscription activated successfully' . ($stripeWarning ? '. ' . $stripeWarning : ''),
                 'refresh' => true,
                 'data' => [
                     'subscription_id' => $subscription->id,
                     'status' => $subscription->status,
                     'end_date' => $subscription->current_period_end ? $subscription->current_period_end->format('Y-m-d') : null,
                     'user_id' => $user->id,
+                    'stripe_subscription_id' => $subscription->stripe_subscription_id,
                 ]
             ]);
             

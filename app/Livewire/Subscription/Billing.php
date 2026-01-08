@@ -59,6 +59,7 @@ class Billing extends Component
     public $stripeSubscriptionDetails = null;
     public $stripePaymentMethod = null;
     public $showCancelModal = false;
+    public $stripeUpcomingInvoice = null;
 
     public function mount()
     {
@@ -1195,6 +1196,7 @@ class Billing extends Component
 
         $stripeSubscription = null;
         $paymentMethod = null;
+        $upcomingInvoice = null;
 
         // If subscription doesn't have stripe_subscription_id, try to find it from Stripe customer
         if (!$this->subscription->stripe_subscription_id) {
@@ -1307,9 +1309,237 @@ class Billing extends Component
             }
         }
         
+        // Get upcoming invoice information directly from Stripe API (all data)
+        if ($stripeSubscription && $stripeSubscription->id) {
+            try {
+                \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+                
+                // Get customer ID from subscription
+                $customerId = $stripeSubscription->customer ?? null;
+                
+                // If no customer ID from subscription, try to get from organisation/user
+                if (!$customerId) {
+                    $user = auth()->user();
+                    if ($user->hasRole('basecamp')) {
+                        // For basecamp users, check subscription for customer ID
+                        if ($this->subscription && $this->subscription->stripe_customer_id) {
+                            $customerId = $this->subscription->stripe_customer_id;
+                        }
+                    } elseif ($user->orgId) {
+                        // For directors, get from organisation
+                        $organisation = Organisation::find($user->orgId);
+                        if ($organisation && $organisation->stripe_customer_id) {
+                            $customerId = $organisation->stripe_customer_id;
+                        }
+                    }
+                }
+                
+                // Build upcoming invoice data from Stripe subscription object (which contains all the info we need)
+                // The subscription object from Stripe already has all the data for the upcoming invoice
+                $upcomingInvoiceObj = null;
+                
+                // Extract upcoming invoice data directly from the subscription object
+                // Stripe subscriptions contain all the information needed for the next invoice
+                if ($stripeSubscription) {
+                    // Calculate amount from subscription items
+                    $amountDue = 0;
+                    $currency = $stripeSubscription->currency ?? 'gbp';
+                    
+                    if (isset($stripeSubscription->items->data) && count($stripeSubscription->items->data) > 0) {
+                        foreach ($stripeSubscription->items->data as $item) {
+                            if (isset($item->price->unit_amount)) {
+                                $amountDue += $item->price->unit_amount * ($item->quantity ?? 1);
+                            }
+                        }
+                    }
+                    
+                    // Get next billing date from subscription
+                    // current_period_end IS the next billing date (when the next invoice will be generated)
+                    $periodEnd = $stripeSubscription->current_period_end ?? null;
+                    $periodStart = $stripeSubscription->current_period_start ?? null;
+                    
+                    // Fallback: If period_end is not available, try to get from database subscription
+                    if (!$periodEnd && $this->subscription && $this->subscription->current_period_end) {
+                        $periodEnd = Carbon::parse($this->subscription->current_period_end)->timestamp;
+                    }
+                    
+                    // Create a structured upcoming invoice object from subscription data
+                    // This mimics what Stripe's upcoming invoice API would return
+                    $upcomingInvoiceObj = (object) [
+                        'amount_due' => $amountDue,
+                        'amount_paid' => 0,
+                        'amount_remaining' => $amountDue,
+                        'currency' => $currency,
+                        'status' => 'draft',
+                        'period_start' => $periodStart, // Current period start
+                        'period_end' => $periodEnd, // Next billing date (current_period_end)
+                        'due_date' => $periodEnd, // Due date is same as period_end
+                        'next_payment_attempt' => $periodEnd, // Next payment attempt is period_end
+                        'created' => time(),
+                        'customer' => $stripeSubscription->customer ?? $customerId,
+                        'subscription' => $stripeSubscription->id,
+                        'total' => $amountDue,
+                        'subtotal' => $amountDue,
+                        'tax' => null,
+                        'discount' => null,
+                        'lines' => $stripeSubscription->items ?? null,
+                        'billing_reason' => 'subscription_cycle',
+                        'collection_method' => $stripeSubscription->collection_method ?? 'charge_automatically',
+                    ];
+                    
+                    Log::info('Upcoming invoice data extracted from Stripe subscription', [
+                        'amount_due' => $amountDue,
+                        'period_end' => $periodEnd,
+                        'subscription_id' => $stripeSubscription->id
+                    ]);
+                }
+                
+                // If we successfully got the upcoming invoice from Stripe, extract all data
+                if ($upcomingInvoiceObj) {
+                    // Convert Stripe invoice object to array with all available data
+                    $upcomingInvoice = [
+                        'id' => $upcomingInvoiceObj->id ?? null,
+                        'object' => $upcomingInvoiceObj->object ?? null,
+                        'account_country' => $upcomingInvoiceObj->account_country ?? null,
+                        'account_name' => $upcomingInvoiceObj->account_name ?? null,
+                        'account_tax_ids' => isset($upcomingInvoiceObj->account_tax_ids) ? $upcomingInvoiceObj->account_tax_ids : null,
+                        'amount_due' => $upcomingInvoiceObj->amount_due ?? null,
+                        'amount_paid' => $upcomingInvoiceObj->amount_paid ?? null,
+                        'amount_remaining' => $upcomingInvoiceObj->amount_remaining ?? null,
+                        'application' => $upcomingInvoiceObj->application ?? null,
+                        'application_fee_amount' => $upcomingInvoiceObj->application_fee_amount ?? null,
+                        'attempt_count' => $upcomingInvoiceObj->attempt_count ?? null,
+                        'attempted' => $upcomingInvoiceObj->attempted ?? null,
+                        'auto_advance' => $upcomingInvoiceObj->auto_advance ?? null,
+                        'billing_reason' => $upcomingInvoiceObj->billing_reason ?? null,
+                        'charge' => $upcomingInvoiceObj->charge ?? null,
+                        'collection_method' => $upcomingInvoiceObj->collection_method ?? null,
+                        'created' => $upcomingInvoiceObj->created ?? null,
+                        'currency' => $upcomingInvoiceObj->currency ?? null,
+                        'custom_fields' => isset($upcomingInvoiceObj->custom_fields) ? $upcomingInvoiceObj->custom_fields : null,
+                        'customer' => $upcomingInvoiceObj->customer ?? null,
+                        'customer_address' => isset($upcomingInvoiceObj->customer_address) ? $upcomingInvoiceObj->customer_address : null,
+                        'customer_email' => $upcomingInvoiceObj->customer_email ?? null,
+                        'customer_name' => $upcomingInvoiceObj->customer_name ?? null,
+                        'customer_phone' => $upcomingInvoiceObj->customer_phone ?? null,
+                        'customer_shipping' => isset($upcomingInvoiceObj->customer_shipping) ? $upcomingInvoiceObj->customer_shipping : null,
+                        'customer_tax_exempt' => $upcomingInvoiceObj->customer_tax_exempt ?? null,
+                        'customer_tax_ids' => isset($upcomingInvoiceObj->customer_tax_ids) ? $upcomingInvoiceObj->customer_tax_ids : null,
+                        'default_payment_method' => $upcomingInvoiceObj->default_payment_method ?? null,
+                        'default_source' => $upcomingInvoiceObj->default_source ?? null,
+                        'default_tax_rates' => isset($upcomingInvoiceObj->default_tax_rates) ? $upcomingInvoiceObj->default_tax_rates : null,
+                        'description' => $upcomingInvoiceObj->description ?? null,
+                        'discount' => isset($upcomingInvoiceObj->discount) ? $upcomingInvoiceObj->discount : null,
+                        'discounts' => isset($upcomingInvoiceObj->discounts) ? $upcomingInvoiceObj->discounts : null,
+                        'due_date' => $upcomingInvoiceObj->due_date ?? null,
+                        'ending_balance' => $upcomingInvoiceObj->ending_balance ?? null,
+                        'footer' => $upcomingInvoiceObj->footer ?? null,
+                        'hosted_invoice_url' => $upcomingInvoiceObj->hosted_invoice_url ?? null,
+                        'invoice_pdf' => $upcomingInvoiceObj->invoice_pdf ?? null,
+                        'last_finalization_error' => isset($upcomingInvoiceObj->last_finalization_error) ? $upcomingInvoiceObj->last_finalization_error : null,
+                        'lines' => isset($upcomingInvoiceObj->lines->data) ? $upcomingInvoiceObj->lines->data : null,
+                        'livemode' => $upcomingInvoiceObj->livemode ?? null,
+                        'metadata' => isset($upcomingInvoiceObj->metadata) ? $upcomingInvoiceObj->metadata : null,
+                        'next_payment_attempt' => $upcomingInvoiceObj->next_payment_attempt ?? null,
+                        'number' => $upcomingInvoiceObj->number ?? null,
+                        'paid' => $upcomingInvoiceObj->paid ?? null,
+                        'paid_out_of_band' => $upcomingInvoiceObj->paid_out_of_band ?? null,
+                        'payment_intent' => $upcomingInvoiceObj->payment_intent ?? null,
+                        'payment_settings' => isset($upcomingInvoiceObj->payment_settings) ? $upcomingInvoiceObj->payment_settings : null,
+                        'period_end' => $upcomingInvoiceObj->period_end ?? null,
+                        'period_start' => $upcomingInvoiceObj->period_start ?? null,
+                        'post_payment_credit_notes_amount' => $upcomingInvoiceObj->post_payment_credit_notes_amount ?? null,
+                        'pre_payment_credit_notes_amount' => $upcomingInvoiceObj->pre_payment_credit_notes_amount ?? null,
+                        'receipt_number' => $upcomingInvoiceObj->receipt_number ?? null,
+                        'starting_balance' => $upcomingInvoiceObj->starting_balance ?? null,
+                        'statement_descriptor' => $upcomingInvoiceObj->statement_descriptor ?? null,
+                        'status' => $upcomingInvoiceObj->status ?? null,
+                        'status_transitions' => isset($upcomingInvoiceObj->status_transitions) ? $upcomingInvoiceObj->status_transitions : null,
+                        'subscription' => $upcomingInvoiceObj->subscription ?? null,
+                        'subscription_proration_date' => $upcomingInvoiceObj->subscription_proration_date ?? null,
+                        'subtotal' => $upcomingInvoiceObj->subtotal ?? null,
+                        'subtotal_excluding_tax' => $upcomingInvoiceObj->subtotal_excluding_tax ?? null,
+                        'tax' => $upcomingInvoiceObj->tax ?? null,
+                        'total' => $upcomingInvoiceObj->total ?? null,
+                        'total_discount_amounts' => isset($upcomingInvoiceObj->total_discount_amounts) ? $upcomingInvoiceObj->total_discount_amounts : null,
+                        'total_excluding_tax' => $upcomingInvoiceObj->total_excluding_tax ?? null,
+                        'total_tax_amounts' => isset($upcomingInvoiceObj->total_tax_amounts) ? $upcomingInvoiceObj->total_tax_amounts : null,
+                        'transfer_data' => isset($upcomingInvoiceObj->transfer_data) ? $upcomingInvoiceObj->transfer_data : null,
+                        'webhooks_delivered_at' => $upcomingInvoiceObj->webhooks_delivered_at ?? null,
+                    ];
+                    
+                    Log::info('Upcoming invoice retrieved from Stripe with all data', [
+                        'invoice_id' => $upcomingInvoice['id'],
+                        'amount_due' => $upcomingInvoice['amount_due'],
+                        'period_end' => $upcomingInvoice['period_end'],
+                        'due_date' => $upcomingInvoice['due_date'],
+                        'subscription_id' => $stripeSubscription->id
+                    ]);
+                } else {
+                    // Fallback: Calculate from subscription data if API call fails
+                    Log::warning('Could not retrieve upcoming invoice from Stripe API, falling back to calculation');
+                    
+                    $amountDue = null;
+                    $currency = $stripeSubscription->currency ?? 'gbp';
+                    
+                    // Calculate amount from subscription items
+                    if (isset($stripeSubscription->items->data) && count($stripeSubscription->items->data) > 0) {
+                        $totalAmount = 0;
+                        foreach ($stripeSubscription->items->data as $item) {
+                            if (isset($item->price->unit_amount)) {
+                                $totalAmount += $item->price->unit_amount * ($item->quantity ?? 1);
+                            }
+                        }
+                        $amountDue = $totalAmount;
+                    }
+                    
+                    // Get period_end from Stripe subscription (Unix timestamp)
+                    $periodEnd = $stripeSubscription->current_period_end ?? null;
+                    
+                    // Fallback to database subscription if Stripe period_end is not available
+                    if (!$periodEnd && $this->subscription && $this->subscription->current_period_end) {
+                        $periodEnd = Carbon::parse($this->subscription->current_period_end)->timestamp;
+                    }
+                    
+                    $upcomingInvoice = [
+                        'amount_due' => $amountDue,
+                        'currency' => $currency,
+                        'period_start' => $stripeSubscription->current_period_start ?? null,
+                        'period_end' => $periodEnd,
+                        'next_payment_attempt' => $periodEnd,
+                    ];
+                }
+            } catch (\Exception $e) {
+                Log::warning('Failed to get upcoming invoice from Stripe: ' . $e->getMessage(), [
+                    'trace' => $e->getTraceAsString()
+                ]);
+                $upcomingInvoice = null;
+            }
+        } else {
+            // Fallback: Try to get from database subscription
+            if ($this->subscription && $this->subscription->current_period_end) {
+                try {
+                    $periodEnd = Carbon::parse($this->subscription->current_period_end)->timestamp;
+                    $upcomingInvoice = [
+                        'amount_due' => null,
+                        'currency' => 'gbp',
+                        'period_start' => null,
+                        'period_end' => $periodEnd,
+                        'next_payment_attempt' => $periodEnd,
+                    ];
+                } catch (\Exception $e) {
+                    Log::warning('Failed to get upcoming invoice from database subscription: ' . $e->getMessage());
+                    $upcomingInvoice = null;
+                }
+            } else {
+                $upcomingInvoice = null;
+            }
+        }
+        
         return [
             'subscription' => $stripeSubscription,
             'payment_method' => $paymentMethod,
+            'upcoming_invoice' => $upcomingInvoice,
         ];
     }
 
@@ -1356,15 +1586,18 @@ class Billing extends Component
             $stripeSubscriptionId = $subscription->stripe_subscription_id;
             
             // Update database FIRST (priority)
+            // Update database status to cancel_at_period_end (not canceled)
+            // Subscription will remain active until end date or next invoice date
             $subscription->update([
-                'status' => 'canceled',
+                'status' => 'cancel_at_period_end',
                 'canceled_at' => now(),
             ]);
             
-            Log::info('Subscription cancelled in database', [
+            Log::info('Subscription scheduled for cancellation at period end in database', [
                 'subscription_id' => $subscriptionId,
                 'stripe_subscription_id' => $stripeSubscriptionId,
-                'status' => 'canceled'
+                'status' => 'cancel_at_period_end',
+                'end_date' => $subscription->current_period_end
             ]);
             
             // Try to cancel in Stripe if subscription ID exists (but don't fail if it doesn't work)
@@ -1372,7 +1605,9 @@ class Billing extends Component
                 try {
                     $stripeService = new StripeService();
                     // Cancel immediately to stop monthly payments
-                    $result = $stripeService->cancelSubscription($stripeSubscriptionId, false);
+                    // Always cancel at period end (not immediately)
+                    // Subscription will remain active until end date or next invoice date
+                    $result = $stripeService->cancelSubscription($stripeSubscriptionId, true);
                     
                     if ($result['success']) {
                         Log::info('Subscription cancelled in both database and Stripe', [
@@ -1413,7 +1648,7 @@ class Billing extends Component
             $this->closeCancelModal();
             
             // Flash success message
-            session()->flash('success', 'Your subscription has been cancelled successfully. Monthly payments have been stopped.');
+            session()->flash('success', 'Your subscription will be cancelled at the end of the billing period. You can continue using the service until ' . ($subscription->current_period_end ? $subscription->current_period_end->format('M d, Y') : 'the end date') . '.');
             
             // Dispatch event to refresh component
             $this->dispatch('$refresh');

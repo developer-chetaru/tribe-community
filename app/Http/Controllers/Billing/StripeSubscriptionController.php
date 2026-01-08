@@ -278,7 +278,7 @@ class StripeSubscriptionController extends Controller
      *         @OA\JsonContent(
      *             required={"subscription_id"},
      *             @OA\Property(property="subscription_id", type="string", example="sub_1234567890", description="Stripe subscription ID (stripe_subscription_id from subscription_records table)"),
-     *             @OA\Property(property="cancel_at_period_end", type="boolean", example=false, description="If true, cancels at end of billing period. If false (default), cancels immediately and stops all future payments.")
+     *             @OA\Property(property="cancel_at_period_end", type="boolean", example=true, description="If true (default), cancels at end of billing period. Subscription remains active until end date. If false, cancels immediately and stops all future payments.")
      *         )
      *     ),
      *     @OA\Response(
@@ -390,8 +390,9 @@ class StripeSubscriptionController extends Controller
                 }
             }
 
-            // Get cancel_at_period_end from request (default: false for immediate cancellation)
-            $cancelAtPeriodEnd = $validated['cancel_at_period_end'] ?? false;
+            // Always cancel at period end (not immediately)
+            // Subscription will remain active until end date or next invoice date
+            $cancelAtPeriodEnd = $validated['cancel_at_period_end'] ?? true;
 
             $result = $this->stripeService->cancelSubscription(
                 $validated['subscription_id'],

@@ -232,6 +232,36 @@
                                     <p class="text-sm text-yellow-800 font-medium">⚠️ Subscription will cancel at period end</p>
                                 </div>
                                 @endif
+                                
+                                <!-- Next Invoice from Stripe -->
+                                @if(isset($stripeDetails['upcoming_invoice']) && $stripeDetails['upcoming_invoice'])
+                                <div class="bg-green-50 rounded-lg p-4 border border-green-200">
+                                    <h5 class="text-sm font-semibold mb-2 text-gray-900">Next Invoice</h5>
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <p class="text-xs text-gray-600 mb-1">Amount</p>
+                                            <p class="font-semibold text-gray-900">
+                                                £{{ isset($stripeDetails['upcoming_invoice']['amount_due']) ? number_format($stripeDetails['upcoming_invoice']['amount_due'] / 100, 2) : 'N/A' }}
+                                                {{ isset($stripeDetails['upcoming_invoice']['currency']) ? strtoupper($stripeDetails['upcoming_invoice']['currency']) : '' }}
+                                            </p>
+                                        </div>
+                                        <div class="text-right">
+                                            <p class="text-xs text-gray-600 mb-1">Due Date</p>
+                                            <p class="font-semibold text-gray-900">
+                                                @if(isset($stripeDetails['upcoming_invoice']['due_date']) && $stripeDetails['upcoming_invoice']['due_date'])
+                                                    {{ \Carbon\Carbon::createFromTimestamp($stripeDetails['upcoming_invoice']['due_date'])->format('M d, Y') }}
+                                                @elseif(isset($stripeDetails['upcoming_invoice']['period_end']) && $stripeDetails['upcoming_invoice']['period_end'])
+                                                    {{ \Carbon\Carbon::createFromTimestamp($stripeDetails['upcoming_invoice']['period_end'])->format('M d, Y') }}
+                                                @elseif(isset($stripeDetails['upcoming_invoice']['next_payment_attempt']) && $stripeDetails['upcoming_invoice']['next_payment_attempt'])
+                                                    {{ \Carbon\Carbon::createFromTimestamp($stripeDetails['upcoming_invoice']['next_payment_attempt'])->format('M d, Y') }}
+                                                @else
+                                                    N/A
+                                                @endif
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                @endif
                             </div>
                             @else
                             <!-- Fallback: Show basic subscription info if Stripe details not available -->
@@ -350,14 +380,14 @@
                                         </a> -->
                                         
                                         <!-- Share Invoice Button -->
-                                        <button wire:click="openShareModal({{ $invoice->id }})" 
+                                        <!-- <button wire:click="openShareModal({{ $invoice->id }})" 
                                                 type="button"
                                                 class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded border border-purple-200 transition-all duration-200">
                                             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
                                             </svg>
                                             Share
-                                        </button>
+                                        </button> -->
                                         
                                         <!-- Payment Invoice (Stripe) Button -->
                                         <button wire:click="redirectToStripeInvoice({{ $invoice->id }})" 

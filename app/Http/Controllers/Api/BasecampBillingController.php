@@ -1118,12 +1118,12 @@ class BasecampBillingController extends Controller
      *     path="/api/basecamp/cancel-subscription",
      *     tags={"Basecamp Billing", "Basecamp Users", "Billing - Subscription Management"},
      *     summary="Cancel basecamp user subscription",
-     *     description="Cancel the subscription for the authenticated basecamp user. This immediately stops all future monthly payments. The subscription will be cancelled permanently and no further charges will be made. Works for mobile apps.",
+     *     description="Cancel the subscription for the authenticated basecamp user. By default, subscription will be cancelled at the end of the billing period (cancel_at_period_end=true). User can continue using the service until the end date. Works for mobile apps.",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
      *         required=false,
      *         @OA\JsonContent(
-     *             @OA\Property(property="cancel_at_period_end", type="boolean", example=false, description="If true, cancels at end of billing period. If false (default), cancels immediately. For basecamp users, immediate cancellation is recommended.")
+     *             @OA\Property(property="cancel_at_period_end", type="boolean", example=true, description="If true (default), cancels at end of billing period. Subscription remains active until end date. If false, cancels immediately and stops all future payments.")
      *         )
      *     ),
      *     @OA\Response(
@@ -1141,7 +1141,7 @@ class BasecampBillingController extends Controller
      *                 @OA\Property(property="canceled_at", type="string", format="date-time", example="2025-01-07T10:30:00.000000Z"),
      *                 @OA\Property(property="current_period_end", type="string", format="date", example="2026-03-08", description="Subscription end date - user can still use service until this date"),
      *                 @OA\Property(property="user_id", type="integer", example=1),
-     *                 @OA\Property(property="cancel_at_period_end", type="boolean", example=false)
+     *                 @OA\Property(property="cancel_at_period_end", type="boolean", example=true, description="Whether subscription will cancel at period end")
      *             )
      *         )
      *     ),
@@ -1212,8 +1212,9 @@ class BasecampBillingController extends Controller
                 ], 400);
             }
 
-            // Get cancel_at_period_end from request (default: false for immediate cancellation)
-            $cancelAtPeriodEnd = $request->input('cancel_at_period_end', false);
+            // Always cancel at period end (not immediately)
+            // Subscription will remain active until end date or next invoice date
+            $cancelAtPeriodEnd = $request->input('cancel_at_period_end', true);
 
             // Initialize Stripe Service
             $stripeService = new \App\Services\Billing\StripeService();

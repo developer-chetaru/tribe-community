@@ -1249,7 +1249,7 @@
                     "Billing - Subscription Management"
                 ],
                 "summary": "Cancel basecamp user subscription",
-                "description": "Cancel the subscription for the authenticated basecamp user. This immediately stops all future monthly payments. The subscription will be cancelled permanently and no further charges will be made. Works for mobile apps.",
+                "description": "Cancel the subscription for the authenticated basecamp user. By default, subscription will be cancelled at the end of the billing period (cancel_at_period_end=true). User can continue using the service until the end date. Works for mobile apps.",
                 "operationId": "708a0cc52830e6f4912b7a89080c8421",
                 "requestBody": {
                     "required": false,
@@ -1258,9 +1258,9 @@
                             "schema": {
                                 "properties": {
                                     "cancel_at_period_end": {
-                                        "description": "If true, cancels at end of billing period. If false (default), cancels immediately. For basecamp users, immediate cancellation is recommended.",
+                                        "description": "If true (default), cancels at end of billing period. Subscription remains active until end date. If false, cancels immediately and stops all future payments.",
                                         "type": "boolean",
-                                        "example": false
+                                        "example": true
                                     }
                                 },
                                 "type": "object"
@@ -1318,8 +1318,9 @@
                                                     "example": 1
                                                 },
                                                 "cancel_at_period_end": {
+                                                    "description": "Whether subscription will cancel at period end",
                                                     "type": "boolean",
-                                                    "example": false
+                                                    "example": true
                                                 }
                                             },
                                             "type": "object"
@@ -3234,9 +3235,9 @@
                                         "example": "sub_1234567890"
                                     },
                                     "cancel_at_period_end": {
-                                        "description": "If true, cancels at end of billing period. If false (default), cancels immediately and stops all future payments.",
+                                        "description": "If true (default), cancels at end of billing period. Subscription remains active until end date. If false, cancels immediately and stops all future payments.",
                                         "type": "boolean",
-                                        "example": false
+                                        "example": true
                                     }
                                 },
                                 "type": "object"
