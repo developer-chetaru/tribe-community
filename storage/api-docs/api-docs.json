@@ -288,6 +288,11 @@
                                                     "type": "integer",
                                                     "example": 1
                                                 },
+                                                "user_id": {
+                                                    "description": "User ID for mobile apps",
+                                                    "type": "integer",
+                                                    "example": 5
+                                                },
                                                 "tier": {
                                                     "type": "string",
                                                     "example": "basecamp"
@@ -297,7 +302,9 @@
                                                     "enum": [
                                                         "active",
                                                         "inactive",
-                                                        "cancelled"
+                                                        "cancelled",
+                                                        "canceled",
+                                                        "cancel_at_period_end"
                                                     ],
                                                     "example": "active"
                                                 },
@@ -308,26 +315,126 @@
                                                 "current_period_start": {
                                                     "type": "string",
                                                     "format": "date-time",
-                                                    "example": "2025-01-05T00:00:00.000000Z",
+                                                    "example": "2025-01-07T00:00:00.000000Z",
                                                     "nullable": true
                                                 },
                                                 "current_period_end": {
                                                     "type": "string",
                                                     "format": "date-time",
-                                                    "example": "2025-02-05T00:00:00.000000Z",
+                                                    "example": "2025-02-07T00:00:00.000000Z",
                                                     "nullable": true
                                                 },
                                                 "next_billing_date": {
                                                     "type": "string",
                                                     "format": "date-time",
-                                                    "example": "2025-02-05T00:00:00.000000Z",
+                                                    "example": "2025-02-07T00:00:00.000000Z",
                                                     "nullable": true
                                                 },
                                                 "monthly_price": {
-                                                    "description": "Monthly subscription price in GBP",
+                                                    "description": "Monthly subscription price in GBP (before VAT)",
                                                     "type": "number",
                                                     "format": "float",
                                                     "example": 10
+                                                },
+                                                "monthly_price_with_vat": {
+                                                    "description": "Monthly subscription price including 20% VAT in GBP",
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "example": 12
+                                                },
+                                                "vat_rate": {
+                                                    "description": "VAT percentage",
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "example": 20
+                                                },
+                                                "stripe_subscription": {
+                                                    "description": "Stripe subscription details (if available)",
+                                                    "properties": {
+                                                        "id": {
+                                                            "description": "Stripe subscription ID",
+                                                            "type": "string",
+                                                            "example": "sub_1SnFnILsZTe0ouTrgXo1ea0w"
+                                                        },
+                                                        "status": {
+                                                            "description": "Stripe subscription status",
+                                                            "type": "string",
+                                                            "example": "active"
+                                                        },
+                                                        "current_period_start": {
+                                                            "type": "string",
+                                                            "format": "date-time",
+                                                            "example": "2025-01-07T00:00:00.000000Z",
+                                                            "nullable": true
+                                                        },
+                                                        "current_period_end": {
+                                                            "type": "string",
+                                                            "format": "date-time",
+                                                            "example": "2025-02-07T00:00:00.000000Z",
+                                                            "nullable": true
+                                                        },
+                                                        "cancel_at_period_end": {
+                                                            "description": "Will cancel at period end",
+                                                            "type": "boolean",
+                                                            "example": false
+                                                        },
+                                                        "canceled_at": {
+                                                            "description": "Cancellation timestamp if cancelled",
+                                                            "type": "string",
+                                                            "format": "date-time",
+                                                            "example": null,
+                                                            "nullable": true
+                                                        }
+                                                    },
+                                                    "type": "object",
+                                                    "nullable": true
+                                                },
+                                                "payment_method": {
+                                                    "description": "Payment method details (if available)",
+                                                    "properties": {
+                                                        "id": {
+                                                            "description": "Payment method ID",
+                                                            "type": "string",
+                                                            "example": "pm_1SnFnILsZTe0ouTrgXo1ea0w"
+                                                        },
+                                                        "type": {
+                                                            "description": "Payment method type",
+                                                            "type": "string",
+                                                            "example": "card"
+                                                        },
+                                                        "card": {
+                                                            "properties": {
+                                                                "brand": {
+                                                                    "description": "Card brand (visa, mastercard, amex)",
+                                                                    "type": "string",
+                                                                    "example": "visa"
+                                                                },
+                                                                "last4": {
+                                                                    "description": "Last 4 digits of card",
+                                                                    "type": "string",
+                                                                    "example": "4242"
+                                                                },
+                                                                "exp_month": {
+                                                                    "description": "Expiry month (1-12)",
+                                                                    "type": "integer",
+                                                                    "example": 12
+                                                                },
+                                                                "exp_year": {
+                                                                    "description": "Expiry year",
+                                                                    "type": "integer",
+                                                                    "example": 2029
+                                                                },
+                                                                "funding": {
+                                                                    "description": "Card funding type (credit, debit)",
+                                                                    "type": "string",
+                                                                    "example": "credit"
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        }
+                                                    },
+                                                    "type": "object",
+                                                    "nullable": true
                                                 }
                                             },
                                             "type": "object"

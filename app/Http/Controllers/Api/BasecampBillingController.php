@@ -221,13 +221,45 @@ class BasecampBillingController extends Controller
      *                 property="data",
      *                 type="object",
      *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="user_id", type="integer", example=5, description="User ID for mobile apps"),
      *                 @OA\Property(property="tier", type="string", example="basecamp"),
-     *                 @OA\Property(property="status", type="string", example="active", enum={"active", "inactive", "cancelled"}),
+     *                 @OA\Property(property="status", type="string", example="active", enum={"active", "inactive", "cancelled", "canceled", "cancel_at_period_end"}),
      *                 @OA\Property(property="user_count", type="integer", example=1),
-     *                 @OA\Property(property="current_period_start", type="string", format="date-time", nullable=true, example="2025-01-05T00:00:00.000000Z"),
-     *                 @OA\Property(property="current_period_end", type="string", format="date-time", nullable=true, example="2025-02-05T00:00:00.000000Z"),
-     *                 @OA\Property(property="next_billing_date", type="string", format="date-time", nullable=true, example="2025-02-05T00:00:00.000000Z"),
-     *                 @OA\Property(property="monthly_price", type="number", format="float", example=10.00, description="Monthly subscription price in GBP")
+     *                 @OA\Property(property="current_period_start", type="string", format="date-time", nullable=true, example="2025-01-07T00:00:00.000000Z"),
+     *                 @OA\Property(property="current_period_end", type="string", format="date-time", nullable=true, example="2025-02-07T00:00:00.000000Z"),
+     *                 @OA\Property(property="next_billing_date", type="string", format="date-time", nullable=true, example="2025-02-07T00:00:00.000000Z"),
+     *                 @OA\Property(property="monthly_price", type="number", format="float", example=10.00, description="Monthly subscription price in GBP (before VAT)"),
+     *                 @OA\Property(property="monthly_price_with_vat", type="number", format="float", example=12.00, description="Monthly subscription price including 20% VAT in GBP"),
+     *                 @OA\Property(property="vat_rate", type="number", format="float", example=20.00, description="VAT percentage"),
+     *                 @OA\Property(
+     *                     property="stripe_subscription",
+     *                     type="object",
+     *                     nullable=true,
+     *                     description="Stripe subscription details (if available)",
+     *                     @OA\Property(property="id", type="string", example="sub_1SnFnILsZTe0ouTrgXo1ea0w", description="Stripe subscription ID"),
+     *                     @OA\Property(property="status", type="string", example="active", description="Stripe subscription status"),
+     *                     @OA\Property(property="current_period_start", type="string", format="date-time", nullable=true, example="2025-01-07T00:00:00.000000Z"),
+     *                     @OA\Property(property="current_period_end", type="string", format="date-time", nullable=true, example="2025-02-07T00:00:00.000000Z"),
+     *                     @OA\Property(property="cancel_at_period_end", type="boolean", example=false, description="Will cancel at period end"),
+     *                     @OA\Property(property="canceled_at", type="string", format="date-time", nullable=true, example=null, description="Cancellation timestamp if cancelled")
+     *                 ),
+     *                 @OA\Property(
+     *                     property="payment_method",
+     *                     type="object",
+     *                     nullable=true,
+     *                     description="Payment method details (if available)",
+     *                     @OA\Property(property="id", type="string", example="pm_1SnFnILsZTe0ouTrgXo1ea0w", description="Payment method ID"),
+     *                     @OA\Property(property="type", type="string", example="card", description="Payment method type"),
+     *                     @OA\Property(
+     *                         property="card",
+     *                         type="object",
+     *                         @OA\Property(property="brand", type="string", example="visa", description="Card brand (visa, mastercard, amex)"),
+     *                         @OA\Property(property="last4", type="string", example="4242", description="Last 4 digits of card"),
+     *                         @OA\Property(property="exp_month", type="integer", example=12, description="Expiry month (1-12)"),
+     *                         @OA\Property(property="exp_year", type="integer", example=2029, description="Expiry year"),
+     *                         @OA\Property(property="funding", type="string", example="credit", description="Card funding type (credit, debit)")
+     *                     )
+     *                 )
      *             )
      *         )
      *     ),
