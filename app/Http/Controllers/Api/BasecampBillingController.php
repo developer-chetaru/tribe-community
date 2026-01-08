@@ -288,22 +288,83 @@ class BasecampBillingController extends Controller
                 ], 404);
             }
 
+            // Fetch Stripe subscription details and payment method
+            $stripeSubscription = null;
+            $paymentMethod = null;
+            $stripeSubscriptionId = $subscription->stripe_subscription_id;
+
+            if ($stripeSubscriptionId && class_exists(\Stripe\Stripe::class)) {
+                try {
+                    \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+                    
+                    // Get Stripe subscription
+                    $stripeSubscription = \Stripe\Subscription::retrieve($stripeSubscriptionId);
+                    
+                    // Get payment method from subscription's default payment method
+                    if ($stripeSubscription->default_payment_method) {
+                        $paymentMethod = \Stripe\PaymentMethod::retrieve($stripeSubscription->default_payment_method);
+                    } elseif ($stripeSubscription->customer) {
+                        // Try to get payment method from customer
+                        $customer = \Stripe\Customer::retrieve($stripeSubscription->customer);
+                        if ($customer->invoice_settings->default_payment_method) {
+                            $paymentMethod = \Stripe\PaymentMethod::retrieve($customer->invoice_settings->default_payment_method);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Failed to retrieve Stripe subscription details: ' . $e->getMessage(), [
+                        'subscription_id' => $subscription->id,
+                        'stripe_subscription_id' => $stripeSubscriptionId,
+                    ]);
+                    // Continue without Stripe details if API call fails
+                }
+            }
+
+            // Build response data
+            $responseData = [
+                'id' => $subscription->id,
+                'user_id' => $user->id, // Include user_id for mobile apps
+                'tier' => $subscription->tier,
+                'status' => $subscription->status,
+                'user_count' => $subscription->user_count,
+                'current_period_start' => $subscription->current_period_start,
+                'current_period_end' => $subscription->current_period_end,
+                'next_billing_date' => $subscription->next_billing_date,
+                'monthly_price' => 10.00, // Basecamp subscription is £10/month (before VAT)
+                'monthly_price_with_vat' => 12.00, // £10 + 20% VAT (£2.00)
+                'vat_rate' => 20.00, // VAT percentage
+            ];
+
+            // Add Stripe subscription details if available
+            if ($stripeSubscription) {
+                $responseData['stripe_subscription'] = [
+                    'id' => $stripeSubscription->id,
+                    'status' => $stripeSubscription->status,
+                    'current_period_start' => $stripeSubscription->current_period_start ? date('Y-m-d\TH:i:s.000000\Z', $stripeSubscription->current_period_start) : null,
+                    'current_period_end' => $stripeSubscription->current_period_end ? date('Y-m-d\TH:i:s.000000\Z', $stripeSubscription->current_period_end) : null,
+                    'cancel_at_period_end' => $stripeSubscription->cancel_at_period_end ?? false,
+                    'canceled_at' => $stripeSubscription->canceled_at ? date('Y-m-d\TH:i:s.000000\Z', $stripeSubscription->canceled_at) : null,
+                ];
+            }
+
+            // Add payment method details if available
+            if ($paymentMethod && isset($paymentMethod->card)) {
+                $responseData['payment_method'] = [
+                    'id' => $paymentMethod->id,
+                    'type' => $paymentMethod->type,
+                    'card' => [
+                        'brand' => $paymentMethod->card->brand ?? null,
+                        'last4' => $paymentMethod->card->last4 ?? null,
+                        'exp_month' => $paymentMethod->card->exp_month ?? null,
+                        'exp_year' => $paymentMethod->card->exp_year ?? null,
+                        'funding' => $paymentMethod->card->funding ?? null, // credit, debit, etc.
+                    ],
+                ];
+            }
+
             return response()->json([
                 'status' => true,
                 'message' => 'Subscription details retrieved successfully',
-                'data' => [
-                    'id' => $subscription->id,
-                    'user_id' => $user->id, // Include user_id for mobile apps
-                    'tier' => $subscription->tier,
-                    'status' => $subscription->status,
-                    'user_count' => $subscription->user_count,
-                    'current_period_start' => $subscription->current_period_start,
-                    'current_period_end' => $subscription->current_period_end,
-                    'next_billing_date' => $subscription->next_billing_date,
-                    'monthly_price' => 10.00, // Basecamp subscription is £10/month (before VAT)
-                    'monthly_price_with_vat' => 12.00, // £10 + 20% VAT (£2.00)
-                    'vat_rate' => 20.00, // VAT percentage
-                ],
+                'data' => $responseData,
             ], 200);
 
         } catch (\Exception $e) {
