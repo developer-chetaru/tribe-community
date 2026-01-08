@@ -16,8 +16,115 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
+/**
+ * @OA\Tag(
+ *     name="Billing - Subscription Management",
+ *     description="Subscription management endpoints for renewal, reactivation, and cancellation (works for both organisation and basecamp users)"
+ * )
+ */
 class StripeCheckoutController extends Controller
 {
+    /**
+     * @OA\Post(
+     *     path="/api/billing/subscription/renew",
+     *     tags={"Billing - Subscription Management", "Organisation Billing", "Basecamp Billing"},
+     *     summary="Renew expired subscription",
+     *     description="Creates a Stripe Checkout session to renew an expired subscription. Works for both organisation users (directors) and basecamp users. The user will be redirected to Stripe Checkout to complete payment. After successful payment, subscription will be activated/renewed for another month. This endpoint works for mobile apps.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=false,
+     *         description="No request body required. Subscription is identified from authenticated user.",
+     *         @OA\JsonContent()
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Checkout session created successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true, description="Indicates successful checkout session creation"),
+     *             @OA\Property(property="redirect_url", type="string", example="https://checkout.stripe.com/pay/cs_test_...", description="Stripe Checkout URL to redirect user for payment"),
+     *             @OA\Property(property="message", type="string", example="Checkout session created successfully")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Bad request - Failed to create renewal checkout",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="error", type="string", example="Failed to create checkout session: Error message")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="error", type="string", example="Unauthorized")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Forbidden - User is not a director or basecamp user",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="error", type="string", example="Only directors and basecamp users can renew subscriptions.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Server error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="error", type="string", example="Failed to create checkout session: Error message")
+     *         )
+     *     )
+     * )
+     * 
+     * @OA\Post(
+     *     path="/api/basecamp/subscription/renew",
+     *     tags={"Billing - Subscription Management", "Basecamp Billing", "Basecamp Users"},
+     *     summary="Renew expired basecamp subscription",
+     *     description="Creates a Stripe Checkout session to renew an expired basecamp subscription. This is an alias endpoint for basecamp users. The user will be redirected to Stripe Checkout to complete payment (£12.00 including VAT). After successful payment, subscription will be activated/renewed for another month. This endpoint works for mobile apps.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=false,
+     *         description="No request body required. Subscription is identified from authenticated user.",
+     *         @OA\JsonContent()
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Checkout session created successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="redirect_url", type="string", example="https://checkout.stripe.com/pay/cs_test_...", description="Stripe Checkout URL to redirect user for payment"),
+     *             @OA\Property(property="message", type="string", example="Checkout session created successfully")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Bad request - Failed to create renewal checkout",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="error", type="string", example="Failed to create checkout session: Error message")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="error", type="string", example="Unauthorized")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Forbidden - User is not a basecamp user",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="error", type="string", example="Only directors and basecamp users can renew subscriptions.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Server error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="error", type="string", example="Failed to create checkout session: Error message")
+     *         )
+     *     )
+     * )
+     */
     public function createRenewalCheckout(Request $request)
     {
         try {
@@ -237,6 +344,21 @@ class StripeCheckoutController extends Controller
                 'checkout_url' => $checkoutUrl
             ]);
             
+            // Check if this is an API request (mobile app)
+            if ($request->header('X-Requested-With') === 'XMLHttpRequest' || 
+                $request->ajax() || 
+                $request->wantsJson() ||
+                $request->expectsJson() ||
+                str_starts_with($request->path(), 'api/')) {
+                // Return JSON for API/mobile requests
+                return response()->json([
+                    'success' => true,
+                    'redirect_url' => $checkoutUrl,
+                    'message' => 'Checkout session created successfully'
+                ]);
+            }
+            
+            // For web requests, return redirect URL
             return response()->json([
                 'redirect_url' => $checkoutUrl
             ]);
@@ -657,6 +779,131 @@ class StripeCheckoutController extends Controller
     }
 
     /**
+     * @OA\Post(
+     *     path="/api/billing/subscription/reactivate",
+     *     tags={"Billing - Subscription Management", "Organisation Billing", "Basecamp Billing"},
+     *     summary="Reactivate cancelled subscription",
+     *     description="Reactivates a cancelled subscription without requiring payment. This only works if the subscription was cancelled but the end date has not yet passed. If the subscription has expired (end date passed), use the renew endpoint instead. Works for both organisation users (directors) and basecamp users. This endpoint works for mobile apps.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=false,
+     *         description="No request body required. Subscription is identified from authenticated user.",
+     *         @OA\JsonContent()
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Subscription reactivated successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Subscription activated successfully"),
+     *             @OA\Property(property="refresh", type="boolean", example=true, description="Indicates that the client should refresh subscription status"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="subscription_id", type="integer", example=1),
+     *                 @OA\Property(property="status", type="string", example="active"),
+     *                 @OA\Property(property="end_date", type="string", format="date", example="2026-03-08"),
+     *                 @OA\Property(property="user_id", type="integer", example=1)
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Bad request",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="error", type="string", example="Subscription is not cancelled"),
+     *             @OA\Property(property="needs_payment", type="boolean", example=true, description="If true, subscription has expired and renewal payment is required")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="error", type="string", example="Unauthorized")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Subscription not found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="error", type="string", example="Subscription not found")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Server error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="error", type="string", example="Error message")
+     *         )
+     *     )
+     * )
+     * 
+     * @OA\Post(
+     *     path="/api/basecamp/subscription/reactivate",
+     *     tags={"Billing - Subscription Management", "Basecamp Billing", "Basecamp Users"},
+     *     summary="Reactivate cancelled basecamp subscription",
+     *     description="Reactivates a cancelled basecamp subscription without requiring payment. This is an alias endpoint for basecamp users. This only works if the subscription was cancelled but the end date has not yet passed. If the subscription has expired (end date passed), use the renew endpoint instead. This endpoint works for mobile apps.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=false,
+     *         description="No request body required. Subscription is identified from authenticated user.",
+     *         @OA\JsonContent()
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Subscription reactivated successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Subscription activated successfully"),
+     *             @OA\Property(property="refresh", type="boolean", example=true, description="Indicates that the client should refresh subscription status"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="subscription_id", type="integer", example=1),
+     *                 @OA\Property(property="status", type="string", example="active"),
+     *                 @OA\Property(property="end_date", type="string", format="date", example="2026-03-08"),
+     *                 @OA\Property(property="user_id", type="integer", example=1)
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Bad request",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="error", type="string", example="Subscription is not cancelled"),
+     *             @OA\Property(property="needs_payment", type="boolean", example=true, description="If true, subscription has expired and renewal payment is required")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="error", type="string", example="Unauthorized")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Subscription not found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="error", type="string", example="Subscription not found")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Server error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="error", type="string", example="Error message")
+     *         )
+     *     )
+     * )
      * Reactivate a cancelled subscription (without payment)
      * Only works if subscription is cancelled but end date hasn't passed
      */
@@ -771,10 +1018,12 @@ class StripeCheckoutController extends Controller
             // Refresh subscription from database
             $subscription->refresh();
             
-            // Clear session flags to ensure UI updates correctly
-            session()->forget('subscription_expired');
-            session()->forget('subscription_status');
-            session()->put('refresh_billing', true);
+            // Clear session flags to ensure UI updates correctly (only for web requests)
+            if (!$request->expectsJson() && !str_starts_with($request->path(), 'api/')) {
+                session()->forget('subscription_expired');
+                session()->forget('subscription_status');
+                session()->put('refresh_billing', true);
+            }
             
             Log::info('Subscription activated successfully in database', [
                 'subscription_id' => $subscription->id,
@@ -784,10 +1033,17 @@ class StripeCheckoutController extends Controller
                 'user_id' => $user->id
             ]);
             
+            // Return JSON response (works for both API and web requests)
             return response()->json([
                 'success' => true,
                 'message' => 'Subscription activated successfully',
-                'refresh' => true
+                'refresh' => true,
+                'data' => [
+                    'subscription_id' => $subscription->id,
+                    'status' => $subscription->status,
+                    'end_date' => $subscription->current_period_end ? $subscription->current_period_end->format('Y-m-d') : null,
+                    'user_id' => $user->id,
+                ]
             ]);
             
         } catch (\Exception $e) {

@@ -1121,10 +1121,11 @@
             "post": {
                 "tags": [
                     "Basecamp Billing",
-                    "Basecamp Users"
+                    "Basecamp Users",
+                    "Billing - Subscription Management"
                 ],
                 "summary": "Cancel basecamp user subscription",
-                "description": "Cancel the subscription for the authenticated basecamp user. This immediately stops all future monthly payments. The subscription will be cancelled permanently and no further charges will be made.",
+                "description": "Cancel the subscription for the authenticated basecamp user. This immediately stops all future monthly payments. The subscription will be cancelled permanently and no further charges will be made. Works for mobile apps.",
                 "operationId": "708a0cc52830e6f4912b7a89080c8421",
                 "requestBody": {
                     "required": false,
@@ -1182,9 +1183,19 @@
                                                     "format": "date-time",
                                                     "example": "2025-01-07T10:30:00.000000Z"
                                                 },
+                                                "current_period_end": {
+                                                    "description": "Subscription end date - user can still use service until this date",
+                                                    "type": "string",
+                                                    "format": "date",
+                                                    "example": "2026-03-08"
+                                                },
                                                 "user_id": {
                                                     "type": "integer",
                                                     "example": 1
+                                                },
+                                                "cancel_at_period_end": {
+                                                    "type": "boolean",
+                                                    "example": false
                                                 }
                                             },
                                             "type": "object"
@@ -2058,6 +2069,561 @@
                 ]
             }
         },
+        "/api/billing/subscription/renew": {
+            "post": {
+                "tags": [
+                    "Billing - Subscription Management",
+                    "Organisation Billing",
+                    "Basecamp Billing"
+                ],
+                "summary": "Renew expired subscription",
+                "description": "Creates a Stripe Checkout session to renew an expired subscription. Works for both organisation users (directors) and basecamp users. The user will be redirected to Stripe Checkout to complete payment. After successful payment, subscription will be activated/renewed for another month. This endpoint works for mobile apps.",
+                "operationId": "80945650230b1106cf79402836f74fc8",
+                "requestBody": {
+                    "description": "No request body required. Subscription is identified from authenticated user.",
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Checkout session created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "description": "Indicates successful checkout session creation",
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "redirect_url": {
+                                            "description": "Stripe Checkout URL to redirect user for payment",
+                                            "type": "string",
+                                            "example": "https://checkout.stripe.com/pay/cs_test_..."
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Checkout session created successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - Failed to create renewal checkout",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Failed to create checkout session: Error message"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Unauthorized"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - User is not a director or basecamp user",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Only directors and basecamp users can renew subscriptions."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Failed to create checkout session: Error message"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/basecamp/subscription/renew": {
+            "post": {
+                "tags": [
+                    "Billing - Subscription Management",
+                    "Basecamp Billing",
+                    "Basecamp Users"
+                ],
+                "summary": "Renew expired basecamp subscription",
+                "description": "Creates a Stripe Checkout session to renew an expired basecamp subscription. This is an alias endpoint for basecamp users. The user will be redirected to Stripe Checkout to complete payment (£12.00 including VAT). After successful payment, subscription will be activated/renewed for another month. This endpoint works for mobile apps.",
+                "operationId": "f84e8c757daff7cf69c310c0bfa53ae9",
+                "requestBody": {
+                    "description": "No request body required. Subscription is identified from authenticated user.",
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Checkout session created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "redirect_url": {
+                                            "description": "Stripe Checkout URL to redirect user for payment",
+                                            "type": "string",
+                                            "example": "https://checkout.stripe.com/pay/cs_test_..."
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Checkout session created successfully"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - Failed to create renewal checkout",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Failed to create checkout session: Error message"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Unauthorized"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - User is not a basecamp user",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Only directors and basecamp users can renew subscriptions."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Failed to create checkout session: Error message"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/billing/subscription/reactivate": {
+            "post": {
+                "tags": [
+                    "Billing - Subscription Management",
+                    "Organisation Billing",
+                    "Basecamp Billing"
+                ],
+                "summary": "Reactivate cancelled subscription",
+                "description": "Reactivates a cancelled subscription without requiring payment. This only works if the subscription was cancelled but the end date has not yet passed. If the subscription has expired (end date passed), use the renew endpoint instead. Works for both organisation users (directors) and basecamp users. This endpoint works for mobile apps.",
+                "operationId": "342f6e2faadf7400caaa256f51b4e9fb",
+                "requestBody": {
+                    "description": "No request body required. Subscription is identified from authenticated user.",
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Subscription reactivated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Subscription activated successfully"
+                                        },
+                                        "refresh": {
+                                            "description": "Indicates that the client should refresh subscription status",
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "subscription_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "active"
+                                                },
+                                                "end_date": {
+                                                    "type": "string",
+                                                    "format": "date",
+                                                    "example": "2026-03-08"
+                                                },
+                                                "user_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Subscription is not cancelled"
+                                        },
+                                        "needs_payment": {
+                                            "description": "If true, subscription has expired and renewal payment is required",
+                                            "type": "boolean",
+                                            "example": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Unauthorized"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Subscription not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Subscription not found"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Error message"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/basecamp/subscription/reactivate": {
+            "post": {
+                "tags": [
+                    "Billing - Subscription Management",
+                    "Basecamp Billing",
+                    "Basecamp Users"
+                ],
+                "summary": "Reactivate cancelled basecamp subscription",
+                "description": "Reactivates a cancelled basecamp subscription without requiring payment. This is an alias endpoint for basecamp users. This only works if the subscription was cancelled but the end date has not yet passed. If the subscription has expired (end date passed), use the renew endpoint instead. This endpoint works for mobile apps.",
+                "operationId": "c1d375bec06a3475df89dcc30ff795e5",
+                "requestBody": {
+                    "description": "No request body required. Subscription is identified from authenticated user.",
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {}
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Subscription reactivated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Subscription activated successfully"
+                                        },
+                                        "refresh": {
+                                            "description": "Indicates that the client should refresh subscription status",
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "subscription_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "active"
+                                                },
+                                                "end_date": {
+                                                    "type": "string",
+                                                    "format": "date",
+                                                    "example": "2026-03-08"
+                                                },
+                                                "user_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Subscription is not cancelled"
+                                        },
+                                        "needs_payment": {
+                                            "description": "If true, subscription has expired and renewal payment is required",
+                                            "type": "boolean",
+                                            "example": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Unauthorized"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Subscription not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Subscription not found"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Error message"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/billing/stripe/payment-intent/create": {
             "post": {
                 "tags": [
@@ -2523,7 +3089,8 @@
             "post": {
                 "tags": [
                     "Billing - Stripe Subscriptions",
-                    "Organisation Billing"
+                    "Organisation Billing",
+                    "Billing - Subscription Management"
                 ],
                 "summary": "Cancel organisation subscription",
                 "description": "Cancels a Stripe subscription for an organisation. Can cancel immediately or at the end of the billing period. Requires director or super_admin role. This endpoint is available for mobile apps via API.",
@@ -2590,6 +3157,12 @@
                                                     "type": "string",
                                                     "format": "date-time",
                                                     "example": "2025-01-07T10:30:00.000000Z"
+                                                },
+                                                "current_period_end": {
+                                                    "description": "Subscription end date - user can still use service until this date",
+                                                    "type": "string",
+                                                    "format": "date",
+                                                    "example": "2026-03-08"
                                                 },
                                                 "organisation_id": {
                                                     "type": "integer",
@@ -3477,6 +4050,10 @@
         {
             "name": "Billing - Refunds",
             "description": "Refund processing and history endpoints for Stripe payments"
+        },
+        {
+            "name": "Billing - Subscription Management",
+            "description": "Subscription management endpoints for renewal, reactivation, and cancellation (works for both organisation and basecamp users)"
         },
         {
             "name": "Billing - Stripe Payments",

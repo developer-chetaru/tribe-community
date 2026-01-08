@@ -269,7 +269,7 @@ class StripeSubscriptionController extends Controller
     /**
      * @OA\Post(
      *     path="/api/billing/subscription/cancel",
-     *     tags={"Billing - Stripe Subscriptions", "Organisation Billing"},
+     *     tags={"Billing - Stripe Subscriptions", "Organisation Billing", "Billing - Subscription Management"},
      *     summary="Cancel organisation subscription",
      *     description="Cancels a Stripe subscription for an organisation. Can cancel immediately or at the end of the billing period. Requires director or super_admin role. This endpoint is available for mobile apps via API.",
      *     security={{"bearerAuth":{}}},
@@ -294,6 +294,7 @@ class StripeSubscriptionController extends Controller
      *                 @OA\Property(property="stripe_subscription_id", type="string", example="sub_1234567890"),
      *                 @OA\Property(property="status", type="string", example="canceled", enum={"canceled", "cancel_at_period_end"}),
      *                 @OA\Property(property="canceled_at", type="string", format="date-time", example="2025-01-07T10:30:00.000000Z"),
+     *                 @OA\Property(property="current_period_end", type="string", format="date", example="2026-03-08", description="Subscription end date - user can still use service until this date"),
      *                 @OA\Property(property="organisation_id", type="integer", nullable=true, example=1),
      *                 @OA\Property(property="cancel_at_period_end", type="boolean", example=false)
      *             )
@@ -419,6 +420,7 @@ class StripeSubscriptionController extends Controller
                         'stripe_subscription_id' => $validated['subscription_id'],
                         'status' => $subscription->status,
                         'canceled_at' => $subscription->canceled_at ? $subscription->canceled_at->toIso8601String() : null,
+                        'current_period_end' => $subscription->current_period_end ? $subscription->current_period_end->format('Y-m-d') : null,
                         'organisation_id' => $subscription->organisation_id,
                         'cancel_at_period_end' => $cancelAtPeriodEnd,
                     ],

@@ -1019,9 +1019,9 @@ class BasecampBillingController extends Controller
     /**
      * @OA\Post(
      *     path="/api/basecamp/cancel-subscription",
-     *     tags={"Basecamp Billing", "Basecamp Users"},
+     *     tags={"Basecamp Billing", "Basecamp Users", "Billing - Subscription Management"},
      *     summary="Cancel basecamp user subscription",
-     *     description="Cancel the subscription for the authenticated basecamp user. This immediately stops all future monthly payments. The subscription will be cancelled permanently and no further charges will be made.",
+     *     description="Cancel the subscription for the authenticated basecamp user. This immediately stops all future monthly payments. The subscription will be cancelled permanently and no further charges will be made. Works for mobile apps.",
      *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
      *         required=false,
@@ -1042,7 +1042,9 @@ class BasecampBillingController extends Controller
      *                 @OA\Property(property="stripe_subscription_id", type="string", nullable=true, example="sub_1234567890"),
      *                 @OA\Property(property="status", type="string", example="canceled", enum={"canceled", "cancel_at_period_end"}),
      *                 @OA\Property(property="canceled_at", type="string", format="date-time", example="2025-01-07T10:30:00.000000Z"),
-     *                 @OA\Property(property="user_id", type="integer", example=1)
+     *                 @OA\Property(property="current_period_end", type="string", format="date", example="2026-03-08", description="Subscription end date - user can still use service until this date"),
+     *                 @OA\Property(property="user_id", type="integer", example=1),
+     *                 @OA\Property(property="cancel_at_period_end", type="boolean", example=false)
      *             )
      *         )
      *     ),
@@ -1146,6 +1148,7 @@ class BasecampBillingController extends Controller
                         'stripe_subscription_id' => $subscription->stripe_subscription_id,
                         'status' => $subscription->status,
                         'canceled_at' => $subscription->canceled_at ? $subscription->canceled_at->toIso8601String() : null,
+                        'current_period_end' => $subscription->current_period_end ? $subscription->current_period_end->format('Y-m-d') : null,
                         'user_id' => $user->id,
                         'cancel_at_period_end' => $cancelAtPeriodEnd,
                     ],
