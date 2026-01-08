@@ -462,6 +462,22 @@
                                                     "type": "string",
                                                     "example": "pi_1234567890"
                                                 },
+                                                "invoice_id": {
+                                                    "description": "Invoice ID",
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "user_id": {
+                                                    "description": "User ID",
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "email": {
+                                                    "description": "User email address for payment processing",
+                                                    "type": "string",
+                                                    "format": "email",
+                                                    "example": "user@example.com"
+                                                },
                                                 "amount": {
                                                     "description": "Payment amount in GBP (includes 20% VAT)",
                                                     "type": "number",
@@ -469,6 +485,7 @@
                                                     "example": 12
                                                 },
                                                 "currency": {
+                                                    "description": "Payment currency",
                                                     "type": "string",
                                                     "example": "gbp"
                                                 }

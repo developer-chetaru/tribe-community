@@ -341,8 +341,11 @@ class BasecampBillingController extends Controller
      *                 type="object",
      *                 @OA\Property(property="client_secret", type="string", example="pi_1234567890_secret_...", description="Stripe payment intent client secret for frontend integration"),
      *                 @OA\Property(property="payment_intent_id", type="string", example="pi_1234567890", description="Stripe payment intent ID"),
+     *                 @OA\Property(property="invoice_id", type="integer", example=1, description="Invoice ID"),
+     *                 @OA\Property(property="user_id", type="integer", example=1, description="User ID"),
+     *                 @OA\Property(property="email", type="string", format="email", example="user@example.com", description="User email address for payment processing"),
      *                 @OA\Property(property="amount", type="number", format="float", example=12.00, description="Payment amount in GBP (includes 20% VAT)"),
- *                 @OA\Property(property="currency", type="string", example="gbp")
+     *                 @OA\Property(property="currency", type="string", example="gbp", description="Payment currency")
      *             )
      *         )
      *     ),
@@ -462,6 +465,7 @@ class BasecampBillingController extends Controller
                     'payment_intent_id' => $paymentIntent->id,
                     'invoice_id' => $invoice->id,
                     'user_id' => $user->id, // Include user_id for mobile apps
+                    'email' => $user->email, // Include email for payment processing
                     'amount' => $invoice->total_amount,
                     'currency' => 'gbp',
                 ],
