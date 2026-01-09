@@ -17,6 +17,7 @@ class Kernel extends ConsoleKernel
         \App\Console\Commands\GenerateAllMonthlySummaries::class,
         \App\Console\Commands\ProcessMonthlyBilling::class,
         \App\Console\Commands\ProcessPaymentRetries::class,
+        \App\Console\Commands\ResetSentimentTag::class,
     ];
 
     protected function schedule(Schedule $schedule): void
@@ -62,6 +63,15 @@ class Kernel extends ConsoleKernel
         $schedule->command('leave:update-status')
             ->daily()
             ->timezone('Asia/Kolkata')
+            ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+        // -------------------------
+        // Daily Sentiment Tag Reset
+        // -------------------------
+        $schedule->command('onesignal:reset-sentiment-tag')
+            ->dailyAt('00:00')
+            ->timezone('Asia/Kolkata')
+            ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/scheduler.log'));
 
         // -------------------------

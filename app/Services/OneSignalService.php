@@ -703,6 +703,58 @@ class OneSignalService
     }
 
     /**
+     * Reset has_submitted_today tag to false for all active users
+     * Runs daily at midnight via cron to reset the tag for a new day
+     * Creates users in OneSignal if they don't exist
+     *
+     * @return array Stats: ['total' => int, 'success' => int, 'failed' => int]
+     */
+    public function resetAllUsersSentimentTag(): array
+    {
+        $users = \App\Models\User::where('status', 1)
+            ->get();
+
+        $stats = [
+            'total' => $users->count(),
+            'success' => 0,
+            'failed' => 0,
+        ];
+
+        Log::info('Starting daily has_submitted_today tag reset', [
+            'total_users' => $stats['total'],
+        ]);
+
+        foreach ($users as $user) {
+            try {
+                // Reset has_submitted_today to false for all users (new day starts)
+                $result = $this->resetDailySentimentTag($user->id);
+
+                if ($result) {
+                    $stats['success']++;
+                    Log::info('has_submitted_today reset to false', [
+                        'user_id' => $user->id,
+                    ]);
+                } else {
+                    $stats['failed']++;
+                    Log::warning('has_submitted_today reset failed', [
+                        'user_id' => $user->id,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                $stats['failed']++;
+                Log::error('has_submitted_today reset exception', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        Log::info('Daily has_submitted_today tag reset completed', $stats);
+
+        return $stats;
+    }
+
+    /**
      * Update user timezone tag
      *
      * @param int|string $userId
