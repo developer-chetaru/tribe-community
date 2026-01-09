@@ -711,7 +711,9 @@ class OneSignalService
      */
     public function resetAllUsersSentimentTag(): array
     {
-        $users = \App\Models\User::where('status', 1)
+        // Status is ENUM: 'pending_payment', 'active_unverified', 'active_verified', 'suspended', 'cancelled', 'inactive'
+        // Only reset tags for active users (not suspended, cancelled, or inactive)
+        $users = \App\Models\User::whereIn('status', ['active_verified', 'active_unverified', 'pending_payment'])
             ->get();
 
         $stats = [
@@ -791,7 +793,9 @@ class OneSignalService
      */
     public function updateAllUsersWorkingDayStatus(): array
     {
-        $users = \App\Models\User::where('status', 1)
+        // Status is ENUM: 'pending_payment', 'active_unverified', 'active_verified', 'suspended', 'cancelled', 'inactive'
+        // Only update tags for active users (not suspended, cancelled, or inactive)
+        $users = \App\Models\User::whereIn('status', ['active_verified', 'active_unverified', 'pending_payment'])
             ->with('organisation')
             ->get();
 
