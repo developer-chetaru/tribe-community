@@ -65,11 +65,11 @@
 
                 {{-- Action Buttons --}}
                 <div class="space-y-3">
-                    <a href="{{ $isBasecamp ? route('basecamp.billing') : route('billing') }}" 
+                    <!-- <a href="{{ $isBasecamp ? route('basecamp.billing') : route('billing') }}" 
                        class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-full transition block text-center">
                         Update Payment Method
                     </a>
-                    
+                     -->
                     <form method="POST" action="{{ route('logout') }}" class="inline-block w-full">
                         @csrf
                         <button type="submit" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 rounded-full transition">

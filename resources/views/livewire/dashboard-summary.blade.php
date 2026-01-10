@@ -236,7 +236,12 @@
                 }
             }
 
-            $todayDate = \Carbon\Carbon::today('Asia/Kolkata');
+            // Get user's timezone for today's date comparison
+            $userTimezone = auth()->user()->timezone ?? 'Asia/Kolkata';
+            if (!in_array($userTimezone, timezone_identifiers_list())) {
+                $userTimezone = 'Asia/Kolkata';
+            }
+            $todayDate = \Carbon\Carbon::today($userTimezone);
         @endphp
 
         <table class="table-auto border-collapse w-full text-center">
@@ -258,7 +263,7 @@
                             @if($day)
                                 @php
                                     $dayData = $happyIndexMonthly[$day-1] ?? null;
-                                    $dayDate = \Carbon\Carbon::createFromDate($year, $month, $day, 'Asia/Kolkata');
+                                    $dayDate = \Carbon\Carbon::createFromDate($year, $month, $day, $userTimezone);
                                     
                                     // For today, use todayMoodData if available, otherwise use dayData
                                     if ($dayDate->isSameDay($todayDate) && $todayMoodData) {

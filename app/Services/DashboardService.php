@@ -59,53 +59,89 @@ public function getFreeVersionHomeDetails(array $filters = [])
         }
     }
 
+    // Get user's timezone or default to Asia/Kolkata
+    $userTimezone = $user->timezone ?: 'Asia/Kolkata';
+    
+    // Validate timezone to prevent errors
+    if (!in_array($userTimezone, timezone_identifiers_list())) {
+        $userTimezone = 'Asia/Kolkata';
+    }
+    
+    // Get current date in user's timezone for "today" comparison
+    $userNow = \Carbon\Carbon::now($userTimezone);
+    $userTodayDate = $userNow->toDateString(); // Y-m-d format in user's timezone
+
     // Days in selected month/year
     $noOfDaysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $year);
 
     // Fetch happy indexes for filtered users
-    $happyData = HappyIndex::whereYear('created_at', $year)
-        ->whereMonth('created_at', $month)
+    // We fetch a wider range to ensure we get all entries that fall in the selected month in any user's timezone
+    // Then filter by user's timezone when processing
+    $startDate = \Carbon\Carbon::create($year, $month, 1, 0, 0, 0, $userTimezone)->startOfMonth();
+    $endDate = \Carbon\Carbon::create($year, $month, $noOfDaysInMonth, 23, 59, 59, $userTimezone)->endOfMonth();
+    
+    // Convert to UTC for database query (created_at is stored in UTC)
+    $startDateUTC = $startDate->utc();
+    $endDateUTC = $endDate->utc();
+    
+    // Fetch entries within the month range (UTC time for database query)
+    $happyData = HappyIndex::whereBetween('created_at', [$startDateUTC, $endDateUTC])
         ->whereIn('user_id', $filteredUserIds)
         ->get(['created_at', 'mood_value', 'description', 'user_id']);
 
     $dateData = [];
     foreach ($happyData as $entry) {
-        $d = (int) date('d', strtotime($entry->created_at));
-        if (!isset($dateData[$d])) {
-            $dateData[$d] = ['total_users' => 0, 'total_score' => 0, 'description' => null, 'mood_value' => null];
-        }
-
-        $dateData[$d]['total_users'] += 1;
-
-        // If user has no orgId, show individual user mood value directly
-        if (empty($orgId)) {
-            // For user-only data, use the mood value directly
-            $dateData[$d]['mood_value'] = $entry->mood_value;
-            if ($entry->mood_value == 3) {
-                $dateData[$d]['total_score'] = 100;
-            } elseif ($entry->mood_value == 2) {
-                $dateData[$d]['total_score'] = 51;
-            } else {
-                $dateData[$d]['total_score'] = 0;
-            }
-            $dateData[$d]['description'] = $entry->description;
-        } else {
-            // ✅ Updated logic: count only users with mood_value = 3 for organization
-            if ($entry->mood_value == 3) {
-                $dateData[$d]['total_score'] += 1;
+        // Get the user who created this entry to use their timezone
+        $entryUser = User::find($entry->user_id);
+        $entryUserTimezone = $entryUser && $entryUser->timezone && in_array($entryUser->timezone, timezone_identifiers_list()) 
+            ? $entryUser->timezone 
+            : 'Asia/Kolkata';
+        
+        // Convert entry's created_at (UTC) to entry creator's timezone to get the date
+        $entryDate = \Carbon\Carbon::parse($entry->created_at)->setTimezone($entryUserTimezone);
+        $entryYear = (int) $entryDate->format('Y');
+        $entryMonth = (int) $entryDate->format('m');
+        $d = (int) $entryDate->format('d');
+        
+        // Only include if the entry falls in the selected month/year in the entry creator's timezone
+        if ($entryYear == $year && $entryMonth == $month) {
+            if (!isset($dateData[$d])) {
+                $dateData[$d] = ['total_users' => 0, 'total_score' => 0, 'description' => null, 'mood_value' => null];
             }
 
-            // Logged-in user's description only
-            if ($entry->user_id == $userId) {
+            $dateData[$d]['total_users'] += 1;
+
+            // If user has no orgId, show individual user mood value directly
+            if (empty($orgId)) {
+                // For user-only data, use the mood value directly
+                $dateData[$d]['mood_value'] = $entry->mood_value;
+                if ($entry->mood_value == 3) {
+                    $dateData[$d]['total_score'] = 100;
+                } elseif ($entry->mood_value == 2) {
+                    $dateData[$d]['total_score'] = 51;
+                } else {
+                    $dateData[$d]['total_score'] = 0;
+                }
                 $dateData[$d]['description'] = $entry->description;
+            } else {
+                // ✅ Updated logic: count only users with mood_value = 3 for organization
+                if ($entry->mood_value == 3) {
+                    $dateData[$d]['total_score'] += 1;
+                }
+
+                // Logged-in user's description only
+                if ($entry->user_id == $userId) {
+                    $dateData[$d]['description'] = $entry->description;
+                }
             }
         }
     }
 
     $happyIndexArr = [];
-    $todayDay = (int) now()->format('d');
-    $todayMonth = (int) now()->format('m');
-    $todayYear  = (int) now()->format('Y');
+    // Use user's timezone for "today" comparison
+    $todayDay = (int) $userNow->format('d');
+    $todayMonth = (int) $userNow->format('m');
+    $todayYear  = (int) $userNow->format('Y');
 
     // ✅ Your original for-loop logic remains exactly the same
     for ($i = 1; $i <= $noOfDaysInMonth; $i++) {

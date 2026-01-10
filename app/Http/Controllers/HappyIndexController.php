@@ -66,19 +66,6 @@ class HappyIndexController extends Controller
             'moodValue' => $moodValue,
         ]);
 
-        $existing = HappyIndex::where('user_id', $userId)
-            ->whereDate('created_at', now()->toDateString())
-            ->first();
-
-        if ($existing) {
-            return response()->json([
-                'status'  => false,
-                'message' => 'You have already submitted your response',
-                'code'    => 400,
-                'data'    => [],
-            ]);
-        }
-
         $user = User::where('id', $userId)
             // ->whereIn('status', ['active_verified', 'active_unverified', true, '1', 1])
             ->first();
@@ -92,20 +79,61 @@ class HappyIndexController extends Controller
             ]);
             return response()->json(['status' => false, 'message' => 'User not eligible']);
         }
+
+        // Get user's timezone or default to Asia/Kolkata
+        $userTimezone = $user->timezone ?: 'Asia/Kolkata';
+        
+        // Validate timezone to prevent errors
+        if (!in_array($userTimezone, timezone_identifiers_list())) {
+            Log::warning("Invalid timezone for user {$userId}: {$userTimezone}, using Asia/Kolkata");
+            $userTimezone = 'Asia/Kolkata';
+        }
+        
+        // Get current date in user's timezone
+        $userNow = \Carbon\Carbon::now($userTimezone);
+        $userDate = $userNow->toDateString(); // Y-m-d format in user's timezone
+        
+        // Check if user already submitted today in their timezone
+        // We need to check all entries and convert their created_at to user's timezone to compare dates
+        $existing = HappyIndex::where('user_id', $userId)
+            ->get()
+            ->filter(function ($entry) use ($userTimezone, $userDate) {
+                // Convert entry's created_at to user's timezone and compare dates
+                $entryDate = \Carbon\Carbon::parse($entry->created_at)->setTimezone($userTimezone)->toDateString();
+                return $entryDate === $userDate;
+            })
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'You have already submitted your response',
+                'code'    => 400,
+                'data'    => [],
+            ]);
+        }
       
+        // Store timestamp in UTC (Laravel default), but the date represented is in user's timezone
         HappyIndex::create([
             'user_id'      => $userId,
             'mood_value'   => $moodValue,
             'description' => $description,
             'status'      => 'active',
-            'created_at'  => now(),
-            'updated_at'  => now(),
+            'created_at'  => $userNow->utc(), // Convert user's timezone to UTC for storage
+            'updated_at'  => $userNow->utc(),
         ]);
 
         $user->EIScore += 250;
-        $user->lastHIDate = now()->toDateString();
-        $user->updated_at = now();
+        $user->lastHIDate = $userDate; // Store date in user's timezone
+        $user->updated_at = $userNow->utc();
         $user->save();
+        
+        Log::info('HappyIndex created with user timezone', [
+            'user_id' => $userId,
+            'user_timezone' => $userTimezone,
+            'user_date' => $userDate,
+            'stored_timestamp' => $userNow->utc()->toDateTimeString(),
+        ]);
 
         // ✅ Mark sentiment submitted in OneSignal (stops 6PM email reminder)
         try {

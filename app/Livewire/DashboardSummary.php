@@ -70,14 +70,35 @@ class DashboardSummary extends Component
             ->where('leave_status', 1)
             ->exists();
 
-        // Check if user gave feedback today
-        $this->userGivenFeedback = HappyIndex::where('user_id', $user->id)
-            ->whereDate('created_at', $today)
-            ->exists();
+        // Get user's timezone or default
+        $userTimezone = $user->timezone ?: 'Asia/Kolkata';
+        if (!in_array($userTimezone, timezone_identifiers_list())) {
+            $userTimezone = 'Asia/Kolkata';
+        }
         
-        // Fetch today's actual mood data if exists
+        // Get current date in user's timezone
+        $userNow = Carbon::now($userTimezone);
+        $userTodayDate = $userNow->toDateString(); // Y-m-d format
+        
+        // Check if user gave feedback today in their timezone
+        // Need to check all entries and convert to user's timezone to compare dates
+        $this->userGivenFeedback = HappyIndex::where('user_id', $user->id)
+            ->get()
+            ->filter(function ($entry) use ($userTimezone, $userTodayDate) {
+                // Convert entry's created_at (UTC) to user's timezone and compare dates
+                $entryDate = Carbon::parse($entry->created_at)->setTimezone($userTimezone)->toDateString();
+                return $entryDate === $userTodayDate;
+            })
+            ->isNotEmpty();
+        
+        // Fetch today's actual mood data if exists (using user's timezone)
         $todayHappyIndex = HappyIndex::where('user_id', $user->id)
-            ->whereDate('created_at', $today)
+            ->get()
+            ->filter(function ($entry) use ($userTimezone, $userTodayDate) {
+                // Convert entry's created_at (UTC) to user's timezone and compare dates
+                $entryDate = Carbon::parse($entry->created_at)->setTimezone($userTimezone)->toDateString();
+                return $entryDate === $userTodayDate;
+            })
             ->first();
         
         if ($todayHappyIndex) {
@@ -295,11 +316,25 @@ public function updatedSelectedDepartment($value)
         
         // Refresh today's mood data
         $user = auth()->user();
-        $tz = $user->timezone ?? 'Asia/Kolkata';
-        $today = Carbon::now($tz)->startOfDay();
+        $userTimezone = $user->timezone ?? 'Asia/Kolkata';
         
+        // Validate timezone
+        if (!in_array($userTimezone, timezone_identifiers_list())) {
+            $userTimezone = 'Asia/Kolkata';
+        }
+        
+        // Get current date in user's timezone
+        $userNow = Carbon::now($userTimezone);
+        $userTodayDate = $userNow->toDateString(); // Y-m-d format
+        
+        // Fetch today's mood data (using user's timezone)
         $todayHappyIndex = HappyIndex::where('user_id', $user->id)
-            ->whereDate('created_at', $today)
+            ->get()
+            ->filter(function ($entry) use ($userTimezone, $userTodayDate) {
+                // Convert entry's created_at (UTC) to user's timezone and compare dates
+                $entryDate = Carbon::parse($entry->created_at)->setTimezone($userTimezone)->toDateString();
+                return $entryDate === $userTodayDate;
+            })
             ->first();
         
         if ($todayHappyIndex) {
@@ -402,16 +437,6 @@ public function updatedSelectedDepartment($value)
 
         $description = $this->moodNote ?? '';  
 
-        $existing = HappyIndex::where('user_id', $userId)
-            ->whereDate('created_at', now()->toDateString())
-            ->first();
-
-        if ($existing) {
-            $this->dispatch('close-leave-modal'); 
-            session()->flash('error', 'You have already submitted your response today.');
-            return;
-        }
-
         $user = User::where('id', $userId)
             ->whereIn('status', ['active_verified', 'active_unverified', true, '1', 1])
             ->first();
@@ -428,16 +453,46 @@ public function updatedSelectedDepartment($value)
             return;
         }
 
+        // Get user's timezone or default to Asia/Kolkata
+        $userTimezone = $user->timezone ?: 'Asia/Kolkata';
+        
+        // Validate timezone to prevent errors
+        if (!in_array($userTimezone, timezone_identifiers_list())) {
+            Log::warning("Invalid timezone for user {$userId}: {$userTimezone}, using Asia/Kolkata");
+            $userTimezone = 'Asia/Kolkata';
+        }
+        
+        // Get current date in user's timezone
+        $userNow = \Carbon\Carbon::now($userTimezone);
+        $userDate = $userNow->toDateString(); // Y-m-d format in user's timezone
+        
+        // Check if user already submitted today in their timezone
+        $existing = HappyIndex::where('user_id', $userId)
+            ->get()
+            ->filter(function ($entry) use ($userTimezone, $userDate) {
+                // Convert entry's created_at to user's timezone and compare dates
+                $entryDate = \Carbon\Carbon::parse($entry->created_at)->setTimezone($userTimezone)->toDateString();
+                return $entryDate === $userDate;
+            })
+            ->first();
+
+        if ($existing) {
+            $this->dispatch('close-leave-modal'); 
+            session()->flash('error', 'You have already submitted your response today.');
+            return;
+        }
+
         HappyIndex::create([
             'user_id'      => $userId,
             'mood_value'   => $moodValue,
             'description'  => $description,
             'status'       => 'active',
-            'created_at'   => now(),
-            'updated_at'   => now(),
+            'created_at'   => $userNow->utc(), // Convert user's timezone to UTC for storage
+            'updated_at'   => $userNow->utc(),
         ]);
 
         $user->EIScore += 250;
+        $user->lastHIDate = $userDate; // Store date in user's timezone
         $user->lastHIDate = now()->toDateString();
         $user->updated_at = now();
         $user->save();

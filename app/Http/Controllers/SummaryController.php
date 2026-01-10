@@ -102,57 +102,72 @@ class SummaryController extends Controller
     // Update user timezone from request if provided
     // $this->updateUserTimezoneIfNeeded($request);
     
-    $userId = Auth::id();
+    $user = Auth::user();
+    $userId = $user->id;
     $startDate = $request->get('start_date');
     $endDate = $request->get('end_date');
 
+    // Get user's timezone or default to Asia/Kolkata
+    $userTimezone = $user->timezone ?: 'Asia/Kolkata';
+    
+    // Validate timezone
+    if (!in_array($userTimezone, timezone_identifiers_list())) {
+        $userTimezone = 'Asia/Kolkata';
+    }
+
     // Get user's organisation working days
-    $org = Auth::user()->organisation;
+    $org = $user->organisation;
     $workingDays = $org && $org->working_days
         ? $org->working_days
         : ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
-    // Determine date range
+    // Determine date range using user's timezone
+    $userNow = Carbon::now($userTimezone);
+    
     switch ($filterType) {
         case 'this_week':
-            $start = Carbon::now()->startOfWeek();
-            $end = Carbon::now()->endOfWeek();
+            $start = $userNow->copy()->startOfWeek();
+            $end = $userNow->copy()->endOfWeek();
             break;
         case 'last_7_days':
-            $start = Carbon::now()->subDays(7);
-            $end = Carbon::now();
+            $start = $userNow->copy()->subDays(7);
+            $end = $userNow->copy();
             break;
         case 'previous_week':
-            $start = Carbon::now()->subWeek()->startOfWeek();
-            $end = Carbon::now()->subWeek()->endOfWeek();
+            $start = $userNow->copy()->subWeek()->startOfWeek();
+            $end = $userNow->copy()->subWeek()->endOfWeek();
             break;
         case 'this_month':
-            $start = Carbon::now()->startOfMonth();
-            $end = Carbon::now()->endOfMonth();
+            $start = $userNow->copy()->startOfMonth();
+            $end = $userNow->copy()->endOfMonth();
             break;
         case 'previous_month':
-            $start = Carbon::now()->subMonth()->startOfMonth();
-            $end = Carbon::now()->subMonth()->endOfMonth();
+            $start = $userNow->copy()->subMonth()->startOfMonth();
+            $end = $userNow->copy()->subMonth()->endOfMonth();
             break;
         case 'custom':
             if ($startDate && $endDate) {
-                $start = Carbon::parse($startDate);
-                $end = Carbon::parse($endDate);
+                $start = Carbon::parse($startDate)->setTimezone($userTimezone);
+                $end = Carbon::parse($endDate)->setTimezone($userTimezone);
             } else {
-                $start = Auth::user()->created_at->startOfDay();
-                $end = Carbon::now()->endOfDay();
+                $start = Carbon::parse($user->created_at)->setTimezone($userTimezone)->startOfDay();
+                $end = $userNow->copy()->endOfDay();
             }
             break;
         case 'all':
         default:
-            $start = Auth::user()->created_at->startOfDay();
-            $end = Carbon::now()->endOfDay();
+            $start = Carbon::parse($user->created_at)->setTimezone($userTimezone)->startOfDay();
+            $end = $userNow->copy()->endOfDay();
             break;
     }
 
-    // Fetch happy indexes in range
+    // Convert date range to UTC for database query (created_at is stored in UTC)
+    $startUTC = $start->utc();
+    $endUTC = $end->utc();
+
+    // Fetch happy indexes in UTC range
     $happyIndexes = HappyIndex::where('user_id', $userId)
-        ->whereBetween('created_at', [$start, $end])
+        ->whereBetween('created_at', [$startUTC, $endUTC])
         ->get();
 
     // Fetch leaves in range
@@ -172,13 +187,18 @@ class SummaryController extends Controller
         return url('images/'.$fileName);
     };
 
-    // Generate date range
-    $period = collect(Carbon::parse($start)->daysUntil(Carbon::parse($end)->addDay()))
+    // Generate date range using user's timezone
+    $period = collect($start->copy()->daysUntil($end->copy()->addDay()))
+        ->map(function ($date) use ($userTimezone) {
+            return Carbon::parse($date)->setTimezone($userTimezone);
+        })
         ->sortByDesc(fn($d) => $d->timestamp);
 
+    $userToday = Carbon::now($userTimezone);
+
     foreach ($period as $date) {
-        // Skip future dates
-        if ($date->greaterThan(Carbon::today())) continue;
+        // Skip future dates (using user's timezone)
+        if ($date->greaterThan($userToday)) continue;
 
         // Skip non-working days
         if (!in_array($date->format('D'), $workingDays)) {
@@ -205,8 +225,11 @@ class SummaryController extends Controller
             continue;
         }
 
-        // Check happy index
-        $entry = $happyIndexes->first(fn($h) => $h->created_at->isSameDay($date));
+        // Check happy index - convert entry's created_at (UTC) to user's timezone and compare dates
+        $entry = $happyIndexes->first(function($h) use ($date, $userTimezone) {
+            $entryDate = Carbon::parse($h->created_at)->setTimezone($userTimezone);
+            return $entryDate->isSameDay($date);
+        });
 
         if ($entry) {
             $image = match($entry->mood_value) {
@@ -224,9 +247,8 @@ class SummaryController extends Controller
                 'status'      => 'Present',
             ];
         } else {
-            // Only show missed sentiment notification for past days or today after 16:00
-            $now = Carbon::now('Asia/Kolkata');
-            $showMissed = !$date->isToday();
+            // Only show missed sentiment notification for past days (using user's timezone)
+            $showMissed = !$date->isSameDay($userToday);
 
             if ($showMissed) {
                 $summary[] = [
