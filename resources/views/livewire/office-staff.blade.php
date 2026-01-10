@@ -87,12 +87,13 @@
                                                 'organisation_admin' => 'Team Lead',
                                                 'director' => 'Director',
                                             ];
+                                            $displayRole = $roleMapping[$userRole] ?? ($userRole ? ucfirst($userRole) : '-');
                                         @endphp
 
                                         <span class="text-[14px] text-[#020202]">
                                             Role:
                                             <span class="text-[#EB1C24] pl-2">
-                                                {{ $roleMapping[$userRole] ?? $userRole ?? '-' }}
+                                                {{ $displayRole }}
                                             </span>
                                         </span>
 

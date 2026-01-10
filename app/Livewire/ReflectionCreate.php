@@ -17,6 +17,7 @@ class ReflectionCreate extends Component
 
     public $alertType = '';
     public $alertMessage = '';
+    public $reflectionAdded = false; // Track if reflection was successfully added
 
     public function mount()
     {
@@ -56,6 +57,7 @@ class ReflectionCreate extends Component
 
         $this->alertType = 'success';
         $this->alertMessage = 'Reflection created successfully!';
+        $this->reflectionAdded = true; // Mark that reflection was added
 
         // Reset form
         $this->reset(['topic', 'message', 'image']);
