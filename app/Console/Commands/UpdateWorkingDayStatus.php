@@ -4,19 +4,78 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Services\OneSignalService;
+use App\Models\User;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class UpdateWorkingDayStatus extends Command
 {
-    protected $signature = 'onesignal:update-working-day-status';
-    protected $description = 'Update has_working_today tag for all users (runs daily)';
+    protected $signature = 'onesignal:update-working-day-status {--time=00:00 : Time to check (00:00 or 11:10)}';
+    protected $description = 'Update has_working_today tag for users at specified time in their timezone (runs hourly)';
 
     public function handle(OneSignalService $oneSignal)
     {
-        $this->info('Updating has_working_today tag for all users...');
-        Log::info('Cron: UpdateWorkingDayStatus started');
+        $targetTime = $this->option('time') ?: '00:00';
+        $this->info("Checking for users at {$targetTime} in their timezone...");
+        Log::info('Cron: UpdateWorkingDayStatus started', ['target_time' => $targetTime]);
 
-        $stats = $oneSignal->updateAllUsersWorkingDayStatus();
+        // Get all active users
+        $users = User::whereIn('status', ['active_verified', 'active_unverified', 'pending_payment'])
+            ->with('organisation')
+            ->get();
+        
+        $usersToUpdate = $users->filter(function ($user) use ($targetTime) {
+            // Get user's timezone or default to Asia/Kolkata
+            $userTimezone = $user->timezone ?: 'Asia/Kolkata';
+            
+            // Validate timezone to prevent errors
+            if (!in_array($userTimezone, timezone_identifiers_list())) {
+                Log::warning("Invalid timezone for user {$user->id}: {$userTimezone}, using Asia/Kolkata");
+                $userTimezone = 'Asia/Kolkata';
+            }
+            
+            // Get current time in user's timezone
+            $userNow = Carbon::now($userTimezone);
+            
+            // Check if it's target time in user's timezone
+            $currentTime = $userNow->format('H:i');
+            return $currentTime === $targetTime;
+        });
+
+        if ($usersToUpdate->isEmpty()) {
+            $this->info("No users at {$targetTime} in their timezone right now.");
+            Log::info('Cron: UpdateWorkingDayStatus - No users at target time');
+            return 0;
+        }
+
+        $this->info("Found {$usersToUpdate->count()} users at {$targetTime} in their timezone. Updating tags...");
+
+        $stats = [
+            'total' => $usersToUpdate->count(),
+            'success' => 0,
+            'failed' => 0
+        ];
+
+        foreach ($usersToUpdate as $user) {
+            try {
+                // Use setUserTagsOnLogin which creates user if doesn't exist and updates all tags
+                $result = $oneSignal->setUserTagsOnLogin($user);
+
+                if ($result) {
+                    $stats['success']++;
+                    $isWorkingDay = $oneSignal->isWorkingDayToday($user);
+                    Log::info("has_working_today updated for user {$user->id} (timezone: {$user->timezone})", [
+                        'has_working_today' => $isWorkingDay,
+                    ]);
+                } else {
+                    $stats['failed']++;
+                    Log::warning("has_working_today update failed for user {$user->id}");
+                }
+            } catch (\Exception $e) {
+                $stats['failed']++;
+                Log::error("Failed to update working day status for user {$user->id}: " . $e->getMessage());
+            }
+        }
 
         $this->info("✅ Update complete:");
         $this->info("   Total: {$stats['total']}");

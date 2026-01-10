@@ -33,8 +33,9 @@ class CheckSubscription
             return $next($request);
         }
 
-        // Skip check for logout route (to allow logout even when expired)
-        if ($request->routeIs('logout') || $request->is('logout')) {
+        // Skip check for logout and account suspended routes
+        if ($request->routeIs('logout') || $request->is('logout') || 
+            $request->routeIs('account.suspended') || $request->is('account/suspended')) {
             return $next($request);
         }
 
@@ -44,6 +45,39 @@ class CheckSubscription
         // Check for organization users
         if ($user->orgId) {
             $subscriptionStatus = $this->subscriptionService->getSubscriptionStatus($user->orgId);
+            
+            // Check if subscription is suspended (highest priority - block all access)
+            if (isset($subscriptionStatus['status']) && $subscriptionStatus['status'] === 'suspended') {
+                // Allow account suspended route to prevent redirect loop
+                if ($request->routeIs('account.suspended') || $request->is('account/suspended')) {
+                    return $next($request);
+                }
+                
+                // Only allow billing/reactivation routes and logout
+                $routeName = $request->route()?->getName() ?? '';
+                $path = $request->path();
+                
+                $allowedRoutes = ['billing', 'logout', 'billing.reactivate'];
+                $allowedRoutePrefixes = ['billing.', 'basecamp.billing.'];
+                $allowedPaths = ['billing'];
+                
+                $isAllowed = in_array($routeName, $allowedRoutes) || 
+                             in_array($path, $allowedPaths) ||
+                             str_starts_with($path, 'billing') ||
+                             str_starts_with($path, 'basecamp/billing') ||
+                             collect($allowedRoutePrefixes)->contains(fn($prefix) => str_starts_with($routeName, $prefix));
+                
+                if (!$isAllowed) {
+                    Log::info('Account suspended - redirecting to suspension page', [
+                        'user_id' => $user->id,
+                        'org_id' => $user->orgId,
+                        'route' => $routeName,
+                        'path' => $path,
+                    ]);
+                    return redirect()->route('account.suspended');
+                }
+                return $next($request);
+            }
             
             // Check if subscription has expired (end_date is in the past)
             // Important: Cancelled subscriptions are still active until end date passes
@@ -108,6 +142,40 @@ class CheckSubscription
                 ->first();
             
             if ($subscription) {
+                // Check if subscription is suspended (highest priority - block all access)
+                if ($subscription->status === 'suspended') {
+                    // Allow account suspended route to prevent redirect loop
+                    if ($request->routeIs('account.suspended') || $request->is('account/suspended')) {
+                        return $next($request);
+                    }
+                    
+                    // Only allow billing/reactivation routes and logout
+                    $routeName = $request->route()?->getName() ?? '';
+                    $path = $request->path();
+                    
+                    $allowedRoutes = ['basecamp.billing', 'logout', 'billing.reactivate'];
+                    $allowedRoutePrefixes = ['basecamp.billing.', 'basecamp.checkout.', 'billing.'];
+                    $allowedPaths = ['basecamp/billing', 'billing'];
+                    
+                    $isAllowed = in_array($routeName, $allowedRoutes) || 
+                                 in_array($path, $allowedPaths) ||
+                                 str_starts_with($path, 'basecamp/billing') ||
+                                 str_starts_with($path, 'basecamp/checkout') ||
+                                 str_starts_with($path, 'billing') ||
+                                 collect($allowedRoutePrefixes)->contains(fn($prefix) => str_starts_with($routeName, $prefix));
+                    
+                    if (!$isAllowed) {
+                        Log::info('Basecamp account suspended - redirecting to suspension page', [
+                            'user_id' => $user->id,
+                            'subscription_id' => $subscription->id,
+                            'route' => $routeName,
+                            'path' => $path,
+                        ]);
+                        return redirect()->route('account.suspended');
+                    }
+                    return $next($request);
+                }
+                
                 $endDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end)->startOfDay() : null;
                 $today = Carbon::today();
                 

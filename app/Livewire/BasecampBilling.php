@@ -454,12 +454,15 @@ class BasecampBilling extends Component
                 'paid_at' => now(),
             ]);
             
-            // Activate subscription
+            // Activate subscription - Monthly billing
+            $endDate = now()->addMonth();
+            $billingDate = $endDate; // Same as end date for monthly renewal
+            
             $this->subscription->update([
                 'status' => 'active',
                 'current_period_start' => now(),
-                'current_period_end' => now()->addMonth(),
-                'next_billing_date' => now()->addMonth(),
+                'current_period_end' => $endDate,
+                'next_billing_date' => $billingDate,
             ]);
             
             // Send payment confirmation email (not activation email - that was already sent during registration)

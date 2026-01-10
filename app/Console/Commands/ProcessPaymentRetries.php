@@ -6,9 +6,15 @@ use Illuminate\Console\Command;
 use App\Models\SubscriptionRecord;
 use App\Models\PaymentRecord;
 use App\Models\Invoice;
+use App\Models\Organisation;
 use App\Services\Billing\StripeService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\PaymentFailedMail;
+use App\Mail\PaymentReminderMail;
+use App\Mail\FinalWarningMail;
+use App\Mail\AccountSuspendedMail;
 
 class ProcessPaymentRetries extends Command
 {
@@ -96,14 +102,79 @@ class ProcessPaymentRetries extends Command
 
         $this->warn("Entering grace period for subscription {$subscription->id}");
 
-        // Send grace period warning email
-        // TODO: Implement email notification
-        Log::warning("Grace period started for subscription {$subscription->id}");
+        // Send grace period warning email (Day 1)
+        $this->sendGracePeriodEmails($subscription);
 
         // Restrict new feature access (handled by middleware/authorization)
         $subscription->update([
             'status' => 'past_due', // Keep as past_due during grace period
         ]);
+    }
+
+    protected function sendGracePeriodEmails(SubscriptionRecord $subscription)
+    {
+        $lastPayment = PaymentRecord::where('subscription_id', $subscription->id)
+            ->where('status', 'failed')
+            ->latest()
+            ->first();
+
+        if (!$lastPayment) {
+            return;
+        }
+
+        $daysSinceFailure = Carbon::parse($lastPayment->created_at)->diffInDays(now());
+        $invoice = Invoice::where('subscription_id', $subscription->id)
+            ->where('status', 'unpaid')
+            ->latest()
+            ->first();
+
+        if (!$invoice) {
+            return;
+        }
+
+        $user = $this->getUserForSubscription($subscription);
+
+        if (!$user) {
+            Log::warning("No user found for subscription {$subscription->id} to send grace period email");
+            return;
+        }
+
+        try {
+            // Day 1 - Payment Failed Email
+            if ($daysSinceFailure == 0 || $daysSinceFailure == 1) {
+                Mail::to($user->email)->send(new PaymentFailedMail($invoice, $subscription, $user, 'Payment processing failed', 1));
+                Log::info("Grace period Day 1 email sent for subscription {$subscription->id}");
+            }
+            
+            // Day 3 - Payment Reminder Email
+            if ($daysSinceFailure >= 3 && $daysSinceFailure < 4) {
+                $daysRemaining = 7 - $daysSinceFailure;
+                Mail::to($user->email)->send(new PaymentReminderMail($invoice, $subscription, $user, $daysRemaining));
+                Log::info("Grace period Day 3 email sent for subscription {$subscription->id}");
+            }
+            
+            // Day 5 - Final Warning Email
+            if ($daysSinceFailure >= 5 && $daysSinceFailure < 6) {
+                $daysRemaining = 7 - $daysSinceFailure;
+                Mail::to($user->email)->send(new FinalWarningMail($invoice, $subscription, $user, $daysRemaining));
+                Log::info("Grace period Day 5 email sent for subscription {$subscription->id}");
+            }
+        } catch (\Exception $e) {
+            Log::error("Failed to send grace period email for subscription {$subscription->id}: " . $e->getMessage());
+        }
+    }
+
+    protected function getUserForSubscription(SubscriptionRecord $subscription)
+    {
+        if ($subscription->user_id) {
+            return \App\Models\User::find($subscription->user_id);
+        } elseif ($subscription->organisation_id) {
+            $org = Organisation::find($subscription->organisation_id);
+            if ($org) {
+                return \App\Models\User::where('email', $org->admin_email)->first();
+            }
+        }
+        return null;
     }
 
     protected function handleGracePeriodExpiration()
@@ -121,6 +192,9 @@ class ProcessPaymentRetries extends Command
 
             if ($lastPayment && Carbon::parse($lastPayment->created_at)->diffInDays(now()) >= 7) {
                 $this->suspendAccount($subscription);
+            } else {
+                // Send grace period emails for subscriptions still in grace period
+                $this->sendGracePeriodEmails($subscription);
             }
         }
     }
@@ -134,11 +208,30 @@ class ProcessPaymentRetries extends Command
             'suspended_at' => now(),
         ]);
 
-        $subscription->organisation->update([
-            'status' => 'suspended',
-        ]);
+        if ($subscription->organisation_id) {
+            $subscription->organisation->update([
+                'status' => 'suspended',
+            ]);
+        }
 
-        // TODO: Send suspension email
+        // Send suspension email
+        $invoice = Invoice::where('subscription_id', $subscription->id)
+            ->where('status', 'unpaid')
+            ->latest()
+            ->first();
+        
+        $user = $this->getUserForSubscription($subscription);
+        
+        if ($user) {
+            try {
+                $outstandingAmount = $invoice ? $invoice->total_amount : 0;
+                Mail::to($user->email)->send(new AccountSuspendedMail($subscription, $user, $outstandingAmount));
+                Log::info("Account suspension email sent for subscription {$subscription->id}");
+            } catch (\Exception $e) {
+                Log::error("Failed to send suspension email for subscription {$subscription->id}: " . $e->getMessage());
+            }
+        }
+        
         Log::warning("Account suspended for subscription {$subscription->id}");
     }
 
@@ -154,8 +247,24 @@ class ProcessPaymentRetries extends Command
 
             if ($daysSuspended >= 30) {
                 // Send final warning
-                if ($daysSuspended < 37) {
-                    // TODO: Send final warning email (7 days before deletion)
+                if ($daysSuspended >= 30 && $daysSuspended < 37) {
+                    // Send final warning email (7 days before deletion)
+                    $invoice = Invoice::where('subscription_id', $subscription->id)
+                        ->where('status', 'unpaid')
+                        ->latest()
+                        ->first();
+                    
+                    $user = $this->getUserForSubscription($subscription);
+                    
+                    if ($user && $invoice) {
+                        try {
+                            $daysRemaining = 37 - $daysSuspended;
+                            Mail::to($user->email)->send(new FinalWarningMail($invoice, $subscription, $user, $daysRemaining));
+                            Log::info("Final warning email (before deletion) sent for subscription {$subscription->id}");
+                        } catch (\Exception $e) {
+                            Log::error("Failed to send final warning email for subscription {$subscription->id}: " . $e->getMessage());
+                        }
+                    }
                     Log::warning("Final warning for subscription {$subscription->id} - will be deleted in " . (37 - $daysSuspended) . " days");
                 } elseif ($daysSuspended >= 37) {
                     // Delete account and data

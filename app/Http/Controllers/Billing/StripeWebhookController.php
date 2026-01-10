@@ -7,8 +7,14 @@ use App\Services\Billing\StripeService;
 use App\Models\SubscriptionRecord;
 use App\Models\PaymentRecord;
 use App\Models\Organisation;
+use App\Models\Invoice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
+use App\Mail\PaymentConfirmationMail;
+use App\Mail\PaymentFailedMail;
+use App\Mail\AccountSuspendedMail;
 
 class StripeWebhookController extends Controller
 {
@@ -90,10 +96,40 @@ class StripeWebhookController extends Controller
             $subscription = SubscriptionRecord::where('stripe_subscription_id', $invoice->subscription)->first();
 
             if ($subscription) {
-                $subscription->update([
+                // Check if this is a daily subscription by checking Stripe subscription
+                $isDailySubscription = false;
+                try {
+                    \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
+                    $stripeSubscription = \Stripe\Subscription::retrieve($invoice->subscription);
+                    if (isset($stripeSubscription->items->data[0]->price->recurring->interval) && 
+                        $stripeSubscription->items->data[0]->price->recurring->interval === 'day') {
+                        $isDailySubscription = true;
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("Failed to check subscription interval: " . $e->getMessage());
+                }
+                
+                // Update subscription dates based on billing interval
+                $updateData = [
                     'status' => 'active',
                     'last_payment_date' => now(),
-                ]);
+                ];
+                
+                if ($isDailySubscription) {
+                    // For daily subscription: expires today, renews tomorrow
+                    $updateData['current_period_start'] = \Carbon\Carbon::today()->startOfDay();
+                    $updateData['current_period_end'] = \Carbon\Carbon::today()->endOfDay(); // Expires today
+                    $updateData['next_billing_date'] = \Carbon\Carbon::today()->addDay(); // Renews tomorrow
+                } else {
+                    // For monthly subscription: use Stripe's period dates
+                    if (isset($stripeSubscription->current_period_start) && isset($stripeSubscription->current_period_end)) {
+                        $updateData['current_period_start'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_start);
+                        $updateData['current_period_end'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
+                        $updateData['next_billing_date'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
+                    }
+                }
+                
+                $subscription->update($updateData);
 
                 // Record payment
                 PaymentRecord::create([
@@ -108,12 +144,40 @@ class StripeWebhookController extends Controller
                     'paid_at' => now(),
                 ]);
 
-                // Send payment success email
-                $organisation = Organisation::find($subscription->organisation_id);
-                if ($organisation) {
-                    // TODO: Send email notification
-                    // Mail::to($organisation->admin_email)->send(new PaymentSuccessEmail($invoice));
+                // Send payment confirmation email
+                $invoiceModel = Invoice::where('subscription_id', $subscription->id)->latest()->first();
+                if ($invoiceModel) {
+                    $paymentRecord = PaymentRecord::where('subscription_id', $subscription->id)
+                        ->where('status', 'succeeded')
+                        ->latest()
+                        ->first();
+                    
+                    $user = null;
+                    if ($subscription->user_id) {
+                        $user = \App\Models\User::find($subscription->user_id);
+                    } elseif ($subscription->organisation_id) {
+                        $org = Organisation::find($subscription->organisation_id);
+                        if ($org) {
+                            $user = \App\Models\User::where('email', $org->admin_email)->first();
+                        }
+                    }
+                    
+                    if ($user) {
+                        try {
+                            Mail::to($user->email)->send(new PaymentConfirmationMail($invoiceModel, $paymentRecord, $user, (bool)$subscription->user_id));
+                            Log::info('Payment confirmation email sent', ['user_id' => $user->id, 'invoice_id' => $invoiceModel->id]);
+                        } catch (\Exception $e) {
+                            Log::error('Failed to send payment confirmation email: ' . $e->getMessage());
+                        }
+                    }
                 }
+                
+                Log::info('Subscription updated after payment', [
+                    'subscription_id' => $subscription->id,
+                    'is_daily' => $isDailySubscription,
+                    'period_end' => $updateData['current_period_end']->format('Y-m-d'),
+                    'next_billing' => $updateData['next_billing_date']->format('Y-m-d'),
+                ]);
             }
         }
     }
@@ -147,11 +211,28 @@ class StripeWebhookController extends Controller
                     'failure_reason' => $invoice->last_finalization_error->message ?? 'Unknown',
                 ]);
 
-                // Send payment failed email
-                $organisation = Organisation::find($subscription->organisation_id);
-                if ($organisation) {
-                    // TODO: Send email notification
-                    // Mail::to($organisation->admin_email)->send(new PaymentFailedEmail($invoice));
+                // Send payment failed email (Day 1)
+                $invoiceModel = Invoice::where('subscription_id', $subscription->id)->latest()->first();
+                if ($invoiceModel) {
+                    $user = null;
+                    if ($subscription->user_id) {
+                        $user = \App\Models\User::find($subscription->user_id);
+                    } elseif ($subscription->organisation_id) {
+                        $org = Organisation::find($subscription->organisation_id);
+                        if ($org) {
+                            $user = \App\Models\User::where('email', $org->admin_email)->first();
+                        }
+                    }
+                    
+                    if ($user) {
+                        try {
+                            $failureReason = $invoice->last_finalization_error->message ?? 'Payment processing failed';
+                            Mail::to($user->email)->send(new PaymentFailedMail($invoiceModel, $subscription, $user, $failureReason, 1));
+                            Log::info('Payment failed email (Day 1) sent', ['user_id' => $user->id, 'invoice_id' => $invoiceModel->id]);
+                        } catch (\Exception $e) {
+                            Log::error('Failed to send payment failed email: ' . $e->getMessage());
+                        }
+                    }
                 }
 
                 // Check if we should suspend the account
@@ -172,12 +253,37 @@ class StripeWebhookController extends Controller
         $subscription = SubscriptionRecord::where('stripe_subscription_id', $stripeSubscription->id)->first();
 
         if ($subscription) {
-            $subscription->update([
+            // Check if this is a daily subscription
+            $isDailySubscription = false;
+            if (isset($stripeSubscription->items->data[0]->price->recurring->interval) && 
+                $stripeSubscription->items->data[0]->price->recurring->interval === 'day') {
+                $isDailySubscription = true;
+            }
+            
+            $updateData = [
                 'status' => $stripeSubscription->status,
                 'user_count' => $stripeSubscription->items->data[0]->quantity ?? $subscription->user_count,
-                'current_period_start' => \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_start),
-                'current_period_end' => \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end),
-                'next_billing_date' => \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end),
+            ];
+            
+            if ($isDailySubscription) {
+                // For daily subscription: override Stripe's dates (Stripe sets period_end to tomorrow, we want today)
+                $updateData['current_period_start'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_start)->startOfDay();
+                $updateData['current_period_end'] = \Carbon\Carbon::today()->endOfDay(); // Expires today
+                $updateData['next_billing_date'] = \Carbon\Carbon::today()->addDay(); // Renews tomorrow
+            } else {
+                // For monthly subscription: use Stripe's dates
+                $updateData['current_period_start'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_start);
+                $updateData['current_period_end'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
+                $updateData['next_billing_date'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
+            }
+            
+            $subscription->update($updateData);
+            
+            Log::info('Subscription dates updated via webhook', [
+                'subscription_id' => $subscription->id,
+                'is_daily' => $isDailySubscription,
+                'period_end' => $updateData['current_period_end']->format('Y-m-d'),
+                'next_billing' => $updateData['next_billing_date']->format('Y-m-d'),
             ]);
         }
     }
@@ -302,35 +408,6 @@ class StripeWebhookController extends Controller
                 return;
             }
             
-            \DB::beginTransaction();
-            
-            // Create payment record
-            $payment = \App\Models\Payment::create([
-                'invoice_id' => $invoice->id,
-                'organisation_id' => $invoice->organisation_id,
-                'amount' => $session->amount_total / 100,
-                'payment_method' => 'stripe',
-                'status' => 'completed',
-                'transaction_id' => $session->payment_intent,
-                'stripe_payment_intent_id' => $session->payment_intent,
-                'stripe_checkout_session_id' => $session->id,
-                'paid_at' => now(),
-                'notes' => "Payment completed via Stripe Checkout",
-            ]);
-            
-            // Create payment record entry
-            PaymentRecord::create([
-                'organisation_id' => $invoice->organisation_id,
-                'subscription_id' => $invoice->subscription_id,
-                'stripe_payment_intent_id' => $session->payment_intent,
-                'stripe_subscription_id' => $stripeSubscriptionId,
-                'amount' => $session->amount_total / 100,
-                'currency' => 'gbp',
-                'status' => 'succeeded',
-                'type' => $session->mode === 'subscription' ? 'subscription' : 'one_time_payment',
-                'paid_at' => now(),
-            ]);
-            
             // If Checkout Session mode is 'subscription', retrieve and save the subscription ID
             $stripeSubscriptionId = null;
             if ($session->mode === 'subscription' && $session->subscription) {
@@ -369,6 +446,35 @@ class StripeWebhookController extends Controller
                 }
             }
             
+            DB::beginTransaction();
+            
+            // Create payment record
+            $payment = \App\Models\Payment::create([
+                'invoice_id' => $invoice->id,
+                'organisation_id' => $invoice->organisation_id,
+                'amount' => $session->amount_total / 100,
+                'payment_method' => 'stripe',
+                'status' => 'completed',
+                'transaction_id' => $session->payment_intent,
+                'stripe_payment_intent_id' => $session->payment_intent,
+                'stripe_checkout_session_id' => $session->id,
+                'paid_at' => now(),
+                'notes' => "Payment completed via Stripe Checkout",
+            ]);
+            
+            // Create payment record entry
+            PaymentRecord::create([
+                'organisation_id' => $invoice->organisation_id,
+                'subscription_id' => $invoice->subscription_id,
+                'stripe_payment_intent_id' => $session->payment_intent,
+                'stripe_subscription_id' => $stripeSubscriptionId,
+                'amount' => $session->amount_total / 100,
+                'currency' => 'gbp',
+                'status' => 'succeeded',
+                'type' => $session->mode === 'subscription' ? 'subscription' : 'one_time_payment',
+                'paid_at' => now(),
+            ]);
+            
             // Update invoice status
             $invoice->status = 'paid';
             $invoice->paid_date = now();
@@ -395,12 +501,12 @@ class StripeWebhookController extends Controller
                 Log::warning("Invoice {$invoice->id} has no associated subscription in webhook handler");
             }
             
-            \DB::commit();
+            DB::commit();
             
             Log::info("Stripe Checkout payment processed via webhook for invoice {$invoice->id}: {$session->payment_intent}");
             
         } catch (\Exception $e) {
-            \DB::rollBack();
+            DB::rollBack();
             Log::error('Failed to process checkout session completed: ' . $e->getMessage(), [
                 'session_id' => $session->id,
                 'invoice_id' => $invoiceId,
@@ -428,7 +534,31 @@ class StripeWebhookController extends Controller
                 'suspended_at' => now(),
             ]);
 
-            // TODO: Send suspension notification
+                        // Send suspension email
+                        $invoice = Invoice::where('subscription_id', $subscription->id)
+                            ->where('status', 'unpaid')
+                            ->latest()
+                            ->first();
+                        
+                        $user = null;
+                        if ($subscription->user_id) {
+                            $user = \App\Models\User::find($subscription->user_id);
+                        } elseif ($subscription->organisation_id) {
+                            $org = Organisation::find($subscription->organisation_id);
+                            if ($org) {
+                                $user = \App\Models\User::where('email', $org->admin_email)->first();
+                            }
+                        }
+                        
+                        if ($user) {
+                            try {
+                                $outstandingAmount = $invoice ? $invoice->total_amount : 0;
+                                Mail::to($user->email)->send(new AccountSuspendedMail($subscription, $user, $outstandingAmount));
+                                Log::info('Account suspension email sent via webhook', ['subscription_id' => $subscription->id]);
+                            } catch (\Exception $e) {
+                                Log::error('Failed to send suspension email via webhook: ' . $e->getMessage());
+                            }
+                        }
             // Mail::to($organisation->admin_email)->send(new AccountSuspendedEmail());
         }
     }

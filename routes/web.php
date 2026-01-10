@@ -117,6 +117,11 @@ Route::get('/test-stripe-redirect', function() {
 
 Route::get('/basecamp/billing', \App\Livewire\BasecampBilling::class)->name('basecamp.billing');
 
+// Account Suspended Page - Accessible to authenticated users with suspended accounts
+Route::middleware(['auth:sanctum', config('jetstream.auth_session')])->get('/account/suspended', function () {
+    return view('account.suspended');
+})->name('account.suspended');
+
 // Basecamp payment routes with rate limiting (10 requests per minute)
 Route::middleware(['throttle:10,1'])->group(function () {
     Route::post('/basecamp/checkout/create', [\App\Http\Controllers\Billing\BasecampStripeCheckoutController::class, 'createCheckoutSession'])

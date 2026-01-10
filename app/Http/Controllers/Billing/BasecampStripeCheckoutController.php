@@ -66,12 +66,12 @@ class BasecampStripeCheckoutController extends Controller
                     ]);
                     $invoiceId = $existingInvoice->id;
                 } else {
-                    // Use basecamp monthly price of £10 (not from amount parameter)
-                    $monthlyPrice = 10.00; // £10 per month for basecamp users
+                    // Monthly price: £10 + 20% VAT = £12
+                    $monthlyPrice = 10.00; // £10 per month base price
                     // Calculate VAT (20% of subtotal)
-                    $subtotal = $monthlyPrice; // £10.00
-                    $taxAmount = $subtotal * 0.20; // 20% VAT = £2.00
-                    $totalAmount = $subtotal + $taxAmount; // £12.00
+                    $subtotal = $monthlyPrice; // Monthly base price
+                    $taxAmount = round($subtotal * 0.20, 2); // 20% VAT
+                    $totalAmount = round($subtotal + $taxAmount, 2); // Monthly total with VAT (£12.00)
                     
                     try {
                         // Create new invoice
@@ -82,7 +82,7 @@ class BasecampStripeCheckoutController extends Controller
                             'invoice_number' => Invoice::generateInvoiceNumber(),
                             'tier' => 'basecamp',
                             'user_count' => 1,
-                            'price_per_user' => $monthlyPrice, // Base price without VAT
+                            'price_per_user' => $monthlyPrice, // Monthly base price without VAT
                             'subtotal' => $subtotal,
                             'tax_amount' => $taxAmount,
                             'total_amount' => $totalAmount,
@@ -177,7 +177,10 @@ class BasecampStripeCheckoutController extends Controller
             // Set Stripe key
             Stripe::setApiKey(config('services.stripe.secret'));
             
-            // Create checkout session
+            // Monthly price: £12.00 = 1200 pence
+            $monthlyPriceInCents = round($invoice->total_amount * 100); // £12.00 = 1200 pence
+            
+            // Create checkout session with MONTHLY billing interval
             $session = Session::create([
                 'payment_method_types' => ['card'],
                 'customer_email' => $user->email,
@@ -188,9 +191,9 @@ class BasecampStripeCheckoutController extends Controller
                             'name' => 'Basecamp Subscription',
                             'description' => 'Monthly subscription for Tribe365 Basecamp',
                         ],
-                        'unit_amount' => $invoice->total_amount * 100, // Convert to cents
+                        'unit_amount' => $monthlyPriceInCents, // Monthly price in cents
                         'recurring' => [
-                            'interval' => 'month',
+                            'interval' => 'month', // Monthly billing
                         ],
                     ],
                     'quantity' => 1,
@@ -202,6 +205,7 @@ class BasecampStripeCheckoutController extends Controller
                     'invoice_id' => $invoice->id,
                     'user_id' => $user->id,
                     'tier' => 'basecamp',
+                    'billing_interval' => 'monthly',
                 ],
             ]);
             
@@ -401,22 +405,17 @@ class BasecampStripeCheckoutController extends Controller
                 ->first();
                 
             if ($subscription) {
-                // Determine start date: if subscription is expired, start from today, otherwise extend from end date
+                // Initialize variables
                 $existingEndDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end)->startOfDay() : null;
                 $existingStartDate = $subscription->current_period_start ? Carbon::parse($subscription->current_period_start)->startOfDay() : null;
-                
-                // Check if subscription is expired
                 $isExpired = !$existingEndDate || $existingEndDate->isPast();
                 
-                // If expired or end date is same as start date (broken record), start from today
-                // Otherwise extend from end date
+                // Monthly subscription logic
                 if ($existingEndDate && $existingEndDate->isFuture() && $existingEndDate->greaterThan($existingStartDate ?? Carbon::today())) {
                     $startDate = $existingEndDate;
                 } else {
                     $startDate = Carbon::today()->startOfDay();
                 }
-                
-                // Ensure end date is always 1 month after start date
                 $endDate = $startDate->copy()->addMonth();
                 
                 Log::info('Calculating subscription dates for basecamp', [
@@ -429,11 +428,14 @@ class BasecampStripeCheckoutController extends Controller
                 ]);
                 
                 // Update subscription with Stripe subscription ID and details
+                // For monthly subscription: next billing is same as end date
+                $nextBillingDate = $endDate;
+                
                 $updateData = [
                     'status' => 'active',
                     'current_period_start' => $startDate,
                     'current_period_end' => $endDate,
-                    'next_billing_date' => $endDate,
+                    'next_billing_date' => $nextBillingDate, // Tomorrow for daily, same as end for monthly
                     'last_payment_date' => Carbon::today(),
                     'canceled_at' => null, // Remove cancellation if any
                 ];
@@ -450,7 +452,6 @@ class BasecampStripeCheckoutController extends Controller
                         if (isset($stripeSubscription->current_period_start) && $stripeSubscription->current_period_start !== null) {
                             $stripeStart = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_start)->startOfDay();
                             $updateData['current_period_start'] = $stripeStart;
-                            // Always extend 1 month from start date
                             $updateData['current_period_end'] = $stripeStart->copy()->addMonth();
                             $updateData['next_billing_date'] = $stripeStart->copy()->addMonth();
                         } else {
@@ -459,24 +460,14 @@ class BasecampStripeCheckoutController extends Controller
                             $updateData['current_period_end'] = Carbon::today()->startOfDay()->addMonth();
                             $updateData['next_billing_date'] = Carbon::today()->startOfDay()->addMonth();
                         }
+                        
+                        // Use Stripe's period_end if available and valid
                         if (isset($stripeSubscription->current_period_end) && $stripeSubscription->current_period_end !== null) {
                             $stripeEnd = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
                             // Only use Stripe end date if it's in future and more than start date
                             if ($stripeEnd->isFuture() && $stripeEnd->greaterThan($updateData['current_period_start'])) {
                                 $updateData['current_period_end'] = $stripeEnd;
                                 $updateData['next_billing_date'] = $stripeEnd;
-                            } else {
-                                // Ensure end date is always set - use start date + 1 month
-                                if (isset($updateData['current_period_start'])) {
-                                    $updateData['current_period_end'] = $updateData['current_period_start']->copy()->addMonth();
-                                    $updateData['next_billing_date'] = $updateData['current_period_start']->copy()->addMonth();
-                                }
-                            }
-                        } else {
-                            // If Stripe doesn't provide end date, ensure we set it from start date
-                            if (isset($updateData['current_period_start'])) {
-                                $updateData['current_period_end'] = $updateData['current_period_start']->copy()->addMonth();
-                                $updateData['next_billing_date'] = $updateData['current_period_start']->copy()->addMonth();
                             }
                         }
                         
@@ -491,12 +482,12 @@ class BasecampStripeCheckoutController extends Controller
                     }
                 }
                 
-                // Activate subscription - update within transaction
-                // Recalculate dates to ensure they're correct (in case updateData was modified by Stripe logic above)
+                // Activate subscription - use calculated dates
                 $finalStartDate = $updateData['current_period_start'] ?? $startDate;
                 $finalEndDate = $updateData['current_period_end'] ?? $endDate;
+                $finalBillingDate = $updateData['next_billing_date'] ?? $nextBillingDate;
                 
-                // Ensure end date is always 1 month after start date
+                // Monthly subscription logic
                 if ($finalStartDate && $finalEndDate) {
                     $finalStartDateCarbon = Carbon::parse($finalStartDate)->startOfDay();
                     $finalEndDateCarbon = $finalStartDateCarbon->copy()->addMonth();
@@ -508,16 +499,18 @@ class BasecampStripeCheckoutController extends Controller
                             $finalEndDateCarbon = $stripeEnd;
                         }
                     }
+                    $finalBillingDateCarbon = $finalEndDateCarbon;
                 } else {
                     $finalStartDateCarbon = Carbon::today()->startOfDay();
                     $finalEndDateCarbon = $finalStartDateCarbon->copy()->addMonth();
+                    $finalBillingDateCarbon = $finalEndDateCarbon;
                 }
                 
                 // Update subscription with explicit date setting
                 $subscription->status = 'active';
                 $subscription->current_period_start = $finalStartDateCarbon;
                 $subscription->current_period_end = $finalEndDateCarbon;
-                $subscription->next_billing_date = $finalEndDateCarbon;
+                $subscription->next_billing_date = $finalBillingDateCarbon; // Use calculated billing date (same as end date for monthly)
                 $subscription->last_payment_date = Carbon::today();
                 $subscription->canceled_at = null;
                 
@@ -558,21 +551,53 @@ class BasecampStripeCheckoutController extends Controller
                 ]);
             } else {
                 // Create new subscription if it doesn't exist
+                // Check if this is a daily subscription from Stripe
+                $isDailyNew = false;
+                if ($stripeSubscriptionId) {
+                    try {
+                        $stripeSubscription = \Stripe\Subscription::retrieve($stripeSubscriptionId);
+                        if (isset($stripeSubscription->items->data[0]->price->recurring->interval) && 
+                            $stripeSubscription->items->data[0]->price->recurring->interval === 'day') {
+                            $isDailyNew = true;
+                        }
+                    } catch (\Exception $e) {
+                        // Assume daily for testing
+                        $isDailyNew = true;
+                    }
+                }
+                
+                // For daily: today to today (expires today), for monthly: today to next month
+                $newStartDate = Carbon::today();
+                $newEndDate = $isDailyNew ? Carbon::today()->endOfDay() : Carbon::today()->addMonth();
+                $newBillingDate = $isDailyNew ? Carbon::today()->addDay() : $newEndDate; // Tomorrow for daily
+                
                 $subscription = SubscriptionRecord::create([
                     'user_id' => $userId,
                     'organisation_id' => null,
                     'tier' => 'basecamp',
                     'user_count' => 1,
                     'status' => 'active',
-                    'current_period_start' => Carbon::today(),
-                    'current_period_end' => Carbon::today()->addMonth(),
-                    'next_billing_date' => Carbon::today()->addMonth(),
+                    'current_period_start' => $newStartDate,
+                    'current_period_end' => $newEndDate,
+                    'next_billing_date' => $newBillingDate,
                     'last_payment_date' => Carbon::today(),
                 ]);
                 
+                if ($stripeSubscriptionId) {
+                    $subscription->stripe_subscription_id = $stripeSubscriptionId;
+                    try {
+                        $stripeSubscription = \Stripe\Subscription::retrieve($stripeSubscriptionId);
+                        $subscription->stripe_customer_id = $stripeSubscription->customer ?? null;
+                        $subscription->save();
+                    } catch (\Exception $e) {
+                        Log::warning("Failed to set Stripe customer ID: " . $e->getMessage());
+                    }
+                }
+                
                 Log::info('Created new basecamp subscription', [
                     'subscription_id' => $subscription->id,
-                    'end_date' => $subscription->current_period_end->format('Y-m-d')
+                    'end_date' => $subscription->current_period_end->format('Y-m-d'),
+                    'is_daily' => $isDailyNew
                 ]);
             }
             

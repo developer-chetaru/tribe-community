@@ -27,6 +27,40 @@ class CheckBasecampPayment
 
         // Only check for basecamp users
         if ($user && $user->hasRole('basecamp') && !$user->hasRole('super_admin')) {
+            // Check if subscription is suspended (highest priority)
+            $suspendedSubscription = SubscriptionRecord::where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->where('status', 'suspended')
+                ->orderBy('id', 'desc')
+                ->first();
+            
+            if ($suspendedSubscription) {
+                // Allow account suspended route to prevent redirect loop
+                if ($request->routeIs('account.suspended') || $request->is('account/suspended')) {
+                    return $next($request);
+                }
+                
+                // Only allow billing/reactivation routes and logout
+                $routeName = $request->route()?->getName() ?? '';
+                $path = $request->path();
+                
+                $allowedRoutes = ['basecamp.billing', 'logout', 'billing.reactivate'];
+                $allowedRoutePrefixes = ['basecamp.billing.', 'basecamp.checkout.', 'billing.'];
+                $allowedPaths = ['basecamp/billing', 'billing'];
+                
+                $isAllowed = in_array($routeName, $allowedRoutes) || 
+                             in_array($path, $allowedPaths) ||
+                             str_starts_with($path, 'basecamp/billing') ||
+                             str_starts_with($path, 'basecamp/checkout') ||
+                             str_starts_with($path, 'billing') ||
+                             collect($allowedRoutePrefixes)->contains(fn($prefix) => str_starts_with($routeName, $prefix));
+                
+                if (!$isAllowed) {
+                    return redirect()->route('account.suspended');
+                }
+                return $next($request);
+            }
+            
             // Check if user has active subscription or paid invoice
             $hasActiveSubscription = SubscriptionRecord::where('user_id', $user->id)
                 ->where('tier', 'basecamp')

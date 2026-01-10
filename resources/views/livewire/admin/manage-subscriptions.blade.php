@@ -265,6 +265,7 @@
                     <select wire:model="status" class="mt-1 block w-full border-gray-300 rounded-md">
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
+                        <option value="suspended">Suspended</option>
                         <option value="canceled">Canceled</option>
                     </select>
                 </div>
@@ -354,6 +355,7 @@
                     <select wire:model="status" class="mt-1 block w-full border-gray-300 rounded-md">
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
+                        <option value="suspended">Suspended</option>
                         <option value="canceled">Canceled</option>
                     </select>
                 </div>

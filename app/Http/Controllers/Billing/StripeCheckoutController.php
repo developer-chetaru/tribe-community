@@ -14,7 +14,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
+use App\Mail\AccountReactivatedMail;
 
 /**
  * @OA\Tag(
@@ -1040,6 +1042,14 @@ class StripeCheckoutController extends Controller
             
             // Refresh subscription from database to get updated values
             $subscription->refresh();
+            
+            // Send reactivation email
+            try {
+                Mail::to($user->email)->send(new AccountReactivatedMail($subscription, $user));
+                Log::info('Account reactivation email sent', ['user_id' => $user->id, 'subscription_id' => $subscription->id]);
+            } catch (\Exception $e) {
+                Log::error('Failed to send reactivation email: ' . $e->getMessage());
+            }
             
             // Clear session flags to ensure UI updates correctly (only for web requests)
             if (!$request->expectsJson() && !str_starts_with($request->path(), 'api/')) {
