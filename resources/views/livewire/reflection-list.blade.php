@@ -293,8 +293,18 @@
                                                         @foreach($msg['images'] as $fileUrl)
                                                             <div>
                                                                 @if(preg_match('/\.(jpg|jpeg|png|gif|webp)$/i', $fileUrl))
+                                                                    {{-- Image files --}}
                                                                     <img src="{{ $fileUrl }}" class="max-w-full sm:max-w-[250px] max-h-[200px] sm:max-h-[250px] rounded-lg object-cover border border-gray-200 shadow-sm cursor-pointer hover:opacity-90 transition" onclick="window.open('{{ $fileUrl }}', '_blank')">
+                                                                @elseif(preg_match('/\.(mp4|webm|ogg|mov|avi|wmv|flv|mkv|m4v|3gp)$/i', $fileUrl))
+                                                                    {{-- Video files --}}
+                                                                    <video controls class="max-w-full sm:max-w-[400px] max-h-[300px] rounded-lg border border-gray-200 shadow-sm" preload="metadata">
+                                                                        <source src="{{ $fileUrl }}" type="video/mp4">
+                                                                        <source src="{{ $fileUrl }}" type="video/webm">
+                                                                        <source src="{{ $fileUrl }}" type="video/ogg">
+                                                                        Your browser does not support the video tag.
+                                                                    </video>
                                                                 @else
+                                                                    {{-- Other files (PDF, DOC, etc.) --}}
                                                                     <a href="{{ $fileUrl }}" target="_blank" class="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-xs sm:text-sm font-medium break-all">
                                                                         <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
@@ -309,8 +319,18 @@
                                                     {{-- Backward compatibility: single file --}}
                                                     <div class="mt-2 sm:mt-3">
                                                         @if(preg_match('/\.(jpg|jpeg|png|gif|webp)$/i', $msg['image']))
+                                                            {{-- Image files --}}
                                                             <img src="{{ $msg['image'] }}" class="max-w-full sm:max-w-[250px] max-h-[200px] sm:max-h-[250px] rounded-lg object-cover border border-gray-200 shadow-sm cursor-pointer hover:opacity-90 transition" onclick="window.open('{{ $msg['image'] }}', '_blank')">
+                                                        @elseif(preg_match('/\.(mp4|webm|ogg|mov|avi|wmv|flv|mkv|m4v|3gp)$/i', $msg['image']))
+                                                            {{-- Video files --}}
+                                                            <video controls class="max-w-full sm:max-w-[400px] max-h-[300px] rounded-lg border border-gray-200 shadow-sm" preload="metadata">
+                                                                <source src="{{ $msg['image'] }}" type="video/mp4">
+                                                                <source src="{{ $msg['image'] }}" type="video/webm">
+                                                                <source src="{{ $msg['image'] }}" type="video/ogg">
+                                                                Your browser does not support the video tag.
+                                                            </video>
                                                         @else
+                                                            {{-- Other files --}}
                                                             <a href="{{ $msg['image'] }}" target="_blank" class="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-xs sm:text-sm font-medium break-all">
                                                                 <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
@@ -390,7 +410,7 @@
                                 </div>
                             @endif
                             
-                            <form wire:submit.prevent="sendChatMessage" class="flex items-end gap-2 sm:gap-3">
+                            <form wire:submit.prevent="sendChatMessage" class="flex items-end gap-2 sm:gap-3" x-data="{ filePreviews: {} }">
                                 <div class="flex-1 relative min-w-0">
                                     <textarea 
                                         wire:model.defer="newChatMessage" 
@@ -405,15 +425,18 @@
                                         id="chatFileInput" 
                                         wire:model="newChatImages" 
                                         class="hidden" 
-                                        accept="image/*,.pdf,.doc,.docx" 
+                                        accept="image/*,video/*,.pdf,.doc,.docx" 
                                         multiple
-                                        x-on:change="
-                                            const files = $event.target.files;
-                                            if (files.length > {{ $maxFiles }}) {
-                                                alert('You can attach maximum {{ $maxFiles }} files at once.');
-                                                $event.target.value = '';
-                                                return false;
-                                            }
+                                        x-on:change="handleFileSelection($event, {{ $maxFiles }})"
+                                        x-on:livewire-upload-finish="
+                                            $wire.$refresh();
+                                            // Update previews after upload completes
+                                            setTimeout(() => {
+                                                const form = $el.closest('form');
+                                                if (form) {
+                                                    form.dispatchEvent(new CustomEvent('livewire-upload-finish'));
+                                                }
+                                            }, 100);
                                         "
                                     >
 
@@ -453,29 +476,158 @@
                                 </button>
                             </form>
                             
-                            @if(!empty($newChatImages) && is_array($newChatImages) && count($newChatImages) > 0)
-                                <div class="mt-2 space-y-1">
-                                    <div class="text-[10px] sm:text-xs text-gray-500 mb-1">
-                                        {{ count(array_filter($newChatImages)) }} file(s) attached (max {{ $maxFiles }})
+                            @php
+                                $hasFiles = !empty($newChatImages) && is_array($newChatImages);
+                                $fileCount = $hasFiles ? count(array_filter($newChatImages, function($f) { return $f !== null && $f !== ''; })) : 0;
+                            @endphp
+                            @if($hasFiles && $fileCount > 0)
+                                <div class="mt-3 space-y-2">
+                                    <div class="text-[10px] sm:text-xs text-gray-500 mb-2">
+                                        {{ $fileCount }} file(s) attached (max {{ $maxFiles }})
                                     </div>
-                                    <div class="flex flex-wrap gap-2">
+                                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                                         @foreach($newChatImages as $index => $file)
                                             @if($file)
-                                                <div class="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded px-2 py-1 text-[10px] sm:text-xs text-gray-700">
-                                                    <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-                                                    </svg>
-                                                    <span class="truncate max-w-[120px] sm:max-w-[200px]">
-                                                        @if(method_exists($file, 'getClientOriginalName'))
-                                                            {{ $file->getClientOriginalName() }}
-                                                        @else
-                                                            File {{ $index + 1 }}
-                                                        @endif
-                                                    </span>
+                                                @php
+                                                    $fileName = method_exists($file, 'getClientOriginalName') ? $file->getClientOriginalName() : 'File ' . ($index + 1);
+                                                    $isImage = false;
+                                                    $isVideo = false;
+                                                    
+                                                    if (method_exists($file, 'getClientOriginalName')) {
+                                                        $ext = strtolower(pathinfo($file->getClientOriginalName(), PATHINFO_EXTENSION));
+                                                        $isImage = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']);
+                                                        $isVideo = in_array($ext, ['mp4', 'webm', 'ogg', 'mov', 'avi', 'wmv', 'flv', 'mkv', 'm4v', '3gp']);
+                                                    }
+                                                    
+                                                    $previewUrl = null;
+                                                    $serverPreviewUrl = null;
+                                                    try {
+                                                        // Try to get server-side preview URL after upload
+                                                        // This will be available after Livewire uploads the file
+                                                        if (method_exists($file, 'temporaryUrl')) {
+                                                            try {
+                                                                $serverPreviewUrl = $file->temporaryUrl();
+                                                            } catch (\Exception $e) {
+                                                                // File might still be uploading
+                                                                $serverPreviewUrl = null;
+                                                            }
+                                                        } elseif (method_exists($file, 'getTemporaryUrl')) {
+                                                            try {
+                                                                $serverPreviewUrl = $file->getTemporaryUrl();
+                                                            } catch (\Exception $e) {
+                                                                $serverPreviewUrl = null;
+                                                            }
+                                                        }
+                                                        $previewUrl = $serverPreviewUrl;
+                                                    } catch (\Exception $e) {
+                                                        // Preview URL not available yet - file might still be uploading
+                                                        $previewUrl = null;
+                                                        $serverPreviewUrl = null;
+                                                    }
+                                                @endphp
+                                                
+                                                <div class="relative group bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm" 
+                                                     x-data="{ 
+                                                        index: {{ $index }},
+                                                        previewUrl: null,
+                                                        serverPreviewUrl: '{{ $serverPreviewUrl ?? '' }}'
+                                                     }"
+                                                     x-init="
+                                                        const form = $el.closest('form');
+                                                        const updatePreview = () => {
+                                                            // First check client-side preview (immediate)
+                                                            if (form && form._x_dataStack && form._x_dataStack[0]) {
+                                                                const filePreviews = form._x_dataStack[0].filePreviews;
+                                                                if (filePreviews && filePreviews[index]) {
+                                                                    previewUrl = filePreviews[index];
+                                                                    return true;
+                                                                }
+                                                            }
+                                                            // Then check server-side preview (after upload)
+                                                            if (serverPreviewUrl) {
+                                                                previewUrl = serverPreviewUrl;
+                                                                return true;
+                                                            }
+                                                            return false;
+                                                        };
+                                                        updatePreview();
+                                                        // Watch for changes every 100ms for faster preview
+                                                        let checkCount = 0;
+                                                        const maxChecks = 50; // Stop after 5 seconds (50 * 100ms)
+                                                        const interval = setInterval(() => {
+                                                            checkCount++;
+                                                            if (updatePreview() || checkCount >= maxChecks) {
+                                                                clearInterval(interval);
+                                                            }
+                                                        }, 100);
+                                                        // Listen for upload finish to update server preview
+                                                        $el.closest('form').addEventListener('livewire-upload-finish', () => {
+                                                            // Refresh to get server preview URL
+                                                            setTimeout(() => {
+                                                                if (serverPreviewUrl) {
+                                                                    previewUrl = serverPreviewUrl;
+                                                                }
+                                                            }, 500);
+                                                        });
+                                                        // Cleanup on component destroy
+                                                        $el.addEventListener('alpine:destroy', () => {
+                                                            clearInterval(interval);
+                                                        });
+                                                     ">
+                                                    @if($isImage)
+                                                        {{-- Image Preview - show image if available, otherwise just filename --}}
+                                                        <div x-show="previewUrl" style="display: none;" class="bg-white">
+                                                            <img 
+                                                                x-bind:src="previewUrl"
+                                                                alt="{{ $fileName }}"
+                                                                class="w-full h-24 sm:h-32 object-cover bg-white"
+                                                                x-on:error="previewUrl = null"
+                                                            >
+                                                        </div>
+                                                        {{-- Show only filename if preview not available --}}
+                                                        <div class="w-full h-24 sm:h-32 flex items-center justify-center bg-white px-2" x-show="!previewUrl">
+                                                            <span class="text-[10px] sm:text-xs text-gray-600 text-center break-words">{{ $fileName }}</span>
+                                                        </div>
+                                                    @elseif($isVideo)
+                                                        {{-- Video Preview - show video if available, otherwise just filename --}}
+                                                        <div class="relative w-full h-24 sm:h-32 bg-black" x-show="previewUrl" style="display: none;">
+                                                            <video 
+                                                                x-bind:src="previewUrl"
+                                                                class="w-full h-full object-cover bg-black"
+                                                                preload="metadata"
+                                                                muted
+                                                                playsinline
+                                                            >
+                                                                <source x-bind:src="previewUrl" type="video/mp4">
+                                                                <source x-bind:src="previewUrl" type="video/webm">
+                                                            </video>
+                                                            <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 pointer-events-none">
+                                                                <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                                                                    <path d="M8 5v14l11-7z"/>
+                                                                </svg>
+                                                            </div>
+                                                        </div>
+                                                        {{-- Show only filename if preview not available --}}
+                                                        <div class="w-full h-24 sm:h-32 flex items-center justify-center bg-white px-2" x-show="!previewUrl">
+                                                            <span class="text-[10px] sm:text-xs text-gray-600 text-center break-words">{{ $fileName }}</span>
+                                                        </div>
+                                                    @else
+                                                        {{-- Non-image/video files - show only filename --}}
+                                                        <div class="w-full h-24 sm:h-32 flex items-center justify-center bg-white px-2">
+                                                            <span class="text-[10px] sm:text-xs text-gray-600 text-center break-words">{{ $fileName }}</span>
+                                                        </div>
+                                                    @endif
+                                                    
+                                                    {{-- File Name Overlay - only show if preview is available --}}
+                                                    <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-[10px] sm:text-xs px-2 py-1 truncate" x-show="previewUrl" style="display: none;">
+                                                        {{ $fileName }}
+                                                    </div>
+                                                    
+                                                    {{-- Remove Button --}}
                                                     <button 
                                                         type="button"
                                                         wire:click="removeFile({{ $index }})"
-                                                        class="text-red-500 hover:text-red-700 transition-colors ml-1"
+                                                        class="absolute top-1 right-1 p-1 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
                                                         title="Remove file"
                                                     >
                                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -543,6 +695,72 @@
     <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
+        // Handle file selection and validation
+        function handleFileSelection(event, maxFiles) {
+            const files = event.target.files;
+            if (files.length > maxFiles) {
+                alert('You can attach maximum ' + maxFiles + ' files at once.');
+                event.target.value = '';
+                return false;
+            }
+            // Check file sizes (25MB = 25 * 1024 * 1024 bytes)
+            const maxSize = 25 * 1024 * 1024; // 25MB in bytes
+            for (let i = 0; i < files.length; i++) {
+                if (files[i].size > maxSize) {
+                    alert('File "' + files[i].name + '" is too large (' + (files[i].size / (1024 * 1024)).toFixed(2) + 'MB). Maximum file size is 25MB.');
+                    event.target.value = '';
+                    return false;
+                }
+            }
+            // Create client-side preview URLs for immediate display
+            const form = event.target.closest('form');
+            if (form) {
+                // Access Alpine data directly
+                let alpineData = null;
+                if (form._x_dataStack && form._x_dataStack[0]) {
+                    alpineData = form._x_dataStack[0];
+                } else if (window.Alpine) {
+                    alpineData = Alpine.$data(form);
+                }
+                
+                if (alpineData) {
+                    if (!alpineData.filePreviews) {
+                        alpineData.filePreviews = {};
+                    }
+                    Array.from(files).forEach((file, index) => {
+                        if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+                            alpineData.filePreviews[index] = URL.createObjectURL(file);
+                        }
+                    });
+                    // Force Alpine to update
+                    if (window.Alpine && form._x_dataStack) {
+                        Alpine.nextTick(() => {
+                            form.dispatchEvent(new CustomEvent('alpine:update'));
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Handle file upload errors
+        function handleUploadError(event) {
+            const err = event.detail;
+            let msg = 'Upload failed. ';
+            if (err) {
+                if (err.message) {
+                    msg += err.message;
+                } else if (err.status === 413 || err.statusText === 'Content Too Large') {
+                    msg = 'File is too large (413 Content Too Large). Maximum file size is 25MB. Please check your server PHP settings (upload_max_filesize and post_max_size should be at least 30M). See FIX_UPLOAD_LIMITS.md for instructions.';
+                } else if (err.status) {
+                    msg += 'HTTP ' + err.status + ': ' + (err.statusText || 'Unknown error');
+                }
+            }
+            alert(msg);
+            if (window.Livewire) {
+                window.Livewire.find(event.target.closest('[wire\\:id]').getAttribute('wire:id')).set('alertType', 'error');
+                window.Livewire.find(event.target.closest('[wire\\:id]').getAttribute('wire:id')).set('alertMessage', msg);
+            }
+        }
         document.addEventListener('livewire:update', () => {
             const chatBox = document.getElementById('chat-box');
             if (chatBox) {

@@ -44,6 +44,13 @@ class ReflectionList extends Component
 
     protected $paginationTheme = 'tailwind';
     protected $listeners = ['refreshReflections' => '$refresh','statusConfirmedResolved' => 'statusConfirmedResolved','statusCancelResolved' => 'statusCancelResolved',];
+    
+    // Handle Livewire upload errors
+    public function updatedNewChatImages($value)
+    {
+        // This method is called when files are uploaded
+        // If upload fails, Livewire will handle it, but we can add custom logic here if needed
+    }
 
     public $cheatMessage = '';
     public $showCheatModal = false;
@@ -290,6 +297,52 @@ class ReflectionList extends Component
             $this->alertType = 'error';
             $this->alertMessage = "You can attach maximum {$this->maxFiles} files at once. You selected {$fileCount} files.";
             return;
+        }
+        
+        // Validate file sizes (25MB = 25 * 1024 * 1024 bytes)
+        if ($hasFiles) {
+            $maxSizeBytes = 25 * 1024 * 1024; // 25MB in bytes
+            $filesToCheck = [];
+            
+            // Collect all files to check
+            if (is_array($this->newChatImages)) {
+                $filesToCheck = array_filter($this->newChatImages, function($f) { return $f !== null && $f !== ''; });
+            } elseif (is_object($this->newChatImages)) {
+                $filesToCheck = [$this->newChatImages];
+            }
+            
+            if (empty($filesToCheck) && !empty($this->newChatImage)) {
+                $filesToCheck = [$this->newChatImage];
+            }
+            
+            foreach ($filesToCheck as $file) {
+                if ($file && is_object($file)) {
+                    try {
+                        // Get file size - Livewire TemporaryUploadedFile has getSize() method
+                        $fileSize = null;
+                        if (method_exists($file, 'getSize')) {
+                            $fileSize = $file->getSize();
+                        } elseif (method_exists($file, 'getClientSize')) {
+                            $fileSize = $file->getClientSize();
+                        } elseif (method_exists($file, 'getRealPath') && file_exists($file->getRealPath())) {
+                            $fileSize = filesize($file->getRealPath());
+                        } elseif (property_exists($file, 'size')) {
+                            $fileSize = $file->size;
+                        }
+                        
+                        if ($fileSize !== null && $fileSize > $maxSizeBytes) {
+                            $fileName = method_exists($file, 'getClientOriginalName') ? $file->getClientOriginalName() : 'file';
+                            $fileSizeMB = round($fileSize / (1024 * 1024), 2);
+                            $this->alertType = 'error';
+                            $this->alertMessage = "File '{$fileName}' is too large ({$fileSizeMB}MB). Maximum file size is 25MB.";
+                            return;
+                        }
+                    } catch (\Exception $e) {
+                        // Continue if we can't check size
+                        continue;
+                    }
+                }
+            }
         }
 
         if (!$this->reflectionId || !$this->sendTo) {
@@ -609,6 +662,35 @@ public function statusCancelResolved()
     // Reset dropdown to previous status
     $this->selectedReflection['status'] = $this->selectedReflection['status_original'] ?? 'inprogress';
 }
+
+    // Helper method to get preview URL for a file
+    public function getFilePreviewUrl($file)
+    {
+        if (!$file || !is_object($file)) {
+            return null;
+        }
+        
+        try {
+            // Try Livewire's temporaryUrl method
+            if (method_exists($file, 'temporaryUrl')) {
+                return $file->temporaryUrl();
+            }
+            
+            // Try getRealPath for local files
+            if (method_exists($file, 'getRealPath')) {
+                $realPath = $file->getRealPath();
+                if ($realPath && file_exists($realPath)) {
+                    // For Livewire temp files, we need to use the Livewire endpoint
+                    // But for now, return null and let the view handle it
+                    return null;
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::debug('Preview URL error: ' . $e->getMessage());
+        }
+        
+        return null;
+    }
 
     public function render()
     {
