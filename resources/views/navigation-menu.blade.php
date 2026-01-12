@@ -45,28 +45,36 @@
                 init() {
                     // Listen to Livewire browser events (dispatched by Userhptm component)
                     const handleScoreUpdate = (e) => {
-                        const detail = e.detail || e;
                         let score = null;
+                        const detail = e.detail || e;
                         
-                        // Handle different event detail formats
-                        if (Array.isArray(detail) && detail.length > 0) {
-                            // If detail is array, check first element
-                            const first = detail[0];
-                            score = first?.hptmScore ?? first;
-                        } else if (detail && typeof detail === 'object' && typeof detail.hptmScore !== 'undefined') {
-                            // If detail is object with hptmScore property
-                            score = detail.hptmScore;
-                        } else if (typeof detail === 'number') {
-                            // If detail is directly a number
+                        // Handle Livewire 3 event format (named parameters)
+                        if (detail && typeof detail === 'object') {
+                            // Check for hptmScore property
+                            if (typeof detail.hptmScore !== 'undefined') {
+                                score = detail.hptmScore;
+                            } 
+                            // Check if it's an array with first element
+                            else if (Array.isArray(detail) && detail.length > 0) {
+                                const first = detail[0];
+                                if (typeof first === 'object' && typeof first.hptmScore !== 'undefined') {
+                                    score = first.hptmScore;
+                                } else if (typeof first === 'number') {
+                                    score = first;
+                                }
+                            }
+                        } 
+                        // Handle direct number
+                        else if (typeof detail === 'number') {
                             score = detail;
                         }
                         
                         if (score !== null && score !== undefined && typeof score === 'number') {
-                            this.hptmScore = score;
+                            this.hptmScore = Math.max(0, score); // Ensure non-negative
                         }
                     };
                     
-                    // Listen to browser CustomEvent (Livewire dispatches to window)
+                    // Listen to browser CustomEvent (Livewire 3 dispatches to window)
                     window.addEventListener('score-updated', handleScoreUpdate);
                     
                     // Also listen via Livewire.on if available (for Livewire 2 compatibility)
@@ -75,6 +83,32 @@
                             handleScoreUpdate({ detail: data });
                         });
                     }
+                    
+                    // Listen to Livewire component events (Livewire 3)
+                    if (typeof Livewire !== 'undefined') {
+                        document.addEventListener('livewire:init', () => {
+                            Livewire.on('score-updated', (data) => {
+                                handleScoreUpdate({ detail: data });
+                            });
+                        });
+                    }
+                    
+                    // Poll for score updates every 2 seconds as fallback
+                    setInterval(() => {
+                        // Fetch latest score from server if available
+                        if (typeof window.Livewire !== 'undefined') {
+                            const component = window.Livewire.find(document.querySelector('[wire\\:id]')?.getAttribute('wire:id'));
+                            if (component && component.get('user')) {
+                                const user = component.get('user');
+                                if (user && (user.hptmScore !== undefined || user.hptmEvaluationScore !== undefined)) {
+                                    const latestScore = (user.hptmScore || 0) + (user.hptmEvaluationScore || 0);
+                                    if (latestScore !== this.hptmScore) {
+                                        this.hptmScore = latestScore;
+                                    }
+                                }
+                            }
+                        }
+                    }, 2000);
                 }
             }"
             class="bg-[#FFEFF0] border border-[#FF9AA0] rounded-md flex items-center py-1 px-2 sm:px-4 sm:py-2 text-[#EB1C24] text-[10px] sm:text-[16px]" 

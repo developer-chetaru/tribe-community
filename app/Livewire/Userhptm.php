@@ -164,8 +164,19 @@ public function mount()
     $principleArray['principleData'] = $resultArray;
 
     // --- User HPTM Score ---
-    $user = User::where('id', $userId)->where('status', 1)->first();
-    $principleArray['hptmScore'] = ($user->hptmScore ?? 0) + ($user->hptmEvaluationScore ?? 0);
+    // For basecamp users, don't filter by status=1 as they might have different status
+    $user = Auth::user();
+    if (!$user || $user->id != $userId) {
+        $user = User::find($userId);
+    }
+    
+    // Refresh user data to get latest score
+    if ($user) {
+        $user->refresh();
+        $principleArray['hptmScore'] = ($user->hptmScore ?? 0) + ($user->hptmEvaluationScore ?? 0);
+    } else {
+        $principleArray['hptmScore'] = 0;
+    }
 
     $this->principleArray = $principleArray;
     $this->activePrincipleId = $this->activePrincipleId ?: ($principles->first()->id ?? null);
@@ -226,7 +237,11 @@ public function changeReadStatusOfUserChecklist($checklistId, $readStatus)
         $learningScore = $scoreModel->score ?? 0;
     }
 
-    $user = User::where('id', $userId)->where('status', 1)->first();
+    // Get user - don't filter by status=1 for basecamp users
+    $user = Auth::user();
+    if (!$user || $user->id != $userId) {
+        $user = User::find($userId);
+    }
 
     if ($user) {
         $newHptmScore = ($readStatus == 1)
@@ -262,16 +277,15 @@ public function changeReadStatusOfUserChecklist($checklistId, $readStatus)
         ]);
     }
 
-    // User ka updated score reload karo
-    $updatedUser = User::where('id', $userId)->where('status', 1)->first();
+    // User ka updated score reload karo - refresh from database
+    // Don't filter by status=1 for basecamp users
+    $updatedUser = User::find($userId);
     $userScore = 0;
     if ($updatedUser) {
-        $userScore += $updatedUser->hptmScore ?? 0;
-        $userScore += $updatedUser->hptmEvaluationScore ?? 0;
+        // Refresh user model to get latest data
+        $updatedUser->refresh();
+        $userScore = ($updatedUser->hptmScore ?? 0) + ($updatedUser->hptmEvaluationScore ?? 0);
     }
-
-    // Refresh principle data
-    $this->mount();
 
     $typeTitle = HptmLearningType::find($checklist->output)?->title ?? null;
 
@@ -284,11 +298,20 @@ public function changeReadStatusOfUserChecklist($checklistId, $readStatus)
         $this->allSelectedByType[$typeTitle] = $allChecked;
     }
 
-
-    $this->dispatch('score-updated', [
-        'hptmScore' => $userScore
-    ]);
+    // Refresh principle data after updating score
     $this->mount();
+
+    // Dispatch score update event - Livewire 3 format with named parameter
+    $this->dispatch('score-updated', hptmScore: $userScore);
+    
+    // Dispatch as browser CustomEvent to ensure navigation menu catches it
+    $this->js("
+        setTimeout(function() {
+            window.dispatchEvent(new CustomEvent('score-updated', { 
+                detail: { hptmScore: {$userScore} } 
+            }));
+        }, 100);
+    ");
 
 }
 

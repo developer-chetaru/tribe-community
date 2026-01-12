@@ -1,4 +1,18 @@
-<div class="flex-1 overflow-auto bg-[#f6f8fa]">
+<div class="flex-1 overflow-auto bg-[#f6f8fa]"
+     x-data="{}"
+     x-init="
+        // Listen for Livewire events and forward to window
+        window.addEventListener('livewire:init', () => {
+            Livewire.on('score-updated', (data) => {
+                const score = data?.hptmScore ?? data?.[0]?.hptmScore ?? data?.[0] ?? null;
+                if (score !== null && typeof score === 'number') {
+                    window.dispatchEvent(new CustomEvent('score-updated', { 
+                        detail: { hptmScore: score } 
+                    }));
+                }
+            });
+        });
+     ">
 <div class="w-full bg-white rounded-md p-5">
     <div class="flex items-center mb-6 flex-wrap sm:flex-nowrap">
         <h2 class="text-[14px] sm:text-[24px] font-semibold text-[#EB1C24]">The 5 HPTM Principles</h2>
