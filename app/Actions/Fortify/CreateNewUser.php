@@ -30,10 +30,12 @@ class CreateNewUser implements CreatesNewUsers
             'email'      => ['required', 'string', 'email', 'max:255', 'unique:users'],
             'password'   => array_merge($this->passwordRules(), ['confirmed']),
             'password_confirmation' => ['required'],
-            'terms'      => Jetstream::hasTermsAndPrivacyPolicyFeature() ? ['accepted', 'required'] : '',
+            'terms'      => ['required', 'accepted'],
         ], [
             'password_confirmation.required' => 'The confirm password field is required.',
             'password.confirmed'              => 'The password confirmation does not match.',
+            'terms.required'                  => 'You must accept the Terms of Service and Privacy Policy to register.',
+            'terms.accepted'                  => 'You must accept the Terms of Service and Privacy Policy to register.',
         ])->validate();
 
         // Create user - let default status handle it, then update if needed

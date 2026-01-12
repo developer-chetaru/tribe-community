@@ -96,7 +96,22 @@ Route::post('/reset-password', [ForgotResetPasswordController::class, 'store'])
 Route::get('/send-notification', [NotificationController::class, 'sendTest']); 
 Route::get('/verify-user/{id}', [VerificationController::class, 'verify'])
     ->name('user.verify')
-    ->middleware('signed'); 
+    ->middleware('signed');
+
+// Terms of Service and Privacy Policy Routes
+Route::get('/terms', function () {
+    $terms = file_exists(resource_path('markdown/terms.md'))
+        ? \Illuminate\Support\Str::markdown(file_get_contents(resource_path('markdown/terms.md')))
+        : '<h1>Terms of Service</h1><p>Terms of Service content will be displayed here.</p>';
+    return view('terms', ['terms' => $terms]);
+})->name('terms.show');
+
+Route::get('/policy', function () {
+    $policy = file_exists(resource_path('markdown/policy.md'))
+        ? \Illuminate\Support\Str::markdown(file_get_contents(resource_path('markdown/policy.md')))
+        : '<h1>Privacy Policy</h1><p>Privacy Policy content will be displayed here.</p>';
+    return view('policy', ['policy' => $policy]);
+})->name('policy.show'); 
 
 Route::get('/', function () {
     return redirect()->to('/login');

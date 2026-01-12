@@ -189,21 +189,29 @@
                         @enderror
                     </div>
 
-                    @if (Laravel\Jetstream\Jetstream::hasTermsAndPrivacyPolicyFeature())
-                        <div>
-                            <x-label for="terms">
-                                <div class="flex items-center">
-                                    <x-checkbox name="terms" id="terms"  />
-                                    <div class="ms-2">
-                                        {!! __('I agree to the :terms_of_service and :privacy_policy', [
-                                            'terms_of_service' => '<a target="_blank" href="'.route('terms.show').'" class="underline text-sm text-gray-600 hover:text-gray-900">'.__('Terms of Service').'</a>',
-                                            'privacy_policy' => '<a target="_blank" href="'.route('policy.show').'" class="underline text-sm text-gray-600 hover:text-gray-900">'.__('Privacy Policy').'</a>',
-                                        ]) !!}
-                                    </div>
-                                </div>
-                            </x-label>
-                        </div>
-                    @endif
+                    <!-- Terms and Privacy Policy Acceptance -->
+                    <div class="mt-4">
+                        <label class="flex items-start cursor-pointer">
+                            <input
+                                type="checkbox"
+                                name="terms"
+                                id="terms"
+                                value="1"
+                                required
+                                class="mt-1 mr-3 w-4 h-4 text-red-500 bg-gray-100 border-gray-300 rounded focus:ring-red-500 focus:ring-2"
+                                {{ old('terms') ? 'checked' : '' }}
+                            />
+                            <span class="text-sm text-gray-600">
+                                I agree to the 
+                                <a href="{{ route('terms.show') }}" target="_blank" class="text-red-500 hover:text-red-600 underline font-medium">Terms of Service</a>
+                                and 
+                                <a href="{{ route('policy.show') }}" target="_blank" class="text-red-500 hover:text-red-600 underline font-medium">Privacy Policy</a>
+                            </span>
+                        </label>
+                        @error('terms')
+                            <p class="text-sm text-red-500 mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
 				   			
                     <div class="mt-4 flex items-center justify-between">
 					   			
