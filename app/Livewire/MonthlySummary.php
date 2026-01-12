@@ -50,6 +50,18 @@ class MonthlySummary extends Component
         $user = Auth::user();
         if (!$user) return;
 
+        // Get user's registration date
+        $userRegistrationDate = Carbon::parse($user->created_at)->startOfDay();
+        
+        // Get the selected month's start date
+        $selectedMonthStart = Carbon::create($this->selectedYear, $this->selectedMonth, 1)->startOfMonth();
+        
+        // Skip if the selected month occurred before user's registration
+        if ($selectedMonthStart->lt($userRegistrationDate)) {
+            $this->monthlySummaries = [];
+            return;
+        }
+
         $summary = MonthlySummaryModel::where('user_id', $user->id)
             ->where('year', $this->selectedYear)
             ->where('month', $this->selectedMonth)

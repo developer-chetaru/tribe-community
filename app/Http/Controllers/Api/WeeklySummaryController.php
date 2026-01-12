@@ -35,11 +35,24 @@ class WeeklySummaryController extends Controller
 
         $weeksInMonth = [];
 
+        // Get user's registration date
+        $userRegistrationDate = Carbon::parse($user->created_at)->timezone('Asia/Kolkata')->startOfDay();
+        $today = Carbon::now('Asia/Kolkata');
+
         while ($weekStart->lte($lastDay)) {
             $weekEnd = $weekStart->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
 
-            // Skip future weeks
-            if ($weekStart->gt(now())) break;
+            // Skip future weeks and current week (only show summaries for completed weeks)
+            // A week is considered completed only if its end date (Sunday) has passed
+            if ($weekStart->gt($today) || $weekEnd->gt($today)) break;
+            
+            // Skip weeks that occurred before user's registration date
+            // Only show weeks where the week's end date (Sunday) is on or after registration date
+            if ($weekEnd->lt($userRegistrationDate)) {
+                $weekNum++;
+                $weekStart->addWeek();
+                continue;
+            }
 
             $weeksInMonth[$weekNum] = [
                 'week' => $weekNum,

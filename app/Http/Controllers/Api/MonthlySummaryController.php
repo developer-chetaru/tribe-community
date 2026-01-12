@@ -22,13 +22,22 @@ class MonthlySummaryController extends Controller
         $selectedYear = $request->input('year', now()->year);
         $selectedMonth = $request->input('month', now()->month);
 
-        // Load monthly summary
-        $summary = MonthlySummaryModel::where('user_id', $user->id)
-            ->where('year', $selectedYear)
-            ->where('month', $selectedMonth)
-            ->first();
+        // Get user's registration date
+        $userRegistrationDate = Carbon::parse($user->created_at)->startOfDay();
+        
+        // Get the selected month's start date
+        $selectedMonthStart = Carbon::create($selectedYear, $selectedMonth, 1)->startOfMonth();
+        
+        // Only load summary if the selected month occurred on or after user's registration
+        $monthlySummaries = [];
+        if ($selectedMonthStart->gte($userRegistrationDate)) {
+            $summary = MonthlySummaryModel::where('user_id', $user->id)
+                ->where('year', $selectedYear)
+                ->where('month', $selectedMonth)
+                ->first();
 
-        $monthlySummaries = $summary ? [$summary] : [];
+            $monthlySummaries = $summary ? [$summary] : [];
+        }
 
         // Calculate valid months and years
         $startYear = $user->created_at->year;
