@@ -5,6 +5,7 @@ namespace App\Livewire;
 use Livewire\Component;
 use App\Models\Organisation;
 use Livewire\WithFileUploads;
+use Illuminate\Support\Facades\Storage;
 
 class UpdateOrganisation extends Component
 {
@@ -223,6 +224,28 @@ protected $messages = [
     session()->flash('success', 'Organisation updated successfully!');
     $this->isEditing = false; // Exit edit mode
 }
+
+    /**
+     * Delete organisation image
+     */
+    public function deleteImage()
+    {
+        $organisation = Organisation::findOrFail($this->organisationId);
+        
+        // Delete the image file from storage if it exists
+        if ($organisation->image && Storage::disk('public')->exists($organisation->image)) {
+            Storage::disk('public')->delete($organisation->image);
+        }
+        
+        // Clear the image from database
+        $organisation->update(['image' => null]);
+        
+        // Clear the existing image from component
+        $this->existingImage = null;
+        $this->image = null;
+        
+        session()->flash('success', 'Organisation logo deleted successfully!');
+    }
 
     /**
      * Toggle working days

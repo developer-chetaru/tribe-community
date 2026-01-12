@@ -25,15 +25,33 @@
             <template x-if="photoPreview">
               <img :src="photoPreview" class="h-24 w-24 rounded-full object-cover" alt="New Profile Photo Preview">
             </template>
-            <template x-if="!photoPreview">
+            <template x-if="!photoPreview && '{{ $this->user->profile_photo_url }}' !== ''">
               <img class="h-24 w-24 rounded-full object-cover" src="{{ $this->user->profile_photo_url }}" alt="{{ $this->user->name }}">
+            </template>
+            <template x-if="!photoPreview && '{{ $this->user->profile_photo_url }}' === ''">
+              <div class="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center">
+                <span class="text-gray-400 text-2xl font-semibold">{{ strtoupper(substr($this->user->first_name, 0, 1) . substr($this->user->last_name, 0, 1)) }}</span>
+              </div>
             </template>
 
             {{-- Upload Button --}}
       <label for="photo"
-       class="absolute bottom-0 right-0 bg-red-600 p-1 rounded-full cursor-pointer hover:bg-red-700 transition duration-200">
+       class="absolute bottom-0 right-0 bg-red-600 p-1 rounded-full cursor-pointer hover:bg-red-700 transition duration-200 z-10">
     <img src="{{ asset('images/pencil1.png') }}" alt="Edit" class="w-4 h-4">
 </label>
+
+            {{-- Delete Button - Only show when photo exists --}}
+            @if($this->user->profile_photo_path)
+                <button type="button" 
+                        wire:click="deletePhoto" 
+                        wire:confirm="Are you sure you want to delete your profile photo?"
+                        class="absolute top-0 right-0 bg-red-600 hover:bg-red-700 text-white w-8 h-8 rounded-full flex items-center justify-center border-2 border-white cursor-pointer z-10 shadow-lg transition-colors"
+                        title="Delete Photo">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            @endif
 
             {{-- File Input --}}
             <input id="photo" type="file" class="hidden" wire:model="photo"

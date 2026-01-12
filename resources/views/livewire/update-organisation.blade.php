@@ -21,7 +21,7 @@
 
     <form wire:submit.prevent="update" class="space-y-6 w-full">
 <!-- Logo Upload -->
-<div x-data="{ preview: null }" class="relative w-32 h-32 mx-auto">
+<div x-data="{ preview: null }" class="relative w-32 h-32 mx-auto mb-4">
     <!-- Circular Image Preview / Upload -->
     <label class="w-full h-full flex items-center justify-center rounded-full border-2 border-gray-300 bg-gray-50 cursor-pointer relative overflow-hidden ">
         <!-- Preview Image -->
@@ -49,10 +49,23 @@
     </label>
 
     <!-- Pencil/Edit Icon Overlay -->
-    <div class="absolute bottom-0 right-0 bg-red-500 w-8 h-8 rounded-full flex items-center justify-center border-2 border-white cursor-pointer"
+    <div class="absolute bottom-0 right-0 bg-red-500 w-8 h-8 rounded-full flex items-center justify-center border-2 border-white cursor-pointer z-10"
          @click="$refs.fileInput.click()">
         <img src="{{ asset('images/pencil1.png') }}" alt="Edit" class="w-4 h-4 text-white">
     </div>
+    
+    <!-- Delete Button - Only show when image exists -->
+    @if($existingImage)
+        <button type="button" 
+                wire:click="deleteImage" 
+                wire:confirm="Are you sure you want to delete this logo?"
+                class="absolute top-0 right-0 bg-red-600 hover:bg-red-700 text-white w-8 h-8 rounded-full flex items-center justify-center border-2 border-white cursor-pointer z-10 shadow-lg transition-colors"
+                title="Delete Logo">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+    @endif
 </div>
 
 @error('image') <span class="text-red-500 text-sm mt-1">{{ $message }}</span> @enderror

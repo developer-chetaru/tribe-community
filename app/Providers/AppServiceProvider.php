@@ -7,6 +7,7 @@ use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Notifications\Messages\MailMessage;
 use App\Models\User; 
 use Livewire\Livewire;
+use App\Livewire\Profile\UpdateProfileInformationForm;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -32,6 +33,9 @@ class AppServiceProvider extends ServiceProvider
     	Livewire::listen('failedAuth', function ($component, $redirect) {
         	return redirect()->route('login'); // session expire → login
     	});
+
+        // Register the Profile UpdateProfileInformationForm component with alias
+        Livewire::component('profile.update-profile-information-form', UpdateProfileInformationForm::class);
 
         // Update Swagger API docs server URL dynamically from APP_URL
         $this->updateSwaggerServerUrl();
