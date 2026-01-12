@@ -15,7 +15,7 @@
     <div style="max-width: 500px; margin: auto; background: #FFFFFF; padding: 20px; border-radius: 0 0 8px 8px; color: black;">
         <img src="{{ asset('images/logo-tribe.png') }}" alt="Tribe365 Logo" style="width:120px; max-width:160px; margin: 0 auto 15px auto; display:block;" />
         
-        <h2 style="margin-bottom: 20px; color: #dc2626;">⚠️ Account Suspended</h2>
+        <h2 style="margin-bottom: 20px; color: #dc2626;">Account Suspended</h2>
         
         <p style="margin: 0 0 15px 0; color: black;">Hi {{ $user->first_name ?? 'there' }},</p>
         <p style="margin: 0 0 15px 0; color: black;">We regret to inform you that your Tribe365 account has been suspended as of <strong>{{ $suspensionDate }}</strong> due to unpaid subscription fees.</p>
