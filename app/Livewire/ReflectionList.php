@@ -169,7 +169,7 @@ class ReflectionList extends Component
             'id' => $reflection->id,
             'topic' => $reflection->topic,
             'message' => $reflection->message ?? '',
-            'status' => $reflection->status ?? 'New',
+            'status' => strtolower($reflection->status ?? 'new'),
         ];
 
         $this->sendTo = $reflection->userId;
@@ -621,6 +621,8 @@ class ReflectionList extends Component
 
         if (!in_array($status, ['new','inprogress','resolved'])) return;
 
+        // Normalize status to lowercase for consistency
+        $status = strtolower($status);
         $reflection->status = $status;
         $reflection->save();
 

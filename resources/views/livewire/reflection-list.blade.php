@@ -172,10 +172,10 @@
                                     <div 
                                         x-data="{ 
                                             open: false,
-                                            currentStatus: '{{ $selectedReflection['status'] ?? 'inprogress' }}',
+                                            currentStatus: '{{ strtolower($selectedReflection['status'] ?? 'new') }}',
                                             init() {
-                                                // Update status from server data on mount
-                                                const serverStatus = '{{ $selectedReflection['status'] ?? 'inprogress' }}';
+                                                // Update status from server data on mount - normalize to lowercase
+                                                const serverStatus = '{{ strtolower($selectedReflection['status'] ?? 'new') }}';
                                                 this.currentStatus = serverStatus;
                                                 
                                                 // Listen to Livewire browser events for status updates
@@ -192,13 +192,24 @@
                                                         status = e.detail;
                                                     }
                                                     
-                                                    if (status && (status === 'inprogress' || status === 'resolved')) {
-                                                        this.currentStatus = status;
+                                                    // Normalize status to lowercase and update
+                                                    if (status) {
+                                                        status = status.toLowerCase();
+                                                        if (status === 'new' || status === 'inprogress' || status === 'resolved') {
+                                                            this.currentStatus = status;
+                                                        }
                                                     }
                                                 });
                                             },
                                             getStatusText() {
-                                                return this.currentStatus === 'inprogress' ? 'In Progress' : 'Resolved';
+                                                if (this.currentStatus === 'new') {
+                                                    return 'New';
+                                                } else if (this.currentStatus === 'inprogress') {
+                                                    return 'In Progress';
+                                                } else if (this.currentStatus === 'resolved') {
+                                                    return 'Resolved';
+                                                }
+                                                return 'New';
                                             },
                                             selectStatus(status) {
                                                 handleStatusChangeOption(status);
@@ -236,6 +247,14 @@
                                             class="absolute right-0 mt-1 w-full bg-white rounded-md shadow-lg border border-gray-200 z-50 overflow-hidden"
                                             style="display: none;"
                                         >
+                                            <button 
+                                                type="button"
+                                                @click="selectStatus('new')"
+                                                class="w-full text-left px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                                                :class="{ 'bg-gray-100 font-medium': currentStatus === 'new' }"
+                                            >
+                                                New
+                                            </button>
                                             <button 
                                                 type="button"
                                                 @click="selectStatus('inprogress')"
