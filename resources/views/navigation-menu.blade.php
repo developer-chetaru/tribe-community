@@ -39,9 +39,48 @@
             </span>
         </a>
         {{-- HPTM Button --}}
-        <button class="bg-[#FFEFF0] border border-[#FF9AA0] rounded-md flex items-center py-1 px-2 sm:px-4 sm:py-2 text-[#EB1C24] text-[10px] sm:text-[16px]" style="line-height: normal;">
-            HPTM <span class="text-black ml-2">
-                {{ Auth::user()->hptmScore ?? 0 }}
+        <button 
+            x-data="{ 
+                hptmScore: {{ (Auth::user()->hptmScore ?? 0) + (Auth::user()->hptmEvaluationScore ?? 0) }},
+                init() {
+                    // Listen to Livewire browser events (dispatched by Userhptm component)
+                    const handleScoreUpdate = (e) => {
+                        const detail = e.detail || e;
+                        let score = null;
+                        
+                        // Handle different event detail formats
+                        if (Array.isArray(detail) && detail.length > 0) {
+                            // If detail is array, check first element
+                            const first = detail[0];
+                            score = first?.hptmScore ?? first;
+                        } else if (detail && typeof detail === 'object' && typeof detail.hptmScore !== 'undefined') {
+                            // If detail is object with hptmScore property
+                            score = detail.hptmScore;
+                        } else if (typeof detail === 'number') {
+                            // If detail is directly a number
+                            score = detail;
+                        }
+                        
+                        if (score !== null && score !== undefined && typeof score === 'number') {
+                            this.hptmScore = score;
+                        }
+                    };
+                    
+                    // Listen to browser CustomEvent (Livewire dispatches to window)
+                    window.addEventListener('score-updated', handleScoreUpdate);
+                    
+                    // Also listen via Livewire.on if available (for Livewire 2 compatibility)
+                    if (typeof Livewire !== 'undefined' && typeof Livewire.on === 'function') {
+                        Livewire.on('score-updated', (data) => {
+                            handleScoreUpdate({ detail: data });
+                        });
+                    }
+                }
+            }"
+            class="bg-[#FFEFF0] border border-[#FF9AA0] rounded-md flex items-center py-1 px-2 sm:px-4 sm:py-2 text-[#EB1C24] text-[10px] sm:text-[16px]" 
+            style="line-height: normal;">
+            HPTM <span class="text-black ml-2" x-text="hptmScore">
+                {{ (Auth::user()->hptmScore ?? 0) + (Auth::user()->hptmEvaluationScore ?? 0) }}
             </span>
         </button>
      @endhasanyrole

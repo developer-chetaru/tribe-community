@@ -54,6 +54,12 @@ class DashboardSummary extends Component
     {
         $user = auth()->user();
         $tz = $user->timezone ?? 'Asia/Kolkata';
+        
+        // Validate timezone - handle empty strings and invalid timezones
+        if (empty($tz) || !in_array($tz, timezone_identifiers_list())) {
+            $tz = 'Asia/Kolkata';
+        }
+        
         $today = Carbon::now($tz)->startOfDay();
 
         $this->month = $today->month;
