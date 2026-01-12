@@ -369,7 +369,8 @@ class ReflectionList extends Component
 
         if ($newStatus === 'resolved') {
             $this->selectedReflection['status'] = $this->selectedReflection['status_original'] ?? 'inprogress';
-            $this->dispatchBrowserEvent('confirmResolved');
+            // In Livewire 3, use dispatch() instead of dispatchBrowserEvent
+            $this->dispatch('confirmResolved');
             return;
         }
 
@@ -394,6 +395,10 @@ class ReflectionList extends Component
 
         $this->alertType = 'success';
         $this->alertMessage = 'Reflection status updated to ' . ucfirst($status);
+        
+        // Dispatch browser event for Alpine.js to update button state
+        // In Livewire 3, dispatch() creates browser events
+        $this->dispatch('reflectionStatusUpdated', status: $status);
 
         // ✅ Send Email only if Super Admin & status is resolved
         $user = Auth::user();

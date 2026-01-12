@@ -169,14 +169,91 @@
                                 </div>
                                 <div class="flex items-center gap-2 flex-shrink-0">
                                     <label class="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">Status:</label>
-                                    <select 
-                                        id="reflectionStatusSelect"
-                                        class="border rounded-md border-gray-300 text-xs sm:text-sm px-2 sm:px-3 py-1.5 text-[#EB1C24] font-medium focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white w-full sm:w-auto" 
-                                        onchange="handleStatusChange(this)"
+                                    <div 
+                                        x-data="{ 
+                                            open: false,
+                                            currentStatus: '{{ $selectedReflection['status'] ?? 'inprogress' }}',
+                                            init() {
+                                                // Update status from server data on mount
+                                                const serverStatus = '{{ $selectedReflection['status'] ?? 'inprogress' }}';
+                                                this.currentStatus = serverStatus;
+                                                
+                                                // Listen to Livewire browser events for status updates
+                                                window.addEventListener('reflectionStatusUpdated', (e) => {
+                                                    // Livewire 3 dispatch format: e.detail contains an array with the parameters
+                                                    let status = null;
+                                                    if (Array.isArray(e.detail) && e.detail.length > 0) {
+                                                        // First element might be the status if passed as named parameter
+                                                        status = e.detail[0]?.status ?? e.detail[0];
+                                                    } else if (e.detail && e.detail.status) {
+                                                        // Direct object format
+                                                        status = e.detail.status;
+                                                    } else if (typeof e.detail === 'string') {
+                                                        status = e.detail;
+                                                    }
+                                                    
+                                                    if (status && (status === 'inprogress' || status === 'resolved')) {
+                                                        this.currentStatus = status;
+                                                    }
+                                                });
+                                            },
+                                            getStatusText() {
+                                                return this.currentStatus === 'inprogress' ? 'In Progress' : 'Resolved';
+                                            },
+                                            selectStatus(status) {
+                                                handleStatusChangeOption(status);
+                                                this.open = false;
+                                            }
+                                        }"
+                                        x-on:click.away="open = false"
+                                        wire:ignore
+                                        class="relative"
                                     >
-                                        <option value="inprogress" {{ $selectedReflection['status'] == 'inprogress' ? 'selected' : '' }}>In Progress</option>
-                                        <option value="resolved" {{ $selectedReflection['status'] == 'resolved' ? 'selected' : '' }}>Resolved</option>
-                                    </select>
+                                        <button 
+                                            @click="open = !open"
+                                            type="button"
+                                            class="border border-[#EB1C24] rounded-md text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 text-gray-700 font-medium bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 transition-colors duration-150 flex items-center gap-2 min-w-[120px] justify-between"
+                                            :class="{
+                                                'border-[#EB1C24]': true,
+                                                'bg-gray-50': open
+                                            }"
+                                        >
+                                            <span x-text="getStatusText()">In Progress</span>
+                                            <svg class="w-4 h-4 text-gray-500 transition-transform duration-200" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                            </svg>
+                                        </button>
+                                        
+                                        <!-- Dropdown Menu -->
+                                        <div 
+                                            x-show="open"
+                                            x-transition:enter="transition ease-out duration-100"
+                                            x-transition:enter-start="transform opacity-0 scale-95"
+                                            x-transition:enter-end="transform opacity-100 scale-100"
+                                            x-transition:leave="transition ease-in duration-75"
+                                            x-transition:leave-start="transform opacity-100 scale-100"
+                                            x-transition:leave-end="transform opacity-0 scale-95"
+                                            class="absolute right-0 mt-1 w-full bg-white rounded-md shadow-lg border border-gray-200 z-50 overflow-hidden"
+                                            style="display: none;"
+                                        >
+                                            <button 
+                                                type="button"
+                                                @click="selectStatus('inprogress')"
+                                                class="w-full text-left px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                                                :class="{ 'bg-gray-100 font-medium': currentStatus === 'inprogress' }"
+                                            >
+                                                In Progress
+                                            </button>
+                                            <button 
+                                                type="button"
+                                                @click="selectStatus('resolved')"
+                                                class="w-full text-left px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                                                :class="{ 'bg-gray-100 font-medium': currentStatus === 'resolved' }"
+                                            >
+                                                Resolved
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div class="mt-3 pt-3 border-t border-gray-200">
@@ -367,9 +444,8 @@
                 chatBox.scrollTop = chatBox.scrollHeight;
             }
         });
-        function handleStatusChange(select) {
-            var selectedStatus = select.value;
-
+        // Function for Alpine.js to handle status changes
+        function handleStatusChangeOption(selectedStatus) {
             if(selectedStatus === 'resolved') {
                 Swal.fire({
                     title: 'Are you sure?',
@@ -384,14 +460,21 @@
                     if (result.isConfirmed) {
                         @this.updateReflectionStatus('resolved'); // call Livewire method
                     } else {
-                        // reset dropdown to previous value
-                        select.value = @json($selectedReflection['status_original'] ?? 'inprogress');
+                        // Reset status if cancelled - handled by Livewire refresh
+                        @this.$refresh();
                     }
                 });
             } else {
                 @this.updateReflectionStatus(selectedStatus);
             }
         }
+        
+        // Keep old function for backward compatibility (if needed)
+        function handleStatusChange(select) {
+            var selectedStatus = select.value;
+            handleStatusChangeOption(selectedStatus);
+        }
+        
     </script>
     @endpush
 </div>
