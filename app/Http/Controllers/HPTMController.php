@@ -134,7 +134,7 @@ class HPTMController extends Controller
                 'status'            => $user->status ? 1 : 0,
                 'userContact'       => $user->phone,
               	'country_code'      => $user->country_code,
-                'timezone'          => $user->timezone,
+                'timezone'          => $user->timezone ?? 'Asia/Kolkata',
                 "organisationName"  => optional($user->organisation)->name,
                 "role"              => $roleName,
               	"created_at"        => $user->created_at ? $user->created_at->toIso8601String() : null,
