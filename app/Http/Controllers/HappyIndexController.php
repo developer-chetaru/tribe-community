@@ -80,17 +80,11 @@ class HappyIndexController extends Controller
             return response()->json(['status' => false, 'message' => 'User not eligible']);
         }
 
-        // Get user's timezone or default to Asia/Kolkata
-        $userTimezone = $user->timezone ?: 'Asia/Kolkata';
-        
-        // Validate timezone to prevent errors
-        if (!in_array($userTimezone, timezone_identifiers_list())) {
-            Log::warning("Invalid timezone for user {$userId}: {$userTimezone}, using Asia/Kolkata");
-            $userTimezone = 'Asia/Kolkata';
-        }
+        // Get user's timezone safely using helper
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
         
         // Get current date in user's timezone
-        $userNow = \Carbon\Carbon::now($userTimezone);
+        $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
         $userDate = $userNow->toDateString(); // Y-m-d format in user's timezone
         
         // Check if user already submitted today in their timezone
@@ -99,7 +93,7 @@ class HappyIndexController extends Controller
             ->get()
             ->filter(function ($entry) use ($userTimezone, $userDate) {
                 // Convert entry's created_at to user's timezone and compare dates
-                $entryDate = \Carbon\Carbon::parse($entry->created_at)->setTimezone($userTimezone)->toDateString();
+                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $userTimezone)->toDateString();
                 return $entryDate === $userDate;
             })
             ->first();

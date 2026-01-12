@@ -50,8 +50,8 @@ class MonthlySummary extends Component
         $user = Auth::user();
         if (!$user) return;
 
-        // Get user's registration date
-        $userRegistrationDate = Carbon::parse($user->created_at)->startOfDay();
+        // Get user's registration date safely
+        $userRegistrationDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), \App\Helpers\TimezoneHelper::DEFAULT_TIMEZONE)->startOfDay();
         
         // Get the selected month's start date
         $selectedMonthStart = Carbon::create($this->selectedYear, $this->selectedMonth, 1)->startOfMonth();

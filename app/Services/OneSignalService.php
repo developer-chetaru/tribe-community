@@ -504,7 +504,7 @@ class OneSignalService
         $tags = [
             'user_type' => $userType,
             'has_working_today' => $hasWorkingToday ? 'true' : 'false',
-            'timezone' => $user->timezone ?? 'Asia/Kolkata',
+            'timezone' => \App\Helpers\TimezoneHelper::getUserTimezone($user),
             'has_submitted_today' => $hasSubmittedToday ? 'true' : 'false',
             'email_subscribed' => 'true',
             'status' => (string) $user->status,
@@ -549,7 +549,7 @@ class OneSignalService
         }
 
         // Get today's day name (Mon, Tue, Wed, etc.)
-        $todayName = now($user->timezone ?? 'Asia/Kolkata')->format('D');
+        $todayName = \App\Helpers\TimezoneHelper::carbon(null, $user->timezone)->format('D');
 
         // Check if today is in working days array
         return in_array($todayName, $workingDays);

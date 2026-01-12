@@ -25,17 +25,11 @@ class UpdateWorkingDayStatus extends Command
             ->get();
         
         $usersToUpdate = $users->filter(function ($user) use ($targetTime) {
-            // Get user's timezone or default to Asia/Kolkata
-            $userTimezone = $user->timezone ?: 'Asia/Kolkata';
-            
-            // Validate timezone to prevent errors
-            if (!in_array($userTimezone, timezone_identifiers_list())) {
-                Log::warning("Invalid timezone for user {$user->id}: {$userTimezone}, using Asia/Kolkata");
-                $userTimezone = 'Asia/Kolkata';
-            }
+            // Get user's timezone safely using helper
+            $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
             
             // Get current time in user's timezone
-            $userNow = Carbon::now($userTimezone);
+            $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
             
             // Check if it's target time in user's timezone
             $currentTime = $userNow->format('H:i');

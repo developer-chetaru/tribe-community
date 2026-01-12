@@ -107,13 +107,8 @@ class SummaryController extends Controller
     $startDate = $request->get('start_date');
     $endDate = $request->get('end_date');
 
-    // Get user's timezone or default to Asia/Kolkata
-    $userTimezone = $user->timezone ?: 'Asia/Kolkata';
-    
-    // Validate timezone
-    if (!in_array($userTimezone, timezone_identifiers_list())) {
-        $userTimezone = 'Asia/Kolkata';
-    }
+    // Get user's timezone safely using helper
+    $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
 
     // Get user's organisation working days
     $org = $user->organisation;
@@ -147,16 +142,16 @@ class SummaryController extends Controller
             break;
         case 'custom':
             if ($startDate && $endDate) {
-                $start = Carbon::parse($startDate)->setTimezone($userTimezone);
-                $end = Carbon::parse($endDate)->setTimezone($userTimezone);
+                $start = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($startDate), $userTimezone);
+                $end = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($endDate), $userTimezone);
             } else {
-                $start = Carbon::parse($user->created_at)->setTimezone($userTimezone)->startOfDay();
+                $start = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), $userTimezone)->startOfDay();
                 $end = $userNow->copy()->endOfDay();
             }
             break;
         case 'all':
         default:
-            $start = Carbon::parse($user->created_at)->setTimezone($userTimezone)->startOfDay();
+            $start = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), $userTimezone)->startOfDay();
             $end = $userNow->copy()->endOfDay();
             break;
     }
@@ -190,7 +185,7 @@ class SummaryController extends Controller
     // Generate date range using user's timezone
     $period = collect($start->copy()->daysUntil($end->copy()->addDay()))
         ->map(function ($date) use ($userTimezone) {
-            return Carbon::parse($date)->setTimezone($userTimezone);
+            return \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($date), $userTimezone);
         })
         ->sortByDesc(fn($d) => $d->timestamp);
 
@@ -227,7 +222,7 @@ class SummaryController extends Controller
 
         // Check happy index - convert entry's created_at (UTC) to user's timezone and compare dates
         $entry = $happyIndexes->first(function($h) use ($date, $userTimezone) {
-            $entryDate = Carbon::parse($h->created_at)->setTimezone($userTimezone);
+            $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($h->created_at), $userTimezone);
             return $entryDate->isSameDay($date);
         });
 

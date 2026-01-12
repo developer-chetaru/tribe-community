@@ -54,10 +54,12 @@ class WeeklySummary extends Component
 
         $weeksInMonth = [];
 
-        $today = Carbon::now('Asia/Kolkata');
+        // Use safe timezone helper
+        $defaultTimezone = \App\Helpers\TimezoneHelper::DEFAULT_TIMEZONE;
+        $today = \App\Helpers\TimezoneHelper::carbon(null, $defaultTimezone);
         
         // Get user's registration date in the same timezone
-        $userRegistrationDate = Carbon::parse($user->created_at)->timezone('Asia/Kolkata')->startOfDay();
+        $userRegistrationDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), $defaultTimezone)->startOfDay();
         
         while ($weekStart->lte($lastDay)) {
             $weekEnd = $weekStart->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();

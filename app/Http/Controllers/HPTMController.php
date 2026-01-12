@@ -134,7 +134,7 @@ class HPTMController extends Controller
                 'status'            => $user->status ? 1 : 0,
                 'userContact'       => $user->phone,
               	'country_code'      => $user->country_code,
-                'timezone'          => $user->timezone ?? 'Asia/Kolkata',
+                'timezone'          => \App\Helpers\TimezoneHelper::getUserTimezone($user),
                 "organisationName"  => optional($user->organisation)->name,
                 "role"              => $roleName,
               	"created_at"        => $user->created_at ? $user->created_at->toIso8601String() : null,
@@ -1130,7 +1130,7 @@ class HPTMController extends Controller
                     'email'         => $user->email,
                     'phone'         => $user->phone,
                     'country_code'  => $user->country_code,
-                    'timezone'      => $user->timezone,
+                    'timezone'      => \App\Helpers\TimezoneHelper::getUserTimezone($user),
                     'profileImage'  => $user->profile_photo_path 
                                         ? url('storage/' . $user->profile_photo_path) 
                                         : null,

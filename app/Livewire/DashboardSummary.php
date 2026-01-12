@@ -53,14 +53,9 @@ class DashboardSummary extends Component
     public function mount()
     {
         $user = auth()->user();
-        $tz = $user->timezone ?? 'Asia/Kolkata';
+        $tz = \App\Helpers\TimezoneHelper::getUserTimezone($user);
         
-        // Validate timezone - handle empty strings and invalid timezones
-        if (empty($tz) || !in_array($tz, timezone_identifiers_list())) {
-            $tz = 'Asia/Kolkata';
-        }
-        
-        $today = Carbon::now($tz)->startOfDay();
+        $today = \App\Helpers\TimezoneHelper::carbon(null, $tz)->startOfDay();
 
         $this->month = $today->month;
         $this->year = $today->year;
@@ -76,14 +71,11 @@ class DashboardSummary extends Component
             ->where('leave_status', 1)
             ->exists();
 
-        // Get user's timezone or default
-        $userTimezone = $user->timezone ?: 'Asia/Kolkata';
-        if (!in_array($userTimezone, timezone_identifiers_list())) {
-            $userTimezone = 'Asia/Kolkata';
-        }
+        // Get user's timezone safely using helper
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
         
         // Get current date in user's timezone
-        $userNow = Carbon::now($userTimezone);
+        $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
         $userTodayDate = $userNow->toDateString(); // Y-m-d format
         
         // Check if user gave feedback today in their timezone
@@ -92,7 +84,7 @@ class DashboardSummary extends Component
             ->get()
             ->filter(function ($entry) use ($userTimezone, $userTodayDate) {
                 // Convert entry's created_at (UTC) to user's timezone and compare dates
-                $entryDate = Carbon::parse($entry->created_at)->setTimezone($userTimezone)->toDateString();
+                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $userTimezone)->toDateString();
                 return $entryDate === $userTodayDate;
             })
             ->isNotEmpty();
@@ -102,7 +94,7 @@ class DashboardSummary extends Component
             ->get()
             ->filter(function ($entry) use ($userTimezone, $userTodayDate) {
                 // Convert entry's created_at (UTC) to user's timezone and compare dates
-                $entryDate = Carbon::parse($entry->created_at)->setTimezone($userTimezone)->toDateString();
+                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $userTimezone)->toDateString();
                 return $entryDate === $userTodayDate;
             })
             ->first();
@@ -126,7 +118,7 @@ class DashboardSummary extends Component
         }
 
         // Show Happy Index only in allowed time (16:00 - 23:59)
-        $now = Carbon::now($tz);
+        $now = \App\Helpers\TimezoneHelper::carbon(null, $tz);
         $dayOfWeek = $now->format('D');
 
         if ($user->hasRole('basecamp')) {
@@ -322,15 +314,10 @@ public function updatedSelectedDepartment($value)
         
         // Refresh today's mood data
         $user = auth()->user();
-        $userTimezone = $user->timezone ?? 'Asia/Kolkata';
-        
-        // Validate timezone
-        if (!in_array($userTimezone, timezone_identifiers_list())) {
-            $userTimezone = 'Asia/Kolkata';
-        }
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
         
         // Get current date in user's timezone
-        $userNow = Carbon::now($userTimezone);
+        $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
         $userTodayDate = $userNow->toDateString(); // Y-m-d format
         
         // Fetch today's mood data (using user's timezone)
@@ -338,7 +325,7 @@ public function updatedSelectedDepartment($value)
             ->get()
             ->filter(function ($entry) use ($userTimezone, $userTodayDate) {
                 // Convert entry's created_at (UTC) to user's timezone and compare dates
-                $entryDate = Carbon::parse($entry->created_at)->setTimezone($userTimezone)->toDateString();
+                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $userTimezone)->toDateString();
                 return $entryDate === $userTodayDate;
             })
             ->first();
@@ -459,17 +446,11 @@ public function updatedSelectedDepartment($value)
             return;
         }
 
-        // Get user's timezone or default to Asia/Kolkata
-        $userTimezone = $user->timezone ?: 'Asia/Kolkata';
-        
-        // Validate timezone to prevent errors
-        if (!in_array($userTimezone, timezone_identifiers_list())) {
-            Log::warning("Invalid timezone for user {$userId}: {$userTimezone}, using Asia/Kolkata");
-            $userTimezone = 'Asia/Kolkata';
-        }
+        // Get user's timezone safely using helper
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
         
         // Get current date in user's timezone
-        $userNow = \Carbon\Carbon::now($userTimezone);
+        $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
         $userDate = $userNow->toDateString(); // Y-m-d format in user's timezone
         
         // Check if user already submitted today in their timezone
@@ -477,7 +458,7 @@ public function updatedSelectedDepartment($value)
             ->get()
             ->filter(function ($entry) use ($userTimezone, $userDate) {
                 // Convert entry's created_at to user's timezone and compare dates
-                $entryDate = \Carbon\Carbon::parse($entry->created_at)->setTimezone($userTimezone)->toDateString();
+                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $userTimezone)->toDateString();
                 return $entryDate === $userDate;
             })
             ->first();

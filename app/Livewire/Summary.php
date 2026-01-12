@@ -53,13 +53,8 @@ class Summary extends Component
         $user = Auth::user();
         $userId = $user->id;
 
-        // Get user's timezone or default to Asia/Kolkata
-        $userTimezone = $user->timezone ?: 'Asia/Kolkata';
-        
-        // Validate timezone
-        if (!in_array($userTimezone, timezone_identifiers_list())) {
-            $userTimezone = 'Asia/Kolkata';
-        }
+        // Get user's timezone safely using helper
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
 
         // Get user's working days
         $org = $user->organisation;
@@ -68,7 +63,7 @@ class Summary extends Component
             : ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
         // Determine date range using user's timezone
-        $userNow = Carbon::now($userTimezone);
+        $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
         
         switch ($this->filterType) {
             case 'this_week':
@@ -133,7 +128,7 @@ class Summary extends Component
         // Create period using user's timezone dates
         $period = collect($start->copy()->daysUntil($end->copy()->addDay()))
             ->map(function ($date) use ($userTimezone) {
-                return Carbon::parse($date)->setTimezone($userTimezone);
+                return \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($date), $userTimezone);
             })
             ->sortByDesc(fn($d) => $d->timestamp);
 
@@ -168,7 +163,7 @@ class Summary extends Component
 
             // Check sentiment entry - convert entry's created_at (UTC) to user's timezone and compare dates
             $entry = $happyIndexes->first(function($h) use ($date, $userTimezone) {
-                $entryDate = Carbon::parse($h->created_at)->setTimezone($userTimezone);
+                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($h->created_at), $userTimezone);
                 return $entryDate->isSameDay($date);
             });
 

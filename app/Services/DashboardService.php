@@ -59,16 +59,11 @@ public function getFreeVersionHomeDetails(array $filters = [])
         }
     }
 
-    // Get user's timezone or default to Asia/Kolkata
-    $userTimezone = $user->timezone ?: 'Asia/Kolkata';
-    
-    // Validate timezone to prevent errors
-    if (!in_array($userTimezone, timezone_identifiers_list())) {
-        $userTimezone = 'Asia/Kolkata';
-    }
+    // Get user's timezone safely using helper
+    $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
     
     // Get current date in user's timezone for "today" comparison
-    $userNow = \Carbon\Carbon::now($userTimezone);
+    $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
     $userTodayDate = $userNow->toDateString(); // Y-m-d format in user's timezone
 
     // Days in selected month/year
@@ -98,7 +93,7 @@ public function getFreeVersionHomeDetails(array $filters = [])
             : 'Asia/Kolkata';
         
         // Convert entry's created_at (UTC) to entry creator's timezone to get the date
-        $entryDate = \Carbon\Carbon::parse($entry->created_at)->setTimezone($entryUserTimezone);
+        $entryDate = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $entryUserTimezone);
         $entryYear = (int) $entryDate->format('Y');
         $entryMonth = (int) $entryDate->format('m');
         $d = (int) $entryDate->format('d');

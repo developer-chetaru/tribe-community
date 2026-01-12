@@ -184,11 +184,12 @@ class ReflectionList extends Component
             ->orderBy('id', 'asc')
             ->get();
 
-        $userTimezone = $user->timezone ?? config('app.timezone');
+        // Use safe timezone helper to prevent invalid timezone errors
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
 
         $this->chatMessages = $messages->map(function ($msg) use ($userTimezone) {
             $dt = new DateTime($msg->created_at, new DateTimeZone('UTC'));
-            $dt->setTimezone(new DateTimeZone($userTimezone));
+            $dt->setTimezone(\App\Helpers\TimezoneHelper::dateTimeZone($userTimezone));
 
             return [
                 'from' => $msg->sendFrom,

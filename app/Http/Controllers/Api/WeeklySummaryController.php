@@ -35,9 +35,10 @@ class WeeklySummaryController extends Controller
 
         $weeksInMonth = [];
 
-        // Get user's registration date
-        $userRegistrationDate = Carbon::parse($user->created_at)->timezone('Asia/Kolkata')->startOfDay();
-        $today = Carbon::now('Asia/Kolkata');
+        // Get user's registration date safely
+        $defaultTimezone = \App\Helpers\TimezoneHelper::DEFAULT_TIMEZONE;
+        $userRegistrationDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), $defaultTimezone)->startOfDay();
+        $today = \App\Helpers\TimezoneHelper::carbon(null, $defaultTimezone);
 
         while ($weekStart->lte($lastDay)) {
             $weekEnd = $weekStart->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
