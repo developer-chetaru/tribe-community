@@ -65,6 +65,9 @@ class Summary extends Component
         // Determine date range using user's timezone
         $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
         
+        // Get user's registration date in user's timezone (minimum start date)
+        $userRegistrationDate = Carbon::parse($user->created_at)->setTimezone($userTimezone)->startOfDay();
+        
         switch ($this->filterType) {
             case 'this_week':
                 $start = $userNow->copy()->startOfWeek();
@@ -99,9 +102,14 @@ class Summary extends Component
 
             case 'all':
             default:
-                $start = Carbon::parse($user->created_at)->setTimezone($userTimezone)->startOfDay();
+                $start = $userRegistrationDate->copy();
                 $end   = $userNow->copy()->endOfDay();
                 break;
+        }
+        
+        // Ensure start date is never before user's registration date
+        if ($start->lessThan($userRegistrationDate)) {
+            $start = $userRegistrationDate->copy();
         }
 
         // Convert date range to UTC for database query (created_at is stored in UTC)
@@ -137,6 +145,9 @@ class Summary extends Component
         foreach ($period as $date) {
             // Skip future dates (using user's timezone)
             if ($date->greaterThan($userToday)) continue;
+            
+            // Skip dates before user's registration date
+            if ($date->lessThan($userRegistrationDate)) continue;
 
             // Skip non-working days
             if (!in_array($date->format('D'), $workingDays)) continue;

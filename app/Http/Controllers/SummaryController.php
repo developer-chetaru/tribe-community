@@ -119,6 +119,9 @@ class SummaryController extends Controller
     // Determine date range using user's timezone
     $userNow = Carbon::now($userTimezone);
     
+    // Get user's registration date in user's timezone (minimum start date)
+    $userRegistrationDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), $userTimezone)->startOfDay();
+    
     switch ($filterType) {
         case 'this_week':
             $start = $userNow->copy()->startOfWeek();
@@ -145,15 +148,20 @@ class SummaryController extends Controller
                 $start = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($startDate), $userTimezone);
                 $end = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($endDate), $userTimezone);
             } else {
-                $start = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), $userTimezone)->startOfDay();
+                $start = $userRegistrationDate->copy();
                 $end = $userNow->copy()->endOfDay();
             }
             break;
         case 'all':
         default:
-            $start = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), $userTimezone)->startOfDay();
+            $start = $userRegistrationDate->copy();
             $end = $userNow->copy()->endOfDay();
             break;
+    }
+    
+    // Ensure start date is never before user's registration date
+    if ($start->lessThan($userRegistrationDate)) {
+        $start = $userRegistrationDate->copy();
     }
 
     // Convert date range to UTC for database query (created_at is stored in UTC)
@@ -194,6 +202,9 @@ class SummaryController extends Controller
     foreach ($period as $date) {
         // Skip future dates (using user's timezone)
         if ($date->greaterThan($userToday)) continue;
+        
+        // Skip dates before user's registration date
+        if ($date->lessThan($userRegistrationDate)) continue;
 
         // Skip non-working days
         if (!in_array($date->format('D'), $workingDays)) {
