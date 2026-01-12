@@ -36,6 +36,8 @@ class ReflectionList extends Component
     public $showChatModal = false;
     public $newChatMessage = '';
     public $newChatImage;
+    public $newChatImages = [];
+    public $maxFiles = 10; // Maximum number of files allowed
 
     public $chatMessages = [];
     public $adminIds = [];
@@ -191,14 +193,31 @@ class ReflectionList extends Component
             $dt = new DateTime($msg->created_at, new DateTimeZone('UTC'));
             $dt->setTimezone(\App\Helpers\TimezoneHelper::dateTimeZone($userTimezone));
 
+            // Handle multiple files (JSON array) or single file
+            $files = [];
+            if ($msg->file) {
+                $decoded = json_decode($msg->file, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    // Multiple files stored as JSON array
+                    foreach ($decoded as $fileName) {
+                        $files[] = url('storage/hptm_files/' . $fileName);
+                    }
+                } else {
+                    // Single file stored as string
+                    $files[] = url('storage/hptm_files/' . $msg->file);
+                }
+            }
+
             return [
                 'from' => $msg->sendFrom,
                 'message' => $msg->message,
-                'image' => $msg->file ? url('storage/hptm_files/' . $msg->file) : null,
+                'image' => !empty($files) ? $files[0] : null, // Keep for backward compatibility
+                'images' => $files, // New: array of all files
                 'time' => $dt->format('Y-m-d H:i A'),
                 'user_profile_photo' => $msg->user && $msg->user->profile_photo_path
                     ? asset('storage/' . $msg->user->profile_photo_path)
                     : null,
+                'user_name' => $msg->user ? $msg->user->name : 'Unknown',
             ];
         })->toArray();
     }
@@ -210,15 +229,66 @@ class ReflectionList extends Component
             $this->loadChatMessages();
         }
     }
+    
+    public function removeFile($index)
+    {
+        if (isset($this->newChatImages[$index])) {
+            unset($this->newChatImages[$index]);
+            $this->newChatImages = array_values($this->newChatImages); // Re-index array
+        }
+    }
 
     public function sendChatMessage()
     {
         $user = Auth::user();
         $this->sendFrom = $user->id;
 
-        if (!$this->newChatMessage && !$this->newChatImage) {
+        // Check if message or files are provided
+        $hasMessage = !empty(trim($this->newChatMessage ?? ''));
+        
+        // Check for files - handle both single file (backward compatibility) and multiple files
+        $hasFiles = false;
+        $fileCount = 0;
+        
+        // Check for multiple files (new way)
+        // Livewire file uploads: files are available as TemporaryUploadedFile objects
+        // Simple check: if array exists and has items, files are attached
+        if (!empty($this->newChatImages)) {
+            if (is_array($this->newChatImages)) {
+                // Count non-null, non-empty items in array
+                // Even if items are not fully uploaded objects yet, if array has items, files are being uploaded
+                $nonEmptyFiles = array_filter($this->newChatImages, function($file) {
+                    return $file !== null && $file !== '';
+                });
+                $fileCount = count($nonEmptyFiles);
+                $hasFiles = $fileCount > 0;
+            } elseif (is_object($this->newChatImages)) {
+                // Single file object (not in array)
+                $hasFiles = true;
+                $fileCount = 1;
+            }
+        }
+        
+        // Also check for single file (backward compatibility)
+        if (!$hasFiles && !empty($this->newChatImage)) {
+            $hasFiles = true;
+            $fileCount = 1;
+        }
+        
+        // Only show error if BOTH message text is blank AND no files are attached
+        // Error should show ONLY when: message is empty AND files are not attached AND user clicks send
+        // If files are attached (even without message), allow sending
+        // If message is written (even without files), allow sending
+        if (!$hasMessage && !$hasFiles) {
             $this->alertType = 'error';
-            $this->alertMessage = 'Please type a message or attach a file.';
+            $this->alertMessage = 'Please write a message or attach a file and then click on send.';
+            return;
+        }
+        
+        // Validate file count
+        if ($hasFiles && $fileCount > $this->maxFiles) {
+            $this->alertType = 'error';
+            $this->alertMessage = "You can attach maximum {$this->maxFiles} files at once. You selected {$fileCount} files.";
             return;
         }
 
@@ -249,10 +319,102 @@ class ReflectionList extends Component
             $data['message'] = trim($this->newChatMessage);
         }
 
-        if ($this->newChatImage) {
-            $fileName = 'hptmChat_' . time() . '.' . $this->newChatImage->getClientOriginalExtension();
-            $this->newChatImage->storeAs('public/hptm_files', $fileName);
-            $data['file'] = $fileName;
+        // Handle multiple files (new way)
+        $fileNames = [];
+        if (!empty($this->newChatImages)) {
+            // Handle array of files
+            if (is_array($this->newChatImages)) {
+                foreach ($this->newChatImages as $index => $file) {
+                    if ($file) {
+                        try {
+                            // Check if file has the required methods
+                            if (method_exists($file, 'getClientOriginalExtension')) {
+                                $extension = $file->getClientOriginalExtension();
+                            } elseif (method_exists($file, 'extension')) {
+                                $extension = $file->extension();
+                            } else {
+                                // Try to get extension from path
+                                $path = method_exists($file, 'getRealPath') ? $file->getRealPath() : (property_exists($file, 'path') ? $file->path : '');
+                                $extension = pathinfo($path, PATHINFO_EXTENSION) ?: 'file';
+                            }
+                            
+                            $fileName = 'hptmChat_' . time() . '_' . uniqid() . '_' . $index . '.' . $extension;
+                            
+                            // Store file
+                            if (method_exists($file, 'storeAs')) {
+                                $file->storeAs('public/hptm_files', $fileName);
+                            } elseif (method_exists($file, 'store')) {
+                                $storedPath = $file->store('public/hptm_files');
+                                $fileName = basename($storedPath);
+                            } else {
+                                \Log::error('File object does not have storeAs or store method', ['file_type' => get_class($file)]);
+                                continue;
+                            }
+                            
+                            $fileNames[] = $fileName;
+                        } catch (\Exception $e) {
+                            \Log::error('File upload error for file ' . $index . ': ' . $e->getMessage(), [
+                                'file_type' => is_object($file) ? get_class($file) : gettype($file),
+                                'trace' => $e->getTraceAsString()
+                            ]);
+                        }
+                    }
+                }
+            } elseif (is_object($this->newChatImages)) {
+                // Single file object (not in array)
+                try {
+                    if (method_exists($this->newChatImages, 'getClientOriginalExtension')) {
+                        $extension = $this->newChatImages->getClientOriginalExtension();
+                    } else {
+                        $extension = 'file';
+                    }
+                    
+                    $fileName = 'hptmChat_' . time() . '_' . uniqid() . '.' . $extension;
+                    
+                    if (method_exists($this->newChatImages, 'storeAs')) {
+                        $this->newChatImages->storeAs('public/hptm_files', $fileName);
+                    } elseif (method_exists($this->newChatImages, 'store')) {
+                        $storedPath = $this->newChatImages->store('public/hptm_files');
+                        $fileName = basename($storedPath);
+                    }
+                    
+                    $fileNames[] = $fileName;
+                } catch (\Exception $e) {
+                    \Log::error('Single file upload error: ' . $e->getMessage());
+                }
+            }
+        }
+        
+        // Handle single file (backward compatibility)
+        if (empty($fileNames) && !empty($this->newChatImage)) {
+            try {
+                $extension = method_exists($this->newChatImage, 'getClientOriginalExtension') 
+                    ? $this->newChatImage->getClientOriginalExtension() 
+                    : 'file';
+                    
+                $fileName = 'hptmChat_' . time() . '_' . uniqid() . '.' . $extension;
+                
+                if (method_exists($this->newChatImage, 'storeAs')) {
+                    $this->newChatImage->storeAs('public/hptm_files', $fileName);
+                } elseif (method_exists($this->newChatImage, 'store')) {
+                    $storedPath = $this->newChatImage->store('public/hptm_files');
+                    $fileName = basename($storedPath);
+                }
+                
+                $fileNames[] = $fileName;
+            } catch (\Exception $e) {
+                \Log::error('Backward compatibility file upload error: ' . $e->getMessage());
+            }
+        }
+        
+        // Store files in database
+        if (!empty($fileNames)) {
+            // Store files as JSON array if multiple, or single string if one file
+            if (count($fileNames) === 1) {
+                $data['file'] = $fileNames[0];
+            } else {
+                $data['file'] = json_encode($fileNames);
+            }
         }
 
         ReflectionMessage::insert($data);
@@ -302,6 +464,9 @@ class ReflectionList extends Component
 
         $this->newChatMessage = null;
         $this->newChatImage = null;
+        $this->newChatImages = [];
+        $this->alertMessage = '';
+        $this->alertType = '';
 
         $this->loadChatMessages();
         $this->dispatch('scrollToBottom');
