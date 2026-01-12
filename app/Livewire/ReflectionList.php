@@ -175,6 +175,10 @@ class ReflectionList extends Component
         $this->sendTo = $reflection->userId;
         $this->loadChatMessages();
         $this->showChatModal = true;
+        
+        // Clear any previous error messages when opening chat
+        $this->alertMessage = '';
+        $this->alertType = '';
     }
 
     public function loadChatMessages()
@@ -287,10 +291,15 @@ class ReflectionList extends Component
         // If files are attached (even without message), allow sending
         // If message is written (even without files), allow sending
         if (!$hasMessage && !$hasFiles) {
+            // Clear any previous success messages
             $this->alertType = 'error';
             $this->alertMessage = 'Please write a message or attach a file and then click on send.';
             return;
         }
+        
+        // Clear any previous error messages before processing successful send
+        $this->alertMessage = '';
+        $this->alertType = '';
         
         // Validate file count
         if ($hasFiles && $fileCount > $this->maxFiles) {
@@ -515,14 +524,20 @@ class ReflectionList extends Component
             $this->updateReflectionStatus('inprogress');
         }
 
-        $this->newChatMessage = null;
-        $this->newChatImage = null;
-        $this->newChatImages = [];
+        // Clear form fields and error messages FIRST
         $this->alertMessage = '';
         $this->alertType = '';
+        $this->newChatMessage = '';
+        $this->newChatImage = null;
+        $this->newChatImages = [];
 
+        // Reload messages and scroll to bottom
         $this->loadChatMessages();
         $this->dispatch('scrollToBottom');
+        
+        // Force clear any remaining error state and ensure UI updates
+        $this->resetErrorBag();
+        $this->dispatch('message-sent'); // Custom event to ensure UI updates
     }
 
 

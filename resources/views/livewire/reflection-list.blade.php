@@ -410,8 +410,10 @@
                                 </div>
                             @endif
                             
-                            <form wire:submit.prevent="sendChatMessage" class="flex items-end gap-2 sm:gap-3" 
+                            <form wire:submit.prevent="sendChatMessage" 
+                                  class="flex items-end gap-2 sm:gap-3" 
                                   x-data="{ filePreviews: {} }"
+                                  x-on:livewire:message-sent.window="$wire.set('alertMessage', ''); $wire.set('alertType', '');"
                                   x-init="
                                     // Store handlePaste function in Alpine data for access
                                     $data.handlePaste = function(event) {
@@ -423,6 +425,17 @@
                                             
                                             if (item.type.indexOf('image') !== -1) {
                                                 event.preventDefault();
+                                                
+                                                // Clear error message when file is pasted
+                                                if (window.Livewire) {
+                                                    const wireId = event.target.closest('[wire\\:id]')?.getAttribute('wire:id');
+                                                    if (wireId) {
+                                                        const component = window.Livewire.find(wireId);
+                                                        if (component) {
+                                                            component.set('alertMessage', '');
+                                                        }
+                                                    }
+                                                }
                                                 
                                                 const file = item.getAsFile();
                                                 if (!file) continue;
@@ -487,6 +500,7 @@
                                         class="w-full border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-3 pr-10 sm:pr-12 bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none text-sm"
                                         x-on:keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); $wire.call('sendChatMessage'); }"
                                         x-on:paste="$data.handlePaste($event)"
+                                        x-on:input="$wire.set('alertMessage', '')"
                                     ></textarea>
                                     
                                     <input 
@@ -496,7 +510,10 @@
                                         class="hidden" 
                                         accept="image/*,video/*,.pdf,.doc,.docx" 
                                         multiple
-                                        x-on:change="handleFileSelection($event, {{ $maxFiles }})"
+                                        x-on:change="
+                                            handleFileSelection($event, {{ $maxFiles }});
+                                            $wire.set('alertMessage', '');
+                                        "
                                         x-on:livewire-upload-finish="
                                             $wire.$refresh();
                                             // Update previews after upload completes
@@ -523,7 +540,6 @@
 
                                 <button 
                                     type="submit"
-                                    wire:click="sendChatMessage"
                                     wire:loading.attr="disabled"
                                     wire:target="sendChatMessage,newChatImages"
                                     class="bg-[#EB1C24] hover:bg-red-700 text-white px-3 sm:px-5 py-2.5 sm:py-3 rounded-lg flex items-center justify-center gap-1 sm:gap-2 transition-colors shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
