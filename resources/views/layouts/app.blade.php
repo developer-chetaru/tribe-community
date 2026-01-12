@@ -41,7 +41,8 @@
                     @include('navigation-menu', ['header' => $header ?? null])
                </div>
 
-
+               {{-- Grace Period Banner --}}
+               @livewire('grace-period-banner')
 
              <main class="p-6 flex-1 overflow-y-auto">
                {{ $slot }}

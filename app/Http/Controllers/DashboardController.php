@@ -57,8 +57,36 @@ class DashboardController extends Controller
     	$needsPayment = false;
     	$paymentMessage = '';
     	
-    	// Check if subscription has expired (from session first, then direct check)
-    	if (session('subscription_expired')) {
+    	// First, check actual subscription status (don't rely on session if status is past_due)
+    	$subscriptionIsPastDue = false;
+    	if ($user && !$user->hasRole('super_admin')) {
+    	    if ($user->hasRole('basecamp')) {
+    	        $subscription = SubscriptionRecord::where('user_id', $user->id)
+                    ->where('tier', 'basecamp')
+                    ->orderBy('id', 'desc')
+                    ->first();
+    	        if ($subscription) {
+    	            $normalizedStatus = strtolower(str_replace(' ', '_', $subscription->status));
+    	            $subscriptionIsPastDue = ($normalizedStatus === 'past_due');
+    	        }
+    	    } elseif ($user->orgId) {
+    	        $subscriptionService = new SubscriptionService();
+    	        $subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId);
+    	        $normalizedStatus = isset($subscriptionStatus['status']) 
+    	            ? strtolower(str_replace(' ', '_', $subscriptionStatus['status'])) 
+    	            : '';
+    	        $subscriptionIsPastDue = ($normalizedStatus === 'past_due');
+    	    }
+    	}
+    	
+    	// If subscription is past_due, clear session and allow dashboard access (grace period banner will show)
+    	if ($subscriptionIsPastDue) {
+    	    session()->forget('subscription_expired');
+    	    session()->forget('subscription_status');
+    	}
+    	
+    	// Check if subscription has expired (from session, but only if not past_due)
+    	if (session('subscription_expired') && !$subscriptionIsPastDue) {
     	    $needsPayment = true;
     	    $subscriptionStatus = session('subscription_status', []);
     	    $isBasecamp = $user && $user->hasRole('basecamp');
@@ -84,38 +112,57 @@ class DashboardController extends Controller
                     ->first();
                     
                 if ($subscription) {
-                    $endDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end)->startOfDay() : null;
-                    $today = Carbon::today();
+                    // Normalize status for comparison (handle both "past_due" and "Past Due")
+                    $normalizedStatus = strtolower(str_replace(' ', '_', $subscription->status));
                     
-                    // Check if expired
-                    // Important: Cancelled subscriptions are still active until end date passes
-                    if ($endDate && $today->greaterThan($endDate)) {
-                        // End date has passed - subscription is expired regardless of status
-                        $isExpired = true;
-                    } elseif ($endDate && $endDate->isFuture()) {
-                        // End date is in future - subscription is active (even if cancelled)
-                        // User can access until the end date
+                    // If status is past_due, allow access to show grace period banner
+                    // Don't block with Payment Required modal
+                    if ($normalizedStatus === 'past_due') {
                         $isExpired = false;
-                    } elseif (!$endDate) {
-                        // No end date - check status
-                        if ($subscription->status !== 'active') {
+                        // Clear any expired flags to allow dashboard access
+                        session()->forget('subscription_expired');
+                        session()->forget('subscription_status');
+                    } else {
+                        $endDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end)->startOfDay() : null;
+                        $today = Carbon::today();
+                        
+                        // Check if expired
+                        // Important: Cancelled subscriptions are still active until end date passes
+                        if ($endDate && $today->greaterThan($endDate)) {
+                            // End date has passed - subscription is expired regardless of status
                             $isExpired = true;
+                        } elseif ($endDate && $endDate->isFuture()) {
+                            // End date is in future - subscription is active (even if cancelled)
+                            // User can access until the end date
+                            $isExpired = false;
+                        } elseif (!$endDate) {
+                            // No end date - check status
+                            if ($subscription->status !== 'active') {
+                                $isExpired = true;
+                            } else {
+                                $isExpired = false;
+                            }
                         } else {
                             $isExpired = false;
                         }
-                    } else {
-                        $isExpired = false;
                     }
                 } else {
                     // No subscription = expired
                     $isExpired = true;
                 }
                 
-                if ($isExpired) {
+                // Don't show Payment Required modal if status is past_due (grace period banner will show instead)
+                if ($subscription && strtolower(str_replace(' ', '_', $subscription->status)) === 'past_due') {
+                    $isExpired = false;
+                    $needsPayment = false;
+                    // Clear any expired flags to allow dashboard access
+                    session()->forget('subscription_expired');
+                    session()->forget('subscription_status');
+                } elseif ($isExpired) {
                     $needsPayment = true;
                     $paymentMessage = 'Please complete your payment of £12.00 (incl. VAT) to activate your account.';
                 } else {
-                    // Subscription is active - clear any expired flags
+                    // Subscription is active or in grace period - clear any expired flags
                     session()->forget('subscription_expired');
                     session()->forget('subscription_status');
                 }
@@ -126,27 +173,48 @@ class DashboardController extends Controller
                 $subscriptionService = new SubscriptionService();
                 $subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId);
                 
-                // Check if subscription has expired (end_date is in the past)
-                // Important: Cancelled subscriptions are still active until end date passes
-                if (isset($subscriptionStatus['end_date']) && $subscriptionStatus['end_date']) {
-                    $endDate = Carbon::parse($subscriptionStatus['end_date'])->startOfDay();
-                    $today = Carbon::today();
-                    // Only expired if end date has passed
-                    $isExpired = $today->greaterThan($endDate);
-                } elseif (!($subscriptionStatus['active'] ?? false)) {
-                    // Only mark as expired if there's no end date or it's truly inactive
-                    // Check if we have end date in subscription object
-                    if (isset($subscriptionStatus['subscription']) && $subscriptionStatus['subscription']->current_period_end) {
-                        $endDate = Carbon::parse($subscriptionStatus['subscription']->current_period_end)->startOfDay();
+                // Normalize status for comparison (handle both "past_due" and "Past Due")
+                $normalizedStatus = isset($subscriptionStatus['status']) 
+                    ? strtolower(str_replace(' ', '_', $subscriptionStatus['status'])) 
+                    : '';
+                
+                // If status is past_due, allow access to show grace period banner
+                // Don't block with Payment Required modal
+                if ($normalizedStatus === 'past_due') {
+                    $isExpired = false;
+                    // Clear any expired flags to allow dashboard access
+                    session()->forget('subscription_expired');
+                    session()->forget('subscription_status');
+                } else {
+                    // Check if subscription has expired (end_date is in the past)
+                    // Important: Cancelled subscriptions are still active until end date passes
+                    if (isset($subscriptionStatus['end_date']) && $subscriptionStatus['end_date']) {
+                        $endDate = Carbon::parse($subscriptionStatus['end_date'])->startOfDay();
                         $today = Carbon::today();
+                        // Only expired if end date has passed
                         $isExpired = $today->greaterThan($endDate);
-                    } else {
-                        $isExpired = true;
+                    } elseif (!($subscriptionStatus['active'] ?? false)) {
+                        // Only mark as expired if there's no end date or it's truly inactive
+                        // Check if we have end date in subscription object
+                        if (isset($subscriptionStatus['subscription']) && $subscriptionStatus['subscription']->current_period_end) {
+                            $endDate = Carbon::parse($subscriptionStatus['subscription']->current_period_end)->startOfDay();
+                            $today = Carbon::today();
+                            $isExpired = $today->greaterThan($endDate);
+                        } else {
+                            $isExpired = true;
+                        }
                     }
                 }
                 
-                // Only show payment popup if expired AND not suspended (suspended has different handling)
-                if ($isExpired && $subscriptionStatus['status'] !== 'suspended') {
+                // Don't show Payment Required modal if status is past_due (grace period banner will show instead)
+                if ($normalizedStatus === 'past_due') {
+                    $isExpired = false;
+                    $needsPayment = false;
+                    // Clear any expired flags to allow dashboard access
+                    session()->forget('subscription_expired');
+                    session()->forget('subscription_status');
+                } elseif ($isExpired && $subscriptionStatus['status'] !== 'suspended') {
+                    // Only show payment popup if expired AND not suspended AND not past_due
                     $needsPayment = true;
                     
                     // Calculate amount based on user count
