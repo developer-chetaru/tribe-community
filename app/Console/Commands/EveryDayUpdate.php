@@ -200,17 +200,11 @@ class EveryDayUpdate extends Command
 
       // Filter users based on their timezone, target time (16:00), organisation and working days
       $usersToNotify = $users->filter(function ($user) {
-          // Get user's timezone or default to Asia/Kolkata
-          $userTimezone = $user->timezone ?: 'Asia/Kolkata';
-          
-          // Validate timezone to prevent errors
-          if (!in_array($userTimezone, timezone_identifiers_list())) {
-              Log::channel('daily')->warning("Invalid timezone for user {$user->id}: {$userTimezone}, using Asia/Kolkata");
-              $userTimezone = 'Asia/Kolkata';
-          }
+          // Get user's timezone safely using helper
+          $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
           
           // Get current time in user's timezone
-          $userNow = now($userTimezone);
+          $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
           
           // Check if it's 16:00 in user's timezone
           $targetTime = $userNow->format('H:i');
@@ -243,11 +237,8 @@ class EveryDayUpdate extends Command
 
       // ✅ Filter out users who already received notification today to prevent duplicates
       $usersToNotify = $usersToNotify->filter(function ($user) {
-          $userTimezone = $user->timezone ?: 'Asia/Kolkata';
-          if (!in_array($userTimezone, timezone_identifiers_list())) {
-              $userTimezone = 'Asia/Kolkata';
-          }
-          $userNow = now($userTimezone);
+          $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+          $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
           
           // Check if notification already sent today
           $notificationAlreadySent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
@@ -292,7 +283,7 @@ class EveryDayUpdate extends Command
               $userTimezone = 'Asia/Kolkata';
           }
           
-          $userNow = now($userTimezone);
+          $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
           
           $this->storeNotification(
               $user->id,
@@ -348,7 +339,7 @@ class EveryDayUpdate extends Command
                     $userTimezone = 'Asia/Kolkata';
                 }
                 
-                $userNow = now($userTimezone);
+                $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
                 
                 // Check if it's 23:59 in user's timezone
                 if ($userNow->format('H:i') === '23:59') {
@@ -1001,66 +992,84 @@ protected function sendMonthlyEmail()
  */
 public function generateWeeklySummary()
 {
-    $today = now('Asia/Kolkata');
-    Log::info("WeeklySummary generation started at {$today}");
+    Log::info("WeeklySummary generation started");
     
-    // Remove strict time check - let cron handle scheduling
-    // Only check if it's Sunday (cron runs on Sunday)
-    if (!$today->isSunday()) {
-        Log::info("WeeklySummary: Not Sunday, skipping. Current day: {$today->format('l')}");
+    // Get all active users
+    $users = User::where('status', 1)->get();
+    
+    if ($users->isEmpty()) {
+        Log::info("WeeklySummary: No active users found.");
         return;
     }
-
-    // Generate summary for the week that just ended
-    // On Sunday, the week that just ended is Monday-Sunday of the current week
-    // So we use startOfWeek() and endOfWeek() on today (Sunday) to get the week that just ended
-    $startOfWeekIST = $today->copy()->startOfWeek(); // Monday of current week
-    $endOfWeekIST = $today->copy()->endOfWeek(); // Sunday of current week (today)
-    $startOfWeekUTC = $startOfWeekIST->clone()->setTimezone('UTC');
-    $endOfWeekUTC = $endOfWeekIST->clone()->setTimezone('UTC');
-
-    $userIds = HappyIndex::whereBetween('created_at', [$startOfWeekUTC, $endOfWeekUTC])
-        ->distinct()
-        ->pluck('user_id');
-
-    if ($userIds->isEmpty()) {
-        Log::info("WeeklySummary: No users found with mood data for this week.");
-        return;
-    }
-
-    $users = User::whereIn('id', $userIds)->get();
-    $oneSignal = new OneSignalService();
-
+    
+    $processedCount = 0;
+    $skippedCount = 0;
+    
     foreach ($users as $user) {
+        try {
+            // Get user's timezone or default to Asia/Kolkata
+            $userTimezone = $user->timezone ?: 'Asia/Kolkata';
+            
+            // Validate timezone to prevent errors
+            if (!in_array($userTimezone, timezone_identifiers_list())) {
+                Log::warning("Invalid timezone for user {$user->id}: {$userTimezone}, using Asia/Kolkata");
+                $userTimezone = 'Asia/Kolkata';
+            }
+            
+            // Get current time in user's timezone
+            $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
+            
+            // Check if it's Sunday 23:00 in user's timezone
+            $isSunday = $userNow->isSunday();
+            $is2300 = $userNow->format('H:i') === '23:00';
+            
+            if (!$isSunday || !$is2300) {
+                $skippedCount++;
+                continue; // Skip if not Sunday 23:00 in user's timezone
+            }
+            
+            // Use user's timezone for date calculations
+            $today = $userNow;
 
-        $allData = HappyIndex::where('user_id', $user->id)
-            ->whereBetween('created_at', [$startOfWeekUTC, $endOfWeekUTC])
-            ->orderBy('created_at')
-            ->get(['mood_value', 'description', 'created_at']);
+            // Generate summary for the week that just ended
+            // On Sunday, the week that just ended is Monday-Sunday of the current week
+            // So we use startOfWeek() and endOfWeek() on today (Sunday) to get the week that just ended
+            $startOfWeekUserTz = $today->copy()->startOfWeek(); // Monday of current week
+            $endOfWeekUserTz = $today->copy()->endOfWeek(); // Sunday of current week (today)
+            $startOfWeekUTC = $startOfWeekUserTz->clone()->setTimezone('UTC');
+            $endOfWeekUTC = $endOfWeekUserTz->clone()->setTimezone('UTC');
 
-        if ($allData->isEmpty()) {
-            continue;
-        }
+            // Check if user has mood data for this week
+            $allData = HappyIndex::where('user_id', $user->id)
+                ->whereBetween('created_at', [$startOfWeekUTC, $endOfWeekUTC])
+                ->orderBy('created_at')
+                ->get(['mood_value', 'description', 'created_at']);
 
-        $entries = $allData->map(function ($item) {
-            $date = $item->created_at->setTimezone('Asia/Kolkata')->format('M d, D');
-            $mood = match ($item->mood_value) {
-                3 => 'Good 😊',
-                2 => 'Okay 😐',
-                1 => 'Bad 🙁',
-                default => 'Unknown',
-            };
-            $desc = $item->description ? " - {$item->description}" : '';
-            return "{$date}: {$mood}{$desc}";
-        })->implode("\n");
+            if ($allData->isEmpty()) {
+                Log::info("WeeklySummary: No mood data for user {$user->id} for this week.");
+                $skippedCount++;
+                continue;
+            }
 
-        $weekLabel = $startOfWeekIST->format('M d') . ' - ' . $endOfWeekIST->format('M d');
-        $year = $startOfWeekIST->year;
-        $month = $startOfWeekIST->month;
-        $weekNumber = $startOfWeekIST->weekOfMonth;
+            $entries = $allData->map(function ($item) use ($userTimezone) {
+                $date = $item->created_at->setTimezone($userTimezone)->format('M d, D');
+                $mood = match ($item->mood_value) {
+                    3 => 'Good 😊',
+                    2 => 'Okay 😐',
+                    1 => 'Bad 🙁',
+                    default => 'Unknown',
+                };
+                $desc = $item->description ? " - {$item->description}" : '';
+                return "{$date}: {$mood}{$desc}";
+            })->implode("\n");
 
-        // Get prompt from database or use default
-        $promptTemplate = \App\Models\AppSetting::getValue('weekly_summary_prompt', 'Generate a professional weekly emotional summary for the user based strictly on the following daily sentiment data from {weekLabel}:
+            $weekLabel = $startOfWeekUserTz->format('M d') . ' - ' . $endOfWeekUserTz->format('M d');
+            $year = $startOfWeekUserTz->year;
+            $month = $startOfWeekUserTz->month;
+            $weekNumber = $startOfWeekUserTz->weekOfMonth;
+
+            // Get prompt from database or use default
+            $promptTemplate = \App\Models\AppSetting::getValue('weekly_summary_prompt', 'Generate a professional weekly emotional summary for the user based strictly on the following daily sentiment data from {weekLabel}:
 
 {entries}
 
@@ -1073,120 +1082,135 @@ Important writing requirements:
 - Focus only on the user\'s emotional journey.
 - Do NOT include organisational-level references.');
 
-        $prompt = str_replace(['{weekLabel}', '{entries}'], [$weekLabel, $entries], $promptTemplate);
+            $prompt = str_replace(['{weekLabel}', '{entries}'], [$weekLabel, $entries], $promptTemplate);
 
-        // FIRST ATTEMPT
-        $summaryText = $this->generateAIText($prompt, $user->id);
+            // FIRST ATTEMPT
+            $summaryText = $this->generateAIText($prompt, $user->id);
 
-        // RETRY LOGIC (unchanged)
-        if ($summaryText === 'QUOTA_EXCEEDED') {
-            $summaryText = 'Summary unavailable due to AI quota limits.';
-        } else {
-            if ($summaryText === 'AI_SERVICE_UNAVAILABLE' ||
-                empty(trim($summaryText)) ||
-                $summaryText === 'Summary could not be generated due to an error.') {
-
-                Log::warning("WeeklySummary: AI retry attempt for user {$user->id}");
-                $summaryText = $this->generateAIText($prompt, $user->id);
-            }
-
+            // RETRY LOGIC
             if ($summaryText === 'QUOTA_EXCEEDED') {
                 $summaryText = 'Summary unavailable due to AI quota limits.';
-            } elseif ($summaryText === 'AI_SERVICE_UNAVAILABLE' ||
-                empty(trim($summaryText)) ||
-                $summaryText === 'Summary could not be generated due to an error.') {
-                $summaryText = 'No summary generated.';
+            } else {
+                if ($summaryText === 'AI_SERVICE_UNAVAILABLE' ||
+                    empty(trim($summaryText)) ||
+                    $summaryText === 'Summary could not be generated due to an error.') {
+
+                    Log::warning("WeeklySummary: AI retry attempt for user {$user->id}");
+                    $summaryText = $this->generateAIText($prompt, $user->id);
+                }
+
+                if ($summaryText === 'QUOTA_EXCEEDED') {
+                    $summaryText = 'Summary unavailable due to AI quota limits.';
+                } elseif ($summaryText === 'AI_SERVICE_UNAVAILABLE' ||
+                    empty(trim($summaryText)) ||
+                    $summaryText === 'Summary could not be generated due to an error.') {
+                    $summaryText = 'No summary generated.';
+                }
             }
-        }
 
-        // SAVE SUMMARY (unchanged)
-        WeeklySummaryModel::updateOrCreate(
-            [
-                'user_id' => $user->id,
-                'year' => $year,
-                'month' => $month,
-                'week_number' => $weekNumber,
-            ],
-            [
-                'week_label' => $weekLabel,
-                'summary' => $summaryText,
-            ]
-        );
-
-        /**
-         * IMPORTANT: SEND EMAIL AND STORE NOTIFICATION ONLY IF SUMMARY IS VALID
-         */
-        if ($this->isValidSummary($summaryText)) {
-            // ✅ Check if weekly summary email already sent for this week to prevent duplicates
-            // Use proper datetime range for better matching
-            $emailAlreadySent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
-                ->where('notificationType', 'weekly-summary')
-                ->where('title', 'LIKE', "%Weekly Summary ({$weekLabel})%")
-                ->whereBetween('created_at', [
-                    $startOfWeekIST->startOfDay()->toDateTimeString(),
-                    $endOfWeekIST->endOfDay()->toDateTimeString()
-                ])
-                ->exists();
-
-            if ($emailAlreadySent) {
-                Log::warning("⛔ Email NOT sent — weekly summary already sent this week for user {$user->id}");
-                continue;
+            // Only save summary to database if it's valid (not an error message)
+            // Don't save error messages like "No summary generated." or "Error generating summary."
+            if ($this->isValidSummary($summaryText)) {
+                // SAVE SUMMARY only if valid
+                WeeklySummaryModel::updateOrCreate(
+                    [
+                        'user_id' => $user->id,
+                        'year' => $year,
+                        'month' => $month,
+                        'week_number' => $weekNumber,
+                    ],
+                    [
+                        'week_label' => $weekLabel,
+                        'summary' => $summaryText,
+                    ]
+                );
+            } else {
+                // Log that summary generation failed but don't save error message to database
+                Log::warning("WeeklySummary: Invalid summary for user {$user->id} ({$weekLabel}). Not saving to database.");
             }
-            
-            // ✅ Additional safety check: also check if email was sent in the last 7 days with same week label
-            $recentEmailSent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
-                ->where('notificationType', 'weekly-summary')
-                ->where('title', 'LIKE', "%Weekly Summary ({$weekLabel})%")
-                ->where('created_at', '>=', now()->subDays(7)->startOfDay())
-                ->exists();
+
+            /**
+             * IMPORTANT: SEND EMAIL AND STORE NOTIFICATION ONLY IF SUMMARY IS VALID
+             */
+            if ($this->isValidSummary($summaryText)) {
+                // ✅ Check if weekly summary email already sent for this week to prevent duplicates
+                // Use proper datetime range for better matching
+                $emailAlreadySent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
+                    ->where('notificationType', 'weekly-summary')
+                    ->where('title', 'LIKE', "%Weekly Summary ({$weekLabel})%")
+                    ->whereBetween('created_at', [
+                        $startOfWeekUserTz->startOfDay()->toDateTimeString(),
+                        $endOfWeekUserTz->endOfDay()->toDateTimeString()
+                    ])
+                    ->exists();
+
+                if ($emailAlreadySent) {
+                    Log::warning("⛔ Email NOT sent — weekly summary already sent this week for user {$user->id}");
+                    continue;
+                }
                 
-            if ($recentEmailSent) {
-                Log::warning("⛔ Email NOT sent — weekly summary with same week label sent in last 7 days for user {$user->id}");
-                continue;
-            }
+                // ✅ Additional safety check: also check if email was sent in the last 7 days with same week label
+                $recentEmailSent = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
+                    ->where('notificationType', 'weekly-summary')
+                    ->where('title', 'LIKE', "%Weekly Summary ({$weekLabel})%")
+                    ->where('created_at', '>=', now()->subDays(7)->startOfDay())
+                    ->exists();
+                    
+                if ($recentEmailSent) {
+                    Log::warning("⛔ Email NOT sent — weekly summary with same week label sent in last 7 days for user {$user->id}");
+                    continue;
+                }
 
-            // Store notification in database FIRST to prevent race conditions
-            $notificationStored = $this->storeNotification(
-                $user->id,
-                'weekly-summary',
-                "Tribe365 Weekly Summary ({$weekLabel})",
-                "Your weekly emotional summary for {$weekLabel} has been generated.",
-                null,
-                now('Asia/Kolkata')
-            );
-            
-            // Only send email if notification was successfully stored (not duplicate)
-            if ($notificationStored) {
-                try {
-                    $engagementText = $this->buildEngagementSummary($user, $startOfWeekUTC, $endOfWeekUTC);
-                    $organisationSummary = $this->generateAIOrgSummary($startOfWeekUTC, $endOfWeekUTC);
+                // Store notification in database FIRST to prevent race conditions
+                $notificationStored = $this->storeNotification(
+                    $user->id,
+                    'weekly-summary',
+                    "Tribe365 Weekly Summary ({$weekLabel})",
+                    "Your weekly emotional summary for {$weekLabel} has been generated.",
+                    null,
+                    now($userTimezone)
+                );
+                
+                // Only send email if notification was successfully stored (not duplicate)
+                if ($notificationStored) {
+                    try {
+                        $oneSignal = new OneSignalService();
+                        $engagementText = $this->buildEngagementSummary($user, $startOfWeekUTC, $endOfWeekUTC);
+                        $organisationSummary = $this->generateAIOrgSummary($startOfWeekUTC, $endOfWeekUTC);
 
-                    $emailBody = view('emails.weekly-summary', [
-                        'user'                => $user,
-                        'summaryText'         => $summaryText,
-                        'weekLabel'           => $weekLabel,
-                        'engagementText'      => $engagementText,
-                        'organisationSummary' => $organisationSummary,
-                    ])->render();
+                        $emailBody = view('emails.weekly-summary', [
+                            'user'                => $user,
+                            'summaryText'         => $summaryText,
+                            'weekLabel'           => $weekLabel,
+                            'engagementText'      => $engagementText,
+                            'organisationSummary' => $organisationSummary,
+                        ])->render();
 
-                    $oneSignal->registerEmailUserFallback($user->email, $user->id, [
-                        'subject' => "Tribe365 Weekly Summary ({$weekLabel})",
-                        'body'    => $emailBody,
-                    ]);
+                        $oneSignal->registerEmailUserFallback($user->email, $user->id, [
+                            'subject' => "Tribe365 Weekly Summary ({$weekLabel})",
+                            'body'    => $emailBody,
+                        ]);
 
-                    Log::info("✅ OneSignal weekly email sent and notification stored for user {$user->id}");
-                } catch (\Throwable $e) {
-                    Log::error("❌ OneSignal email failed for user {$user->id}: {$e->getMessage()}");
+                        Log::info("✅ OneSignal weekly email sent and notification stored for user {$user->id}");
+                    } catch (\Throwable $e) {
+                        Log::error("❌ OneSignal email failed for user {$user->id}: {$e->getMessage()}");
+                    }
+                } else {
+                    Log::warning("⛔ Email NOT sent — notification already exists for user {$user->id}");
                 }
             } else {
-                Log::warning("⛔ Email NOT sent — notification already exists for user {$user->id}");
+                Log::warning("⛔ Email NOT sent — summary invalid for user {$user->id}");
             }
-        } else {
-            Log::warning("⛔ Email NOT sent — summary invalid for user {$user->id}");
-        }
 
-        Log::info("WeeklySummary generated for user {$user->id} ({$weekLabel})");
+            Log::info("WeeklySummary generated for user {$user->id} ({$weekLabel}) - timezone: {$userTimezone}");
+            $processedCount++;
+        } catch (\Exception $e) {
+            Log::error("Failed to generate weekly summary for user {$user->id}: " . $e->getMessage());
+            $skippedCount++;
+        }
     }
+    
+    Log::info("WeeklySummary generation completed. Processed: {$processedCount}, Skipped: {$skippedCount}");
 }
 
 private function generateAIOrgSummary($startOfWeekUTC, $endOfWeekUTC)
@@ -1317,6 +1341,7 @@ private function isValidSummary(string $text): bool
     $bad = [
         '',
         'Summary could not be generated due to an error.',
+        'Error generating summary.',
         'AI_SERVICE_UNAVAILABLE',
         'No summary generated.',
         'Summary unavailable due to AI quota limits.',
@@ -1418,7 +1443,7 @@ private function generateAIText(string $prompt, $userId = null): string
         
         // If month/year provided, use that; otherwise use current month
         if ($month && $year) {
-            $targetDate = Carbon::create($year, $month, 1, 0, 0, 0, 'Asia/Kolkata');
+            $targetDate = Carbon::create($year, $month, 1, 0, 0, 0, \App\Helpers\TimezoneHelper::DEFAULT_TIMEZONE);
             $startOfMonthIST = $targetDate->copy()->startOfMonth();
             $endOfMonthIST   = $targetDate->copy()->endOfMonth();
             Log::info("MonthlySummary generation started for {$targetDate->format('F Y')} (manual override)");

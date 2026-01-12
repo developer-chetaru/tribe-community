@@ -82,17 +82,24 @@ class GenerateWeeklySummariesForMonth extends Command
                     continue;
                 }
 
-                // Check if summary already exists
-                $exists = WeeklySummaryModel::where([
+                // Check if summary already exists and is valid
+                $existingSummary = WeeklySummaryModel::where([
                     'user_id' => $user->id,
                     'year' => $year,
                     'month' => $month,
                     'week_number' => $week['number'],
-                ])->exists();
+                ])->first();
 
-                if ($exists) {
-                    $this->line("Skipping user {$user->id}, week {$week['number']} - already exists");
+                // Skip only if summary exists AND is valid (not an error message)
+                if ($existingSummary && $this->isValidSummary($existingSummary->summary ?? '')) {
+                    $this->line("Skipping user {$user->id}, week {$week['number']} - valid summary already exists");
                     continue;
+                }
+                
+                // If summary exists but is invalid (error message), delete it to regenerate
+                if ($existingSummary && !$this->isValidSummary($existingSummary->summary ?? '')) {
+                    $this->line("Regenerating invalid summary for user {$user->id}, week {$week['number']}");
+                    $existingSummary->delete();
                 }
 
                 // Get mood data for this week
@@ -105,9 +112,11 @@ class GenerateWeeklySummariesForMonth extends Command
                     ->get(['mood_value', 'description', 'created_at']);
 
                 if ($allData->isEmpty()) {
-                    $this->line("No data for user {$user->id}, week {$week['number']}");
+                    $this->line("No data for user {$user->id}, week {$week['number']} (period: {$startUTC->format('Y-m-d H:i')} to {$endUTC->format('Y-m-d H:i')} UTC)");
                     continue;
                 }
+                
+                $this->line("Found {$allData->count()} mood entries for user {$user->id}, week {$week['number']}");
 
                 // Build entries
                 $entries = $allData->map(function ($item) {
@@ -147,45 +156,112 @@ Important writing requirements:
                     $summaryText = 'No summary generated.';
                 }
 
-                // Save summary
-                WeeklySummaryModel::create([
-                    'user_id' => $user->id,
-                    'year' => $year,
-                    'month' => $month,
-                    'week_number' => $week['number'],
-                    'week_label' => $week['label'],
-                    'summary' => $summaryText,
-                ]);
+                // Only save summary if it's valid (not an error message)
+                if ($this->isValidSummary($summaryText)) {
+                    WeeklySummaryModel::create([
+                        'user_id' => $user->id,
+                        'year' => $year,
+                        'month' => $month,
+                        'week_number' => $week['number'],
+                        'week_label' => $week['label'],
+                        'summary' => $summaryText,
+                    ]);
+                    $generated++;
+                    $this->info("Generated summary for user {$user->id}, week {$week['number']}");
+                } else {
+                    $this->warn("Failed to generate valid summary for user {$user->id}, week {$week['number']} - {$summaryText}");
+                }
 
-                $generated++;
-                $this->info("Generated summary for user {$user->id}, week {$week['number']}");
             }
         }
 
         $this->info("Generated {$generated} weekly summaries.");
     }
+    
+    private function isValidSummary(string $text): bool
+    {
+        $bad = [
+            '',
+            'Summary could not be generated due to an error.',
+            'Error generating summary.',
+            'AI_SERVICE_UNAVAILABLE',
+            'No summary generated.',
+            'Summary unavailable due to AI quota limits.',
+            'QUOTA_EXCEEDED',
+        ];
+
+        return !in_array(trim($text), $bad, true);
+    }
 
     private function generateAIText(string $prompt, $userId = null): string
     {
-        try {
-            $response = \OpenAI\Laravel\Facades\OpenAI::responses()->create([
-                'model' => env('OPENAI_DEFAULT_MODEL', 'gpt-4.1-mini'),
-                'input' => $prompt,
-            ]);
-
-            $summaryText = '';
-            if (!empty($response->output)) {
-                foreach ($response->output as $item) {
-                    foreach ($item->content ?? [] as $c) {
-                        $summaryText .= $c->text ?? '';
-                    }
-                }
-            }
-
-            return trim($summaryText) ?: 'Summary could not be generated due to an error.';
-        } catch (\Exception $e) {
-            Log::error("AI generation error for user {$userId}: " . $e->getMessage());
+        $apiKey = env('OPENAI_API_KEY');
+        if (empty($apiKey)) {
+            Log::error("OpenAI API key missing (OPENAI_API_KEY).");
             return 'AI_SERVICE_UNAVAILABLE';
         }
+
+        // Model configuration — change via .env if you want different model
+        $chatModel = env('OPENAI_CHAT_MODEL', 'gpt-3.5-turbo');
+        $maxTokens = intval(env('OPENAI_MAX_TOKENS', 500));
+        $temperature = floatval(env('OPENAI_TEMPERATURE', 0.7));
+
+        $attempts = 0;
+        $maxAttempts = 3;
+        $backoffSeconds = 1;
+
+        while ($attempts < $maxAttempts) {
+            $attempts++;
+
+            try {
+                $res = \Illuminate\Support\Facades\Http::withToken($apiKey)
+                    ->timeout(30)
+                    ->post('https://api.openai.com/v1/chat/completions', [
+                        'model' => $chatModel,
+                        'messages' => [
+                            ['role' => 'user', 'content' => $prompt],
+                        ],
+                        'max_tokens' => $maxTokens,
+                        'temperature' => $temperature,
+                    ]);
+
+                if ($res->ok()) {
+                    $json = $res->json();
+                    $text = $json['choices'][0]['message']['content'] ?? null;
+                    if (!empty($text)) {
+                        return trim((string)$text);
+                    }
+                    // empty response — warn and try again
+                    Log::warning("AI chat returned empty for user {$userId}, attempt {$attempts}");
+                } else {
+                    $status = $res->status();
+                    $body = $res->body();
+
+                    // Quota exceeded — return sentinel immediately
+                    if ($status === 429 || str_contains($body, 'insufficient_quota')) {
+                        Log::warning("AI chat HTTP failed for user {$userId}: status {$status} body: {$body}");
+                        return 'QUOTA_EXCEEDED';
+                    }
+
+                    // Model-not-found or 404 model error — treat as permanent service unavailability
+                    if ($status === 404 && str_contains($body, 'model')) {
+                        Log::warning("AI chat HTTP model error for user {$userId}: status {$status} body: {$body}");
+                        return 'AI_SERVICE_UNAVAILABLE';
+                    }
+
+                    // For other non-ok status codes, log and retry
+                    Log::warning("AI chat HTTP failed for user {$userId}: status {$status} body: {$body}");
+                }
+            } catch (\Throwable $e) {
+                Log::warning("AI chat HTTP exception for user {$userId}: " . $e->getMessage());
+            }
+
+            // Exponential backoff before retry
+            sleep($backoffSeconds);
+            $backoffSeconds *= 2;
+        }
+
+        Log::error("AI Generation final failure for user {$userId}: no usable response after {$maxAttempts} attempts.");
+        return 'AI_SERVICE_UNAVAILABLE';
     }
 }

@@ -4,8 +4,6 @@ namespace App\Console;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
-use App\Livewire\WeeklySummary;
-use App\Livewire\MonthlySummary;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
@@ -29,51 +27,10 @@ class Kernel extends ConsoleKernel
         // are properly detected by the scheduler in Laravel 11
 
         // -------------------------
-        // Weekly Summary Cron - Runs hourly to check each user's timezone
+        // Weekly Summary Cron - Removed (using routes/console.php instead)
+        // Weekly summary generation is handled by notification:send --only=weeklySummary
+        // which calls EveryDayUpdate::generateWeeklySummary() method
         // -------------------------
-        $schedule->call(function () {
-            $users = User::where('status', 1)->get();
-
-            foreach ($users as $user) {
-                try {
-                    // Get user's timezone or default to Asia/Kolkata
-                    $userTimezone = $user->timezone ?: 'Asia/Kolkata';
-                    
-                    // Validate timezone to prevent errors
-                    if (!in_array($userTimezone, timezone_identifiers_list())) {
-                        Log::warning("Invalid timezone for user {$user->id}: {$userTimezone}, using Asia/Kolkata");
-                        $userTimezone = 'Asia/Kolkata';
-                    }
-                    
-                    // Get current time in user's timezone
-                    $userNow = \Carbon\Carbon::now($userTimezone);
-                    
-                    // Check if it's Sunday 23:00 in user's timezone
-                    $isSunday = $userNow->isSunday();
-                    $is2300 = $userNow->format('H:i') === '23:00';
-                    
-                    if (!$isSunday || !$is2300) {
-                        continue; // Skip if not Sunday 23:00 in user's timezone
-                    }
-                    
-                    $component = new WeeklySummary();
-
-                    // Use current month/year based on user's timezone
-                    $component->selectedYear = $userNow->year;
-                    $component->selectedMonth = $userNow->month;
-
-                    // Generate summary for user (cron-safe)
-                    $component->generateMonthlySummaries($user);
-
-                    Log::info("Weekly summary generated successfully for user: {$user->id} (timezone: {$userTimezone})");
-                } catch (\Exception $e) {
-                    Log::error("Failed to generate weekly summary for user {$user->id}: " . $e->getMessage());
-                }
-            }
-        })
-        ->hourly() // Run every hour to check each user's timezone
-        ->name('weekly-summary-generator')
-        ->withoutOverlapping();
 
         // -------------------------
         // Monthly Update - Runs hourly to check last day of month for each user's timezone
