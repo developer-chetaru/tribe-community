@@ -6,7 +6,9 @@
     <!-- Header: Logo + Toggle Button -->
     <div class="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
         <template x-if="$store.sidebar.open">
-            <img src="{{ asset('images/logo-tribe.svg') }}" class="w-32" />
+            <a href="/dashboard" class="cursor-pointer hover:opacity-80 transition-opacity">
+                <img src="{{ asset('images/logo-tribe.svg') }}" class="w-32" alt="TRIBE 365 Vibe - Go to Dashboard" />
+            </a>
         </template>
 
         <button @click="$store.sidebar.toggle()">

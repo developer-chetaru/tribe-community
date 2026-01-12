@@ -410,7 +410,75 @@
                                 </div>
                             @endif
                             
-                            <form wire:submit.prevent="sendChatMessage" class="flex items-end gap-2 sm:gap-3" x-data="{ filePreviews: {} }">
+                            <form wire:submit.prevent="sendChatMessage" class="flex items-end gap-2 sm:gap-3" 
+                                  x-data="{ filePreviews: {} }"
+                                  x-init="
+                                    // Store handlePaste function in Alpine data for access
+                                    $data.handlePaste = function(event) {
+                                        const items = event.clipboardData.items;
+                                        if (!items) return;
+                                        
+                                        for (let i = 0; i < items.length; i++) {
+                                            const item = items[i];
+                                            
+                                            if (item.type.indexOf('image') !== -1) {
+                                                event.preventDefault();
+                                                
+                                                const file = item.getAsFile();
+                                                if (!file) continue;
+                                                
+                                                // Check file size (25MB limit)
+                                                const maxSize = 25 * 1024 * 1024;
+                                                if (file.size > maxSize) {
+                                                    alert('Pasted image is too large (' + (file.size / (1024 * 1024)).toFixed(2) + 'MB). Maximum file size is 25MB.');
+                                                    return;
+                                                }
+                                                
+                                                const fileInput = document.getElementById('chatFileInput');
+                                                if (!fileInput) return;
+                                                
+                                                // Check current file count
+                                                const currentFiles = fileInput.files ? fileInput.files.length : 0;
+                                                const maxFiles = {{ $maxFiles }};
+                                                if (currentFiles >= maxFiles) {
+                                                    alert('You can attach maximum ' + maxFiles + ' files at once.');
+                                                    return;
+                                                }
+                                                
+                                                // Create DataTransfer with existing files + new pasted file
+                                                const dataTransfer = new DataTransfer();
+                                                
+                                                // Add existing files first
+                                                if (fileInput.files && fileInput.files.length > 0) {
+                                                    for (let j = 0; j < fileInput.files.length; j++) {
+                                                        dataTransfer.items.add(fileInput.files[j]);
+                                                    }
+                                                }
+                                                
+                                                // Add pasted file
+                                                dataTransfer.items.add(file);
+                                                
+                                                // Update file input
+                                                fileInput.files = dataTransfer.files;
+                                                
+                                                // Trigger change event for Livewire to process
+                                                const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+                                                fileInput.dispatchEvent(changeEvent);
+                                                
+                                                // Add to preview immediately
+                                                if (!filePreviews) {
+                                                    filePreviews = {};
+                                                }
+                                                const index = dataTransfer.files.length - 1;
+                                                if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+                                                    filePreviews[index] = URL.createObjectURL(file);
+                                                }
+                                                
+                                                break; // Only process first image
+                                            }
+                                        }
+                                    };
+                                  ">
                                 <div class="flex-1 relative min-w-0">
                                     <textarea 
                                         wire:model.defer="newChatMessage" 
@@ -418,6 +486,7 @@
                                         rows="2"
                                         class="w-full border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-3 pr-10 sm:pr-12 bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none text-sm"
                                         x-on:keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); $wire.call('sendChatMessage'); }"
+                                        x-on:paste="$data.handlePaste($event)"
                                     ></textarea>
                                     
                                     <input 

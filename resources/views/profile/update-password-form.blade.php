@@ -9,6 +9,7 @@
 
         <div
             x-data="{
+                showCurrentPw:false,
                 showPw:false,
                 pwStrength:'',
                 pwMessage:'',
@@ -100,14 +101,14 @@
                 <div class="relative border rounded-md px-3 py-2 bg-white mt-1">
                     <input id="current_password"
                         placeholder="Current Password"
-                        :type="showPw ? 'text' : 'password'"
+                        :type="showCurrentPw ? 'text' : 'password'"
                         class="block w-full border-none outline-none pr-10 focus:ring-0"
                         wire:model="state.current_password">
 
                     <button type="button"
                         class="absolute inset-y-0 right-3 flex items-center text-gray-500"
-                        @click="showPw=!showPw">
-                        <i :class="showPw?'fa-solid fa-eye-slash':'fa-solid fa-eye'"></i>
+                        @click="showCurrentPw=!showCurrentPw">
+                        <i :class="showCurrentPw?'fa-solid fa-eye-slash':'fa-solid fa-eye'"></i>
                     </button>
                 </div>
                 <x-input-error for="current_password" bag="updatePassword" class="mt-2"/>
