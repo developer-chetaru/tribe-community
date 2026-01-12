@@ -66,32 +66,67 @@
             </div>
 
             <div>
-                <div wire:ignore>
-                    <div x-data="{}" 
-                        x-init="
-                            initTelInput(
-                                $refs.phoneInput,
-                                @this,
-                                'phone', 
-                                'country_code',
-                                @js($phone),
-                                @js($country_code)
-                            )
-                        " 
-                        style="width: 100% !important;">
-                        
-                        <input
-                            x-ref="phoneInput"
-                            type="number"
-                            placeholder="Phone Number"
-                            class="border rounded-[8px] px-3 py-2.5 w-full focus:ring-red-500 focus:border-red-500 border border-[#80808080]"
-                        >
+                <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number <span class="text-red-500">*</span></label>
+                <div>
+                    <div wire:ignore>
+                        <div x-data="{}" 
+                            x-init="
+                                const phoneInput = $refs.phoneInput;
+                                const errorContainer = $el.closest('div').nextElementSibling;
+                                
+                                initTelInput(
+                                    phoneInput,
+                                    @this,
+                                    'phone', 
+                                    'country_code',
+                                    @js($phone),
+                                    @js($country_code)
+                                );
+                                
+                                // Function to update error border
+                                function updateErrorBorder() {
+                                    const hasError = errorContainer && errorContainer.querySelector('span.text-red-500') && 
+                                                    errorContainer.querySelector('span.text-red-500').textContent.trim() !== '';
+                                    if (hasError) {
+                                        phoneInput.classList.add('border-red-500');
+                                        phoneInput.classList.remove('border-[#80808080]');
+                                    } else {
+                                        phoneInput.classList.remove('border-red-500');
+                                        phoneInput.classList.add('border-[#80808080]');
+                                    }
+                                }
+                                
+                                // Watch for changes in error container
+                                if (errorContainer) {
+                                    const observer = new MutationObserver(updateErrorBorder);
+                                    observer.observe(errorContainer, { childList: true, subtree: true, characterData: true });
+                                }
+                                
+                                // Also check on input
+                                phoneInput.addEventListener('input', () => {
+                                    setTimeout(updateErrorBorder, 100);
+                                });
+                            " 
+                            style="width: 100% !important;">
+                            
+                            <input
+                                x-ref="phoneInput"
+                                type="tel"
+                                placeholder="Enter phone number"
+                                required
+                                class="border rounded-[8px] px-3 py-2.5 w-full focus:ring-red-500 focus:border-red-500 border-[#80808080]"
+                            >
+                        </div>
                     </div>
 
-                    @error('phone') <span class="text-red-500 text-sm">{{ $message }}</span> 
-                    @enderror
-                    @error('country_code') <span class="text-red-500 text-sm">{{ $message }}</span> 
-                    @enderror
+                    <div>
+                        @error('phone') 
+                            <span class="text-red-500 text-sm mt-1 block font-medium">{{ $message }}</span> 
+                        @enderror
+                        @error('country_code') 
+                            <span class="text-red-500 text-sm mt-1 block font-medium">{{ $message }}</span> 
+                        @enderror
+                    </div>
                 </div>
             </div>
 <div>
@@ -194,8 +229,10 @@
         <!-- Action Buttons -->
         <div class="flex items-center gap-4">
             <button type="submit"
-                    class="bg-[#EB1C24] text-white rounded-[8px] px-8 py-2.5 font-semibold hover:bg-red-700 transition">
-                Update
+                    class="bg-[#EB1C24] text-white rounded-[8px] px-8 py-2.5 font-semibold hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    wire:loading.attr="disabled">
+                <span wire:loading.remove>Update</span>
+                <span wire:loading>Updating...</span>
             </button>
         </div>
     </form>
@@ -240,7 +277,10 @@ function initTelInput(input, livewire, phoneField, countryField, initialPhone = 
         } else {
             justPhone = input.value;
         }
-        livewire.set(phoneField, justPhone.replace(/\D/g, '')); 
+        
+        // Remove all non-numeric characters
+        let cleanPhone = justPhone.replace(/\D/g, '');
+        livewire.set(phoneField, cleanPhone); 
         livewire.set(countryField, `+${dialCode}`);
     }
     
@@ -248,8 +288,20 @@ function initTelInput(input, livewire, phoneField, countryField, initialPhone = 
         iti.setNumber(fullNumber);
     }
     
-    input.addEventListener("input", updateValues);
+    // Restrict input to numbers only
+    input.addEventListener("input", function(e) {
+        // Remove any non-numeric characters
+        let value = e.target.value.replace(/[^0-9]/g, '');
+        if (e.target.value !== value) {
+            e.target.value = value;
+            // Update intlTelInput with cleaned value
+            iti.setNumber(value);
+        }
+        updateValues();
+    });
+    
     input.addEventListener("countrychange", updateValues);
+    input.addEventListener("blur", updateValues);
 
     updateValues(); 
 }
