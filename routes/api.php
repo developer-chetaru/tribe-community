@@ -26,6 +26,7 @@ Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     // flutter api
     Route::get('/user-profile', [HPTMController::class, 'userProfile']);
   	Route::Post('/update-user-profile', [HPTMController::class, 'updateUserProfile']);
+    Route::delete('/delete-profile-photo', [HPTMController::class, 'deleteProfilePhoto']);
     Route::get('/timezone-list', [HPTMController::class, 'getTimezoneList']);
     Route::post('/get-timezone-from-location', [HPTMController::class, 'getTimezoneFromLocation']);
     Route::get('/get-department-list', [HPTMController::class, 'getDepartmentList']);

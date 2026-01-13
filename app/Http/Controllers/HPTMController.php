@@ -1147,6 +1147,106 @@ class HPTMController extends Controller
     }
 
     /**
+     * Delete user profile photo.
+     *
+     * @OA\Delete(
+     *     path="/api/delete-profile-photo",
+     *     tags={"User Profile"},
+     *     summary="Delete user profile photo",
+     *     description="Delete the authenticated user's profile photo. This will remove the photo from storage and set profile_photo_path to null.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Profile photo deleted successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Profile photo deleted successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="profileImage", type="string", nullable=true, example=null, description="Profile photo URL (null after deletion)")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="User not authenticated")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Profile photo not found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Profile photo not found")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Server error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Failed to delete profile photo"),
+     *             @OA\Property(property="error", type="string", example="Error message")
+     *         )
+     *     )
+     * )
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function deleteProfilePhoto(Request $request)
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'User not authenticated'
+                ], 401);
+            }
+
+            // Check if user has a profile photo
+            if (!$user->profile_photo_path) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Profile photo not found'
+                ], 404);
+            }
+
+            // Delete photo from storage
+            if (Storage::disk('public')->exists($user->profile_photo_path)) {
+                Storage::disk('public')->delete($user->profile_photo_path);
+            }
+
+            // Update user record
+            $user->profile_photo_path = null;
+            $user->save();
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Profile photo deleted successfully',
+                'data'    => [
+                    'id'            => $user->id,
+                    'profileImage'  => null,
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Failed to delete profile photo',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Get timezone from latitude and longitude (for mobile and web)
      *
      * @param Request $request
