@@ -85,7 +85,7 @@
                                             $roleMapping = [
                                                 'organisation_user' => 'Staff',
                                                 'organisation_admin' => 'Team Lead',
-                                                'director' => 'Director',
+                                                'director' => 'Directing',
                                             ];
                                             $displayRole = $roleMapping[$userRole] ?? ($userRole ? ucfirst($userRole) : '-');
                                         @endphp
@@ -177,7 +177,7 @@
                                     @endif
 
                                     @if($staff->office && ($userRole === 'organisation_user' || $userRole === 'organisation_admin'))        
-                                        <x-tooltip tooltipText="Make User As Director">
+                                        <x-tooltip tooltipText="Make User As Directing">
                                             <button wire:click="openDirectorModal({{ $staff->id }})"
                                                 class="flex justify-center items-center py-1 px-2 bg-[#ffeaec] border rounded-md border-[#FF9AA0]">
                                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -320,12 +320,12 @@
         @if($showDirectorModal && $selectedStaff)
         <div class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
             <div class="bg-white rounded-lg shadow-lg p-6 w-[400px]">
-                <h2 class="text-lg font-bold mb-4">Confirm Director</h2>
+                <h2 class="text-lg font-bold mb-4">Confirm Directing</h2>
 
                 <p>
                     Are you sure you want to assign 
                     <span class="font-semibold text-red-600">{{ $selectedStaff->first_name }} {{ $selectedStaff->last_name }}</span> 
-                    as the Director?
+                    as the Directing?
                 </p>
 
                 <div class="mt-6 flex justify-end space-x-2">

@@ -190,7 +190,7 @@ class OfficeStaff extends Component
         $user = User::with(['office', 'department'])->findOrFail($this->selectedUserId);
 
         if (is_null($user->officeId)) {
-            session()->flash('error', 'Office is not assigned, so a Director cannot be created.');
+            session()->flash('error', 'Office is not assigned, so a Directing cannot be created.');
             return;
         }
 
@@ -206,7 +206,7 @@ class OfficeStaff extends Component
 
         $user->syncRoles(['director']); 
 
-        session()->flash('directorMessage', $user->first_name . ' is now the Director.');
+        session()->flash('directorMessage', $user->first_name . ' is now the Directing.');
 
         $this->closeDirectorModal();
     }

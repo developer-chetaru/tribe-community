@@ -117,7 +117,7 @@ public $selectedStaff;
     	$user = User::with(['office', 'department'])->findOrFail($this->selectedUserId);
 
     	if (is_null($user->officeId)) {
-        	session()->flash('error', 'Office is not assigned, so a Director cannot be created.');
+        	session()->flash('error', 'Office is not assigned, so a Directing cannot be created.');
         	return;
     	}
 
@@ -131,11 +131,11 @@ public $selectedStaff;
         	$director->syncRoles(['organisation_user']);
     	}
 
-    	$user->syncRoles(['director']); 
+    	$user->syncRoles(['director']);
 
     	session()->flash(
             'directorMessage',
-            '<strong>' . e($user->first_name) . '</strong> is now the Director.'
+            '<strong>' . e($user->first_name) . '</strong> is now the Directing.'
         );
     	$this->closeDirectorModal();
 	}

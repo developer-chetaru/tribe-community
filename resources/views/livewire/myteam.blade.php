@@ -78,7 +78,7 @@
                             $roleMapping = [
                                 'organisation_user' => 'Staff',
                                 'organisation_admin' => 'Team Lead',
-                                'director' => 'Director',
+                                'director' => 'Directing',
                             ];
                             $userRole = $staff->roles->first()?->name;
                             $displayRole = $roleMapping[$userRole] ?? ($userRole ? ucfirst($userRole) : '-');

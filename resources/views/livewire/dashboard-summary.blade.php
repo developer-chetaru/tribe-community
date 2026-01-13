@@ -16,7 +16,7 @@
                 @if(isset($subscriptionStatus['has_pending_invoice']) && $subscriptionStatus['has_pending_invoice'])
                     <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                         <p class="text-yellow-800 text-sm">
-                            Your organization has a pending invoice. Please contact your director to make a payment.
+                            Your organization has a pending invoice. Please contact your directing to make a payment.
                         </p>
                     </div>
                 @endif
