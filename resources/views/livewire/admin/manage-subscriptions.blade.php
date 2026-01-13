@@ -91,7 +91,24 @@
                             @if($activeTab === 'organisation')
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     @if($item['subscription'])
-                                        {{ $item['subscription']->user_count }}
+                                        @php
+                                            $actualCount = $item['user_count'] ?? 0;
+                                            $storedCount = $item['subscription']->user_count ?? 0;
+                                            $countMismatch = $actualCount != $storedCount;
+                                        @endphp
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-2 py-1 text-xs font-semibold rounded-full {{ $countMismatch ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800' }}" 
+                                                  title="{{ $countMismatch ? 'Mismatch: Actual users: ' . $actualCount . ', Stored: ' . $storedCount : 'User count: ' . $actualCount }}">
+                                                {{ $actualCount }}
+                                            </span>
+                                            @if($countMismatch)
+                                                <button wire:click="syncUserCount({{ $item['subscription']->id }})" 
+                                                        class="text-xs text-blue-600 hover:text-blue-800 underline"
+                                                        title="Sync subscription user count with actual user count">
+                                                    Sync
+                                                </button>
+                                            @endif
+                                        </div>
                                     @else
                                         <span class="text-gray-400">-</span>
                                     @endif
@@ -102,7 +119,8 @@
                                     @php
                                         $prices = ['basecamp' => 10, 'spark' => 10, 'momentum' => 20, 'vision' => 30];
                                         $pricePerUser = $prices[$item['subscription']->tier] ?? 0;
-                                        $userCount = $item['type'] === 'basecamp' ? 1 : $item['subscription']->user_count;
+                                        // Use actual user count instead of stored subscription user_count
+                                        $userCount = $item['type'] === 'basecamp' ? 1 : ($item['user_count'] ?? $item['subscription']->user_count);
                                         $total = $pricePerUser * $userCount;
                                     @endphp
                                     £{{ number_format($total, 2) }}

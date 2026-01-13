@@ -330,6 +330,33 @@ class ManageSubscriptions extends Component
             session()->flash('error', 'Failed to delete subscription: ' . $e->getMessage());
         }
     }
+    
+    /**
+     * Sync subscription user_count with actual user count
+     */
+    public function syncUserCount($subscriptionId)
+    {
+        try {
+            $subscription = SubscriptionRecord::findOrFail($subscriptionId);
+            
+            // Get actual user count from organisation
+            $actualUserCount = \App\Models\User::where('orgId', $subscription->organisation_id)
+                ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+                ->count();
+            
+            $oldCount = $subscription->user_count;
+            
+            // Update subscription with actual user count
+            $subscription->update([
+                'user_count' => $actualUserCount,
+            ]);
+            
+            session()->flash('success', "User count synced successfully. Updated from {$oldCount} to {$actualUserCount}.");
+        } catch (\Exception $e) {
+            \Log::error('Error syncing user count: ' . $e->getMessage());
+            session()->flash('error', 'Failed to sync user count: ' . $e->getMessage());
+        }
+    }
 
     public function getSubscriptionsProperty()
     {
