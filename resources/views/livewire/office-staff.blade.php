@@ -401,19 +401,18 @@
             </div>
       	@endif
 
-            @push('scripts')
-                <script>
-                    document.addEventListener('show-team-lead-message', function () {
-                        let popup = document.getElementById('simplePopup');
-                        if (popup) {
-                            setTimeout(() => {
-                                popup.remove();
-                            }, 2000);
-                        }
-                    });
-                </script>
-            @endpush
-        @endif
+        @push('scripts')
+            <script>
+                document.addEventListener('show-team-lead-message', function () {
+                    let popup = document.getElementById('simplePopup');
+                    if (popup) {
+                        setTimeout(() => {
+                            popup.remove();
+                        }, 2000);
+                    }
+                });
+            </script>
+        @endpush
 
     </div>
 </div>
