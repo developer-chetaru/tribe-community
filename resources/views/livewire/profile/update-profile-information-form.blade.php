@@ -34,24 +34,34 @@
               </div>
             </template>
 
-            {{-- Upload Button --}}
-      <label for="photo"
-       class="absolute bottom-0 right-0 bg-red-600 p-1 rounded-full cursor-pointer hover:bg-red-700 transition duration-200 z-10">
-    <img src="{{ asset('images/pencil1.png') }}" alt="Edit" class="w-4 h-4">
-</label>
+            {{-- Buttons Below Photo --}}
+            <div class="mt-3 flex justify-center gap-2">
+                {{-- Edit Button --}}
+                <label for="photo"
+                       class="p-2 bg-red-600 hover:bg-red-700 text-white rounded-md cursor-pointer transition-colors flex items-center justify-center shadow-md"
+                       title="Edit Photo">
+                    <img src="{{ asset('images/pencil1.png') }}" alt="Edit" class="w-2.5 h-2.5">
+                </label>
 
-            {{-- Delete Button - Only show when photo exists --}}
-            @if($this->user->profile_photo_path)
-                <button type="button" 
-                        wire:click="deletePhoto" 
-                        wire:confirm="Are you sure you want to delete your profile photo?"
-                        class="absolute top-0 right-0 bg-red-600 hover:bg-red-700 text-white w-8 h-8 rounded-full flex items-center justify-center border-2 border-white cursor-pointer z-10 shadow-lg transition-colors"
-                        title="Delete Photo">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            @endif
+                {{-- Delete Button - Only show when photo exists --}}
+                @if($this->user->profile_photo_path)
+                    <button type="button" 
+                            wire:click="deletePhoto" 
+                            wire:confirm="Are you sure you want to delete your profile photo?"
+                            wire:loading.attr="disabled"
+                            wire:target="deletePhoto"
+                            class="p-2 bg-red-600 hover:bg-red-700 text-white rounded-md cursor-pointer transition-colors disabled:opacity-50 flex items-center justify-center shadow-md"
+                            title="Delete Photo">
+                        <svg wire:loading.remove wire:target="deletePhoto" xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        <svg wire:loading wire:target="deletePhoto" class="animate-spin h-2.5 w-2.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </button>
+                @endif
+            </div>
 
             {{-- File Input --}}
             <input id="photo" type="file" class="hidden" wire:model="photo"
