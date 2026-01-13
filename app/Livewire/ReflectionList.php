@@ -21,6 +21,7 @@ class ReflectionList extends Component
     use WithPagination, WithFileUploads;
 
     public $searchTopic = '';
+    public $statusFilter = '';
 
     public $orgId = '';
     public $officeId = '';
@@ -63,7 +64,7 @@ class ReflectionList extends Component
 
     public $selectedReflection = [];
 
-    protected $queryString = ['searchTopic', 'orgId', 'officeId'];
+    protected $queryString = ['searchTopic', 'orgId', 'officeId', 'statusFilter'];
 
     public function mount($orgId = null, $officeId = null)
     {
@@ -142,6 +143,11 @@ class ReflectionList extends Component
     }
 
     public function updatedOfficeId()
+    {
+        $this->resetPage();
+    }
+
+    public function updatedStatusFilter()
     {
         $this->resetPage();
     }
@@ -733,6 +739,10 @@ public function statusCancelResolved()
         if (!empty($this->searchTopic)) {
             $search = $this->searchTopic;
             $query->where('topic', 'like', "%$search%");
+        }
+
+        if (!empty($this->statusFilter)) {
+            $query->where('status', $this->statusFilter);
         }
 
         $reflectionListTbl = $query->orderByDesc('id')->paginate(5);

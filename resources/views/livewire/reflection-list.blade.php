@@ -21,6 +21,17 @@
                     />
                 </div>
 
+                {{-- Status Filter --}}
+                <div class="w-full sm:w-auto flex-1 sm:flex-none">
+                    <select wire:model.live="statusFilter"
+                        class="bg-white text-sm border border-slate-200 rounded-md pl-3 pr-10 py-2.5 sm:py-3 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-auto min-w-[160px]">
+                        <option value="">All Status</option>
+                        <option value="new">New</option>
+                        <option value="inprogress">In Progress</option>
+                        <option value="resolved">Resolved</option>
+                    </select>
+                </div>
+
                 {{-- Organisation & Office Filters --}}
                 @role('super_admin')
                 <div class="w-full lg:w-auto flex flex-col sm:flex-row items-start sm:items-center gap-3 lg:gap-4">
