@@ -29,11 +29,66 @@
             </nav>
         </div>
 
-        <!-- Search -->
-        <div class="mb-4">
-            <input type="text" wire:model.live="search" 
-                placeholder="{{ $activeTab === 'organisation' ? 'Search by organisation...' : 'Search by user name or email...' }}" 
-                class="w-full max-w-md px-4 py-2 border border-gray-300 rounded-md">
+        <!-- Search and Filters -->
+        <div class="mb-4 space-y-3">
+            <!-- Search -->
+            <div>
+                <input type="text" wire:model.live="search" 
+                    placeholder="{{ $activeTab === 'organisation' ? 'Search by organisation...' : 'Search by user name or email...' }}" 
+                    class="w-full max-w-md px-4 py-2 border border-gray-300 rounded-md">
+            </div>
+            
+            <!-- Filters -->
+            <div class="flex flex-wrap gap-3">
+                <!-- Account Status Filter -->
+                <div class="min-w-[180px]">
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Account Status</label>
+                    <select wire:model.live="accountStatusFilter" 
+                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="paused">Paused</option>
+                    </select>
+                </div>
+                
+                <!-- Payment Status Filter -->
+                <div class="min-w-[180px]">
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Payment Status</label>
+                    <select wire:model.live="paymentStatusFilter" 
+                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500">
+                        <option value="">All Payment Status</option>
+                        <option value="paid">Paid</option>
+                        <option value="unpaid">Unpaid</option>
+                        <option value="failed">Failed</option>
+                        <option value="pending">Pending</option>
+                    </select>
+                </div>
+                
+                <!-- Next Billing Date Filter -->
+                <div class="min-w-[180px]">
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Next Billing Date</label>
+                    <select wire:model.live="nextBillingDateFilter" 
+                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500">
+                        <option value="">All Dates</option>
+                        <option value="today">Today</option>
+                        <option value="next_7_days">Next 7 days</option>
+                        <option value="next_30_days">Next 30 days</option>
+                        <option value="overdue">Overdue</option>
+                    </select>
+                </div>
+                
+                <!-- Clear Filters Button -->
+                @if($accountStatusFilter || $paymentStatusFilter || $nextBillingDateFilter)
+                    <div class="flex items-end">
+                        <button wire:click="clearFilters" 
+                            type="button"
+                            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+                            Clear Filters
+                        </button>
+                    </div>
+                @endif
+            </div>
         </div>
 
         <!-- Subscriptions Table -->

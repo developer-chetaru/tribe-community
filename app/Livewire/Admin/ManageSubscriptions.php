@@ -37,6 +37,11 @@ class ManageSubscriptions extends Component
 
     public $search = '';
     public $activeTab = 'organisation'; // 'organisation', 'basecamp'
+    
+    // Filter properties
+    public $accountStatusFilter = '';
+    public $paymentStatusFilter = '';
+    public $nextBillingDateFilter = '';
 
     public function mount()
     {
@@ -57,6 +62,35 @@ class ManageSubscriptions extends Component
         if ($this->search) {
             $this->search = addcslashes($this->search, '%_\\');
         }
+        $this->resetPage();
+    }
+    
+    public function updatedAccountStatusFilter()
+    {
+        $this->resetPage();
+    }
+    
+    public function updatedPaymentStatusFilter()
+    {
+        $this->resetPage();
+    }
+    
+    public function updatedNextBillingDateFilter()
+    {
+        $this->resetPage();
+    }
+    
+    public function updatedActiveTab()
+    {
+        $this->resetPage();
+    }
+    
+    public function clearFilters()
+    {
+        $this->accountStatusFilter = '';
+        $this->paymentStatusFilter = '';
+        $this->nextBillingDateFilter = '';
+        $this->resetPage();
     }
 
     public function updatedOrganisationId()
@@ -531,8 +565,94 @@ class ManageSubscriptions extends Component
             }
         }
         
+        // Apply filters
+        $filtered = $combined->filter(function($item) {
+            // Account Status Filter
+            if (!empty($this->accountStatusFilter)) {
+                $subscription = $item['subscription'] ?? null;
+                if (!$subscription) {
+                    // If no subscription and filter is set, exclude unless filter is "inactive"
+                    if ($this->accountStatusFilter !== 'inactive') {
+                        return false;
+                    }
+                } else {
+                    $status = strtolower($subscription->status);
+                    $filterStatus = strtolower($this->accountStatusFilter);
+                    
+                    // Map filter values to subscription statuses
+                    if ($filterStatus === 'active' && $status !== 'active') {
+                        return false;
+                    }
+                    if ($filterStatus === 'inactive' && !in_array($status, ['inactive', 'canceled', 'past_due'])) {
+                        return false;
+                    }
+                    if ($filterStatus === 'paused' && $status !== 'suspended') {
+                        return false;
+                    }
+                }
+            }
+            
+            // Payment Status Filter
+            if (!empty($this->paymentStatusFilter)) {
+                $paymentStatus = $item['payment_status'] ?? 'unpaid';
+                $filterPaymentStatus = strtolower($this->paymentStatusFilter);
+                
+                if ($filterPaymentStatus === 'paid' && $paymentStatus !== 'paid') {
+                    return false;
+                }
+                if ($filterPaymentStatus === 'unpaid' && $paymentStatus !== 'unpaid') {
+                    return false;
+                }
+                // Future-ready: Failed and Pending filters
+                if ($filterPaymentStatus === 'failed' && $paymentStatus !== 'failed') {
+                    return false;
+                }
+                if ($filterPaymentStatus === 'pending' && $paymentStatus !== 'pending') {
+                    return false;
+                }
+            }
+            
+            // Next Billing Date Filter
+            if (!empty($this->nextBillingDateFilter)) {
+                $subscription = $item['subscription'] ?? null;
+                if (!$subscription || !$subscription->next_billing_date) {
+                    return false;
+                }
+                
+                $nextBillingDate = \Carbon\Carbon::parse($subscription->next_billing_date);
+                $today = \Carbon\Carbon::today();
+                
+                switch (strtolower($this->nextBillingDateFilter)) {
+                    case 'today':
+                        if (!$nextBillingDate->isToday()) {
+                            return false;
+                        }
+                        break;
+                    case 'next_7_days':
+                        $sevenDaysFromNow = $today->copy()->addDays(7);
+                        if ($nextBillingDate->lt($today) || $nextBillingDate->gt($sevenDaysFromNow)) {
+                            return false;
+                        }
+                        break;
+                    case 'next_30_days':
+                        $thirtyDaysFromNow = $today->copy()->addDays(30);
+                        if ($nextBillingDate->lt($today) || $nextBillingDate->gt($thirtyDaysFromNow)) {
+                            return false;
+                        }
+                        break;
+                    case 'overdue':
+                        if (!$nextBillingDate->isPast()) {
+                            return false;
+                        }
+                        break;
+                }
+            }
+            
+            return true;
+        });
+        
         // Sort by name
-        $sorted = $combined->sortBy('name')->values();
+        $sorted = $filtered->sortBy('name')->values();
         
         // Manual pagination
         $perPage = 15;
