@@ -13,6 +13,7 @@
             <div x-show="open" x-cloak
                  class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
                 <div class="bg-white w-[450px] rounded-md shadow-lg" 
+                     x-data="{ type: @entangle('filterType') }"
                      @click.away="if (!$event.target.closest('.flatpickr-calendar')) open = false">
 
                     <!-- Header -->
@@ -30,7 +31,7 @@
                         </div>
 
                         <!-- Right Content -->
-                        <div class="w-2/3 p-4 space-y-2" x-data="{ type: @entangle('filterType') }">
+                        <div class="w-2/3 p-4 space-y-2">
                             <template x-for="option in ['all','today','this_week','last_7_days','previous_week','this_month','previous_month','custom']" :key="option">
                                 <label class="flex items-center space-x-2">
                                     <input type="radio" :value="option" class="focus:ring-red-500 text-red-600" x-model="type">
@@ -89,8 +90,18 @@
                         <button @click="open = false" class="px-4 py-2 rounded bg-gray-200">
                             Close
                         </button>
-                        <button wire:click="loadSummary" class="px-4 py-2 rounded bg-red-500 text-white">
-                            Save
+                        <button 
+                            @click="
+                                $wire.filterType = type;
+                                $wire.loadSummary().then(() => {
+                                    open = false;
+                                });
+                            "
+                            wire:loading.attr="disabled"
+                            wire:target="loadSummary"
+                            class="px-4 py-2 rounded bg-red-500 text-white disabled:opacity-50 disabled:cursor-not-allowed">
+                            <span wire:loading.remove wire:target="loadSummary">Save</span>
+                            <span wire:loading wire:target="loadSummary">Loading...</span>
                         </button>
                     </div>
 
@@ -116,9 +127,19 @@
                             </span>
                         </span>
                     @elseif($item['status'] === 'Out of office')
-                        <!-- Do nothing or custom display -->
+                        <span class="date-time text-[12px] sm:text-[14px] text-[#01010180]">
+                            {{ $item['date'] }}
+                            <span class="ml-1 p-1 bg-blue-500 rounded-sm px-2 text-white">
+                                OOO
+                            </span>
+                        </span>
                     @elseif($item['status'] === 'Missed')
-                        <!-- Do nothing or custom display -->
+                        <span class="date-time text-[12px] sm:text-[14px] text-[#01010180]">
+                            {{ $item['date'] }}
+                            <span class="ml-1 p-1 bg-yellow-500 rounded-sm px-2 text-white">
+                                Missed
+                            </span>
+                        </span>
                     @endif
                     <p class="text-[#010101] text-[12px] sm:text-[14px] lg:text-[16px] pl-0  sm:pl-3 sm:border-l leading-[1.3] mt-2 border-gray-200 first-letter:uppercase">
                         {{ $item['description'] }}

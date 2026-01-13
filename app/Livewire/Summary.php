@@ -7,6 +7,7 @@ use App\Models\HappyIndex;
 use App\Models\UserLeave;
 use App\Models\Organisation;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class Summary extends Component
@@ -53,6 +54,12 @@ class Summary extends Component
         $user = Auth::user();
         $userId = $user->id;
 
+        // Debug: Log current filter type
+        Log::info('loadSummary called', [
+            'user_id' => $userId,
+            'filterType' => $this->filterType,
+        ]);
+
         // Get user's timezone safely using helper
         $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
 
@@ -67,6 +74,11 @@ class Summary extends Component
         
         // Get user's registration date in user's timezone (minimum start date)
         $userRegistrationDate = Carbon::parse($user->created_at)->setTimezone($userTimezone)->startOfDay();
+        
+        // Ensure filterType is set
+        if (empty($this->filterType)) {
+            $this->filterType = 'all';
+        }
         
         switch ($this->filterType) {
             case 'today':
@@ -85,8 +97,52 @@ class Summary extends Component
                 break;
 
             case 'previous_week':
-                $start = $userNow->copy()->subWeek()->startOfWeek();
-                $end   = $userNow->copy()->subWeek()->endOfWeek();
+                // Calculate previous week explicitly
+                // Example: If current week is 11-17, previous week should be 4-10
+                // Step 1: Get current week's Monday (start of current week)
+                // Carbon's startOfWeek(MONDAY) should give us the Monday of the current week
+                $currentWeekMonday = $userNow->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+                
+                // Verify: If today is Jan 13 (Wed), current week Monday should be Jan 11 (Mon)
+                // If the calculation is wrong, manually calculate it
+                $dayOfWeek = $userNow->dayOfWeek; // 0=Sunday, 1=Monday, ..., 6=Saturday
+                if ($dayOfWeek == 0) {
+                    // If today is Sunday, current week Monday is 6 days back
+                    $currentWeekMonday = $userNow->copy()->subDays(6)->startOfDay();
+                } elseif ($dayOfWeek == 1) {
+                    // If today is Monday, current week Monday is today
+                    $currentWeekMonday = $userNow->copy()->startOfDay();
+                } else {
+                    // If today is Tue-Sat, current week Monday is (dayOfWeek - 1) days back
+                    $currentWeekMonday = $userNow->copy()->subDays($dayOfWeek - 1)->startOfDay();
+                }
+                
+                // Step 2: Previous week's Monday = current week Monday minus 7 days
+                // If current week Monday is Jan 11, previous week Monday is Jan 4
+                $previousWeekMonday = $currentWeekMonday->copy()->subDays(7)->startOfDay();
+                
+                // Step 3: Previous week's Sunday = previous week Monday + 6 days, end of day
+                // If previous week Monday is Jan 4, previous week Sunday is Jan 10
+                $previousWeekSunday = $previousWeekMonday->copy()->addDays(6)->endOfDay();
+                
+                $start = $previousWeekMonday;
+                $end   = $previousWeekSunday;
+                
+                // Debug logging
+                Log::info('Previous Week Filter Calculation', [
+                    'user_id' => $userId,
+                    'user_now' => $userNow->toDateTimeString(),
+                    'user_now_day' => $userNow->format('l'),
+                    'day_of_week' => $dayOfWeek,
+                    'user_timezone' => $userTimezone,
+                    'current_week_monday' => $currentWeekMonday->toDateString(),
+                    'previous_week_monday' => $previousWeekMonday->toDateString(),
+                    'previous_week_sunday' => $previousWeekSunday->toDateString(),
+                    'start' => $start->toDateString(),
+                    'end' => $end->toDateString(),
+                    'start_timestamp' => $start->timestamp,
+                    'end_timestamp' => $end->timestamp,
+                ]);
                 break;
 
             case 'this_month':
@@ -111,6 +167,10 @@ class Summary extends Component
                 $end   = $userNow->copy()->endOfDay();
                 break;
         }
+        
+        // Store original start and end for period generation (before any adjustments)
+        $originalStart = $start->copy();
+        $originalEnd = $end->copy();
         
         // Ensure start date is never before user's registration date
         if ($start->lessThan($userRegistrationDate)) {
@@ -139,11 +199,30 @@ class Summary extends Component
         $leavesArray = [];
 
         // Create period using user's timezone dates
-        $period = collect($start->copy()->daysUntil($end->copy()->addDay()))
+        // Use original start/end for period (not adjusted for registration date)
+        // This ensures we show the complete filter range, even if some dates are before registration
+        $periodStart = $originalStart->copy()->startOfDay();
+        $periodEnd = $originalEnd->copy()->endOfDay();
+        
+        $period = collect($periodStart->copy()->daysUntil($periodEnd->copy()->addDay()))
             ->map(function ($date) use ($userTimezone) {
-                return \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($date), $userTimezone);
+                return \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($date), $userTimezone)->startOfDay();
+            })
+            ->filter(function ($date) use ($periodStart, $periodEnd) {
+                // Ensure date is within the period range
+                return $date->gte($periodStart) && $date->lte($periodEnd);
             })
             ->sortByDesc(fn($d) => $d->timestamp);
+        
+        // Debug logging for period
+        Log::info('Period Generation', [
+            'user_id' => $userId,
+            'filterType' => $this->filterType,
+            'period_start' => $periodStart->toDateString(),
+            'period_end' => $periodEnd->toDateString(),
+            'period_count' => $period->count(),
+            'period_dates' => $period->map(fn($d) => $d->toDateString())->toArray(),
+        ]);
 
         $userToday = Carbon::now($userTimezone);
 

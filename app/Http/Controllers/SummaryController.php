@@ -136,8 +136,32 @@ class SummaryController extends Controller
             $end = $userNow->copy();
             break;
         case 'previous_week':
-            $start = $userNow->copy()->subWeek()->startOfWeek();
-            $end = $userNow->copy()->subWeek()->endOfWeek();
+            // Calculate previous week explicitly
+            // Example: If current week is 11-17, previous week should be 4-10
+            // Step 1: Get current week's Monday (start of current week)
+            // Manually calculate to ensure accuracy
+            $dayOfWeek = $userNow->dayOfWeek; // 0=Sunday, 1=Monday, ..., 6=Saturday
+            if ($dayOfWeek == 0) {
+                // If today is Sunday, current week Monday is 6 days back
+                $currentWeekMonday = $userNow->copy()->subDays(6)->startOfDay();
+            } elseif ($dayOfWeek == 1) {
+                // If today is Monday, current week Monday is today
+                $currentWeekMonday = $userNow->copy()->startOfDay();
+            } else {
+                // If today is Tue-Sat, current week Monday is (dayOfWeek - 1) days back
+                $currentWeekMonday = $userNow->copy()->subDays($dayOfWeek - 1)->startOfDay();
+            }
+            
+            // Step 2: Previous week's Monday = current week Monday minus 7 days
+            // If current week Monday is Jan 11, previous week Monday is Jan 4
+            $previousWeekMonday = $currentWeekMonday->copy()->subDays(7)->startOfDay();
+            
+            // Step 3: Previous week's Sunday = previous week Monday + 6 days, end of day
+            // If previous week Monday is Jan 4, previous week Sunday is Jan 10
+            $previousWeekSunday = $previousWeekMonday->copy()->addDays(6)->endOfDay();
+            
+            $start = $previousWeekMonday;
+            $end = $previousWeekSunday;
             break;
         case 'this_month':
             $start = $userNow->copy()->startOfMonth();
