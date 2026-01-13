@@ -37,5 +37,6 @@ class Kernel extends HttpKernel
         'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         'validate.jwt' => \App\Http\Middleware\ValidateJWTToken::class,
         'validate.web.session' => \App\Http\Middleware\ValidateWebSession::class,
+        'check.subscription' => \App\Http\Middleware\CheckSubscription::class,
     ];
 }

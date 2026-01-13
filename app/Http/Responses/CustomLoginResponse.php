@@ -29,23 +29,23 @@ class CustomLoginResponse implements LoginResponseContract
             return redirect()->route('organisations.index');
         }
 
-        // Check for suspended status FIRST (before any other redirect)
+        // Check for suspended or inactive status FIRST (before any other redirect)
         if ($user->hasRole('basecamp')) {
-            $suspendedSubscription = SubscriptionRecord::where('user_id', $user->id)
+            $inactiveSubscription = SubscriptionRecord::where('user_id', $user->id)
                 ->where('tier', 'basecamp')
-                ->where('status', 'suspended')
+                ->whereIn('status', ['suspended', 'inactive'])
                 ->orderBy('id', 'desc')
                 ->first();
                 
-            if ($suspendedSubscription) {
-                return redirect()->route('account.suspended');
+            if ($inactiveSubscription) {
+                return redirect()->route('account.restricted');
             }
         } elseif ($user->orgId) {
             $subscriptionService = new SubscriptionService();
             $subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId);
             
-            if (isset($subscriptionStatus['status']) && $subscriptionStatus['status'] === 'suspended') {
-                return redirect()->route('account.suspended');
+            if (isset($subscriptionStatus['status']) && in_array($subscriptionStatus['status'], ['suspended', 'inactive'])) {
+                return redirect()->route('account.restricted');
             }
         }
 

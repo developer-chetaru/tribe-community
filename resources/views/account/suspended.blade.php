@@ -1,3 +1,48 @@
+@php
+    $user = auth()->user();
+    $isBasecamp = $user && $user->hasRole('basecamp');
+    $subscription = null;
+    $suspensionDetails = null;
+    $isInactive = false;
+    
+    if ($isBasecamp) {
+        $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
+            ->where('tier', 'basecamp')
+            ->whereIn('status', ['suspended', 'inactive'])
+            ->orderBy('id', 'desc')
+            ->first();
+        if ($subscription && $subscription->status === 'inactive') {
+            $isInactive = true;
+        }
+    } else {
+        $subscriptionService = new \App\Services\SubscriptionService();
+        $subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId ?? 0);
+        if (isset($subscriptionStatus['status']) && in_array($subscriptionStatus['status'], ['suspended', 'inactive'])) {
+            $suspensionDetails = $subscriptionStatus;
+            if ($subscriptionStatus['status'] === 'inactive') {
+                $isInactive = true;
+            }
+        }
+    }
+    
+    // Get payment status from latest invoice
+    $paymentStatus = 'Unknown';
+    $latestInvoice = null;
+    if ($subscription) {
+        $latestInvoice = \App\Models\Invoice::where('subscription_id', $subscription->id)
+            ->orWhere(function($q) use ($user, $isBasecamp) {
+                if ($isBasecamp) {
+                    $q->where('user_id', $user->id)->where('tier', 'basecamp');
+                }
+            })
+            ->orderBy('created_at', 'desc')
+            ->first();
+        if ($latestInvoice) {
+            $paymentStatus = $latestInvoice->status === 'paid' ? 'Paid' : 'Unpaid';
+        }
+    }
+@endphp
+
 <x-guest-layout>
     <div class="min-h-screen flex flex-col md:flex-row bg-[#FFF7F7]">
         {{-- Left side: Suspended message --}}
@@ -17,47 +62,46 @@
                 </div>
 
                 <h1 class="text-3xl font-bold mb-4 text-gray-900">
-                    Account Suspended
+                    {{ $isInactive ? 'Account Inactive' : 'Account Suspended' }}
                 </h1>
 
                 <p class="text-gray-600 mb-2">
-                    Your account has been suspended due to payment issues.
+                    {{ $isInactive ? 'Your account subscription is currently inactive.' : 'Your account has been suspended due to payment issues.' }}
                 </p>
 
                 <p class="text-gray-600 mb-6">
-                    To reactivate your account, please update your payment method and settle any outstanding invoices.
+                    {{ $isInactive ? 'To reactivate your account, please contact support.' : 'To reactivate your account, please update your payment method and settle any outstanding invoices.' }}
                 </p>
-
-                @php
-                    $user = auth()->user();
-                    $isBasecamp = $user && $user->hasRole('basecamp');
-                    $subscription = null;
-                    $suspensionDetails = null;
-                    
-                    if ($isBasecamp) {
-                        $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
-                            ->where('tier', 'basecamp')
-                            ->where('status', 'suspended')
-                            ->orderBy('id', 'desc')
-                            ->first();
-                    } else {
-                        $subscriptionService = new \App\Services\SubscriptionService();
-                        $subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId ?? 0);
-                        if (isset($subscriptionStatus['status']) && $subscriptionStatus['status'] === 'suspended') {
-                            $suspensionDetails = $subscriptionStatus;
-                        }
-                    }
-                @endphp
 
                 @if ($subscription || $suspensionDetails)
                     <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-left">
-                        <h3 class="font-semibold text-red-800 mb-2">Suspension Details:</h3>
-                        <ul class="text-sm text-red-700 space-y-1">
-                            @if ($subscription && $subscription->suspended_at)
-                                <li><strong>Suspended on:</strong> {{ \Carbon\Carbon::parse($subscription->suspended_at)->format('F d, Y') }}</li>
-                            @endif
-                            @if ($subscription && $subscription->current_period_end)
-                                <li><strong>Subscription period ends:</strong> {{ \Carbon\Carbon::parse($subscription->current_period_end)->format('F d, Y') }}</li>
+                        <h3 class="font-semibold text-red-800 mb-2">{{ $isInactive ? 'Subscription Details:' : 'Suspension Details:' }}</h3>
+                        <ul class="text-sm text-red-700 space-y-2">
+                            @if ($subscription)
+                                <li><strong>Status:</strong> <span class="uppercase">{{ $subscription->status }}</span></li>
+                                @if ($subscription->current_period_end)
+                                    <li><strong>Period End Date:</strong> {{ \Carbon\Carbon::parse($subscription->current_period_end)->format('F d, Y') }}</li>
+                                @endif
+                                @if ($subscription->next_billing_date)
+                                    <li><strong>Next Billing Date:</strong> {{ \Carbon\Carbon::parse($subscription->next_billing_date)->format('F d, Y') }}</li>
+                                @endif
+                                @if ($subscription->suspended_at)
+                                    <li><strong>{{ $isInactive ? 'Inactivated' : 'Suspended' }} on:</strong> {{ \Carbon\Carbon::parse($subscription->suspended_at)->format('F d, Y') }}</li>
+                                @endif
+                                @if ($latestInvoice)
+                                    <li><strong>Payment Status:</strong> {{ $paymentStatus }}</li>
+                                @endif
+                            @elseif ($suspensionDetails)
+                                <li><strong>Status:</strong> <span class="uppercase">{{ $suspensionDetails['status'] ?? 'N/A' }}</span></li>
+                                @if (isset($suspensionDetails['end_date']))
+                                    <li><strong>End Date:</strong> {{ \Carbon\Carbon::parse($suspensionDetails['end_date'])->format('F d, Y') }}</li>
+                                @endif
+                                @if (isset($suspensionDetails['subscription']) && $suspensionDetails['subscription']->current_period_end)
+                                    <li><strong>Period End Date:</strong> {{ \Carbon\Carbon::parse($suspensionDetails['subscription']->current_period_end)->format('F d, Y') }}</li>
+                                @endif
+                                @if (isset($suspensionDetails['subscription']) && $suspensionDetails['subscription']->next_billing_date)
+                                    <li><strong>Next Billing Date:</strong> {{ \Carbon\Carbon::parse($suspensionDetails['subscription']->next_billing_date)->format('F d, Y') }}</li>
+                                @endif
                             @endif
                         </ul>
                     </div>

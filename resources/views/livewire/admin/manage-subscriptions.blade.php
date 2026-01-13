@@ -122,8 +122,6 @@
                                     <div class="font-medium text-gray-900">{{ $item['name'] }}</div>
                                     @if($activeTab === 'organisation' && $item['type'] === 'organisation' && isset($item['user_count']))
                                         <div class="text-sm text-gray-500">{{ $item['user_count'] }} user(s)</div>
-                                    @elseif($activeTab === 'basecamp' && $item['type'] === 'basecamp' && isset($item['user']))
-                                        <div class="text-sm text-gray-500">{{ $item['user']->email ?? '' }}</div>
                                     @endif
                                 </div>
                             </td>

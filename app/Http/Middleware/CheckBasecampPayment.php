@@ -27,16 +27,16 @@ class CheckBasecampPayment
 
         // Only check for basecamp users
         if ($user && $user->hasRole('basecamp') && !$user->hasRole('super_admin')) {
-            // Check if subscription is suspended (highest priority)
-            $suspendedSubscription = SubscriptionRecord::where('user_id', $user->id)
+            // Check if subscription is suspended or inactive (highest priority)
+            $inactiveSubscription = SubscriptionRecord::where('user_id', $user->id)
                 ->where('tier', 'basecamp')
-                ->where('status', 'suspended')
+                ->whereIn('status', ['suspended', 'inactive'])
                 ->orderBy('id', 'desc')
                 ->first();
             
-            if ($suspendedSubscription) {
-                // Allow account suspended route to prevent redirect loop
-                if ($request->routeIs('account.suspended') || $request->is('account/suspended')) {
+            if ($inactiveSubscription) {
+                // Allow account restricted route to prevent redirect loop
+                if ($request->routeIs('account.restricted') || $request->is('account/restricted') || $request->is('account/suspended')) {
                     return $next($request);
                 }
                 
@@ -56,7 +56,7 @@ class CheckBasecampPayment
                              collect($allowedRoutePrefixes)->contains(fn($prefix) => str_starts_with($routeName, $prefix));
                 
                 if (!$isAllowed) {
-                    return redirect()->route('account.suspended');
+                    return redirect()->route('account.restricted');
                 }
                 return $next($request);
             }

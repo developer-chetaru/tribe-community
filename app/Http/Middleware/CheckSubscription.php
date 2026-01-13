@@ -46,10 +46,11 @@ class CheckSubscription
         if ($user->orgId) {
             $subscriptionStatus = $this->subscriptionService->getSubscriptionStatus($user->orgId);
             
-            // Check if subscription is suspended (highest priority - block all access)
-            if (isset($subscriptionStatus['status']) && $subscriptionStatus['status'] === 'suspended') {
-                // Allow account suspended route to prevent redirect loop
-                if ($request->routeIs('account.suspended') || $request->is('account/suspended')) {
+            // Check if subscription is suspended or inactive (highest priority - block all access)
+            $subscriptionStatusValue = $subscriptionStatus['status'] ?? null;
+            if (in_array($subscriptionStatusValue, ['suspended', 'inactive'])) {
+                // Allow account restricted route to prevent redirect loop
+                if ($request->routeIs('account.restricted') || $request->is('account/restricted') || $request->is('account/suspended')) {
                     return $next($request);
                 }
                 
@@ -68,13 +69,14 @@ class CheckSubscription
                              collect($allowedRoutePrefixes)->contains(fn($prefix) => str_starts_with($routeName, $prefix));
                 
                 if (!$isAllowed) {
-                    Log::info('Account suspended - redirecting to suspension page', [
+                    Log::info('Account suspended/inactive - redirecting to restricted page', [
                         'user_id' => $user->id,
                         'org_id' => $user->orgId,
+                        'status' => $subscriptionStatusValue,
                         'route' => $routeName,
                         'path' => $path,
                     ]);
-                    return redirect()->route('account.suspended');
+                    return redirect()->route('account.restricted');
                 }
                 return $next($request);
             }
@@ -142,10 +144,10 @@ class CheckSubscription
                 ->first();
             
             if ($subscription) {
-                // Check if subscription is suspended (highest priority - block all access)
-                if ($subscription->status === 'suspended') {
-                    // Allow account suspended route to prevent redirect loop
-                    if ($request->routeIs('account.suspended') || $request->is('account/suspended')) {
+                // Check if subscription is suspended or inactive (highest priority - block all access)
+                if (in_array($subscription->status, ['suspended', 'inactive'])) {
+                    // Allow account restricted route to prevent redirect loop
+                    if ($request->routeIs('account.restricted') || $request->is('account/restricted') || $request->is('account/suspended')) {
                         return $next($request);
                     }
                     
@@ -165,13 +167,14 @@ class CheckSubscription
                                  collect($allowedRoutePrefixes)->contains(fn($prefix) => str_starts_with($routeName, $prefix));
                     
                     if (!$isAllowed) {
-                        Log::info('Basecamp account suspended - redirecting to suspension page', [
+                        Log::info('Basecamp account suspended/inactive - redirecting to restricted page', [
                             'user_id' => $user->id,
                             'subscription_id' => $subscription->id,
+                            'status' => $subscription->status,
                             'route' => $routeName,
                             'path' => $path,
                         ]);
-                        return redirect()->route('account.suspended');
+                        return redirect()->route('account.restricted');
                     }
                     return $next($request);
                 }

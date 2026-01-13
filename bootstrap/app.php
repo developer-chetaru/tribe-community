@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'validate.jwt' => \App\Http\Middleware\ValidateJWTToken::class,
             'validate.web.session' => \App\Http\Middleware\ValidateWebSession::class,
             'check.basecamp.payment' => \App\Http\Middleware\CheckBasecampPayment::class,
+            'check.subscription' => \App\Http\Middleware\CheckSubscription::class,
         ]);
         
         // Apply basecamp payment check and subscription check globally to all web routes

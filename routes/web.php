@@ -133,9 +133,15 @@ Route::get('/test-stripe-redirect', function() {
 Route::get('/basecamp/billing', \App\Livewire\BasecampBilling::class)->name('basecamp.billing');
 
 // Account Suspended Page - Accessible to authenticated users with suspended accounts
-Route::middleware(['auth:sanctum', config('jetstream.auth_session')])->get('/account/suspended', function () {
+// Account Restricted Page - Accessible to authenticated users with suspended/inactive accounts
+Route::middleware(['auth:sanctum', config('jetstream.auth_session')])->get('/account/restricted', function () {
     return view('account.suspended');
-})->name('account.suspended');
+})->name('account.restricted');
+
+// Redirect old URL to new route for backward compatibility
+Route::middleware(['auth:sanctum', config('jetstream.auth_session')])->get('/account/suspended', function () {
+    return redirect()->route('account.restricted');
+});
 
 // Basecamp payment routes with rate limiting (10 requests per minute)
 Route::middleware(['throttle:10,1'])->group(function () {
@@ -153,6 +159,7 @@ Route::middleware([
     'verified',
     'validate.web.session', // Validate session is from most recent login
     'check.basecamp.payment', // Check basecamp payment before accessing any route
+    // Note: check.subscription is already applied globally in bootstrap/app.php
 ])->group(function () {
      Route::get('/change-password', function () {
         return view('profile.change-password');

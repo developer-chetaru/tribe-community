@@ -32,24 +32,24 @@ class DashboardController extends Controller
     	    return view('dashboard-coming-soon');
     	}
     	
-    	// Check for suspended status FIRST (highest priority - redirect immediately)
+    	// Check for suspended or inactive status FIRST (highest priority - redirect immediately)
     	if ($user && !$user->hasRole('super_admin')) {
     	    if ($user->hasRole('basecamp')) {
-    	        $suspendedSubscription = SubscriptionRecord::where('user_id', $user->id)
+    	        $inactiveSubscription = SubscriptionRecord::where('user_id', $user->id)
     	            ->where('tier', 'basecamp')
-    	            ->where('status', 'suspended')
+    	            ->whereIn('status', ['suspended', 'inactive'])
     	            ->orderBy('id', 'desc')
     	            ->first();
     	            
-    	        if ($suspendedSubscription) {
-    	            return redirect()->route('account.suspended');
+    	        if ($inactiveSubscription) {
+    	            return redirect()->route('account.restricted');
     	        }
     	    } elseif ($user->orgId) {
     	        $subscriptionService = new SubscriptionService();
     	        $subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId);
     	        
-    	        if (isset($subscriptionStatus['status']) && $subscriptionStatus['status'] === 'suspended') {
-    	            return redirect()->route('account.suspended');
+    	        if (isset($subscriptionStatus['status']) && in_array($subscriptionStatus['status'], ['suspended', 'inactive'])) {
+    	            return redirect()->route('account.restricted');
     	        }
     	    }
     	}
