@@ -13,6 +13,8 @@ class Industry extends Component
     protected $paginationTheme = 'tailwind';
 
     public $valueId;
+    public $sortBy = 'id';
+    public $sortDirection = 'desc';
 
     public function delete($id)
     {
@@ -27,9 +29,24 @@ class Industry extends Component
         }
     }
 
+    public function sort($field)
+    {
+        if ($this->sortBy === $field) {
+            // Toggle sort direction if same field
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            // New field, default to ascending
+            $this->sortBy = $field;
+            $this->sortDirection = 'asc';
+        }
+        
+        // Reset to first page when sorting
+        $this->resetPage();
+    }
+
     public function values()
     {
-        return IndustryName::orderBy('id', 'desc')->paginate(8);
+        return IndustryName::orderBy($this->sortBy, $this->sortDirection)->paginate(8);
     }
 
     public function render()

@@ -12,6 +12,9 @@ class DirectingValue extends Component
 
     protected $paginationTheme = 'tailwind'; 
 
+    public $sortBy = 'id';
+    public $sortDirection = 'desc';
+
     public function delete($id)
     {
         DotValueList::findOrFail($id)->delete();
@@ -23,9 +26,24 @@ class DirectingValue extends Component
         }
     }
 
+    public function sort($field)
+    {
+        if ($this->sortBy === $field) {
+            // Toggle sort direction if same field
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            // New field, default to ascending
+            $this->sortBy = $field;
+            $this->sortDirection = 'asc';
+        }
+        
+        // Reset to first page when sorting
+        $this->resetPage();
+    }
+
     public function values()
     {
-        return DotValueList::orderBy('id', 'desc')->paginate(8);
+        return DotValueList::orderBy($this->sortBy, $this->sortDirection)->paginate(8);
     }
 
     public function render()

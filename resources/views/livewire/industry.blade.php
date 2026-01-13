@@ -31,8 +31,46 @@
         <table class="w-full">
             <thead>
                 <tr class="bg-gray-100">
-                    <th class="text-left px-4 py-2 font-semibold">Name</th>
-                    <th class="text-left px-4 py-2 font-semibold">Active</th>
+                    <th class="text-left px-4 py-2 font-semibold">
+                        <button wire:click="sort('name')" class="flex items-center gap-2 hover:text-red-600 transition">
+                            Name
+                            @if($sortBy === 'name')
+                                @if($sortDirection === 'asc')
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                                    </svg>
+                                @else
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                @endif
+                            @else
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>
+                                </svg>
+                            @endif
+                        </button>
+                    </th>
+                    <th class="text-left px-4 py-2 font-semibold">
+                        <button wire:click="sort('status')" class="flex items-center gap-2 hover:text-red-600 transition">
+                            Active
+                            @if($sortBy === 'status')
+                                @if($sortDirection === 'asc')
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                                    </svg>
+                                @else
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                @endif
+                            @else
+                                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path>
+                                </svg>
+                            @endif
+                        </button>
+                    </th>
                   
                     <th class="w-32"></th>
                 </tr>
