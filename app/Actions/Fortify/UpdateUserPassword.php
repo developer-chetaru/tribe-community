@@ -22,7 +22,18 @@ class UpdateUserPassword implements UpdatesUserPasswords
       
       	Validator::make($input, [
             'current_password' => ['required', 'string', 'current_password:web'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'], // Added min:6
+            'password' => [
+                'required', 
+                'string', 
+                'min:6', 
+                'confirmed',
+                function ($attribute, $value, $fail) use ($input, $user) {
+                    // Check if new password is same as current password
+                    if (Hash::check($value, $user->password)) {
+                        $fail(__('The new password must be different from your current password.'));
+                    }
+                }
+            ],
             'password_confirmation' => ['required'],
         ], [
             'current_password.current_password' => __('The provided password does not match your current password.'),

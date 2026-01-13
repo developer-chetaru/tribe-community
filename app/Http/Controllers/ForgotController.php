@@ -241,6 +241,14 @@ class ForgotController extends Controller
             ], 400);
         }
 
+        // Check if new password is same as current password
+        if (Hash::check($request->new_password, $user->password)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'The new password must be different from your current password.'
+            ], 400);
+        }
+
     	$user->update([
         	'password' => Hash::make($request->new_password),
     	]);

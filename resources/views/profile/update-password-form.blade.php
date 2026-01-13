@@ -18,6 +18,8 @@
                 cfStatus:'',
                 cfMessage:'',
                 cfLive:false,
+                sameAsCurrent:false,
+                sameAsCurrentMessage:'',
 
                 init(){
                     if(!$store.passwordStatus){
@@ -27,6 +29,17 @@
 
                 pwBlur(){
                     const pw=this.$refs.pw.value||'';
+                    const currentPw=document.getElementById('current_password')?.value||'';
+                    
+                    // Check if new password is same as current password
+                    if(pw && currentPw && pw === currentPw){
+                        this.sameAsCurrent=true;
+                        this.sameAsCurrentMessage='New password must be different from current password ❌';
+                    } else {
+                        this.sameAsCurrent=false;
+                        this.sameAsCurrentMessage='';
+                    }
+                    
                     this.evaluatePw(pw);
                     $store.passwordStatus.strength=this.pwStrength;
                     $store.passwordStatus.raw=pw;
@@ -35,6 +48,17 @@
 
                 pwInput(){
                     const pw=this.$refs.pw.value||'';
+                    const currentPw=document.getElementById('current_password')?.value||'';
+                    
+                    // Check if new password is same as current password
+                    if(pw && currentPw && pw === currentPw){
+                        this.sameAsCurrent=true;
+                        this.sameAsCurrentMessage='New password must be different from current password ❌';
+                    } else {
+                        this.sameAsCurrent=false;
+                        this.sameAsCurrentMessage='';
+                    }
+                    
                     if(this.pwLive){
                         this.evaluatePw(pw);
                         $store.passwordStatus.strength=this.pwStrength;
@@ -103,7 +127,8 @@
                         placeholder="Current Password"
                         :type="showCurrentPw ? 'text' : 'password'"
                         class="block w-full border-none outline-none pr-10 focus:ring-0"
-                        wire:model="state.current_password">
+                        wire:model="state.current_password"
+                        @input="$refs.pw && $refs.pw.dispatchEvent(new Event('input'))">
 
                     <button type="button"
                         class="absolute inset-y-0 right-3 flex items-center text-gray-500"
@@ -141,11 +166,11 @@
 
                 <p class="text-sm font-semibold mt-1"
                     :class="{
-                        'text-red-500': pwStrength==='weak',
-                        'text-yellow-600': pwStrength==='medium',
-                        'text-green-600': pwStrength==='strong'
+                        'text-red-500': pwStrength==='weak' || sameAsCurrent,
+                        'text-yellow-600': pwStrength==='medium' && !sameAsCurrent,
+                        'text-green-600': pwStrength==='strong' && !sameAsCurrent
                     }"
-                    x-text="pwMessage"></p>
+                    x-text="sameAsCurrent ? sameAsCurrentMessage : pwMessage"></p>
 
                 <x-input-error for="password" bag="updatePassword" class="mt-2"/>
             </div>
@@ -193,8 +218,10 @@
     <x-slot name="actions">
         <div x-data="{ 
                 get canSave(){ 
+                    const sameAsCurrent = document.getElementById('current_password')?.value === document.getElementById('password')?.value;
                     return $store.passwordStatus.strength==='strong' 
-                        && $store.passwordStatus.match==='match';
+                        && $store.passwordStatus.match==='match'
+                        && !sameAsCurrent;
                 }
             }"
             class="flex justify-start items-center">
