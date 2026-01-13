@@ -95,7 +95,7 @@
         <img :src="mood.src"
              class="w-12 h-12 mb-2 cursor-pointer"
              alt=""
-             @click="selectedImage = mood.src; selectedText = mood.text; showDatePicker = false; open = true; $wire.moodStatus = mood.value">
+             @click="selectedImage = mood.src; selectedText = mood.text; showDatePicker = false; $wire.moodStatus = mood.value; $wire.set('moodStatus', mood.value); open = true;">
     </span>
 </template>
   </div>
@@ -143,8 +143,10 @@
                 <img :src="selectedImage" class="w-20 h-20" alt="selected mood">
             </div>
             <p class="text-center mb-4" x-text="selectedText"></p>
+            {{-- Hidden input to ensure Livewire tracks moodStatus --}}
+            <input type="hidden" wire:model="moodStatus" />
             <textarea
-                wire:model.defer="moodNote"
+                wire:model="moodNote"
                 class="w-full p-2 border border-gray-300 rounded mb-2
                        focus:ring-red-500 focus:border-red-500"
                 placeholder="Write a few words about your day..."
@@ -152,7 +154,18 @@
             @error('moodNote')
                 <p class="text-red-500 text-sm mb-2">{{ $message }}</p>
             @enderror
-            <button wire:click="happyIndex" class="w-full bg-red-500 text-white py-2 rounded">SUBMIT</button>
+            @error('moodStatus')
+                <p class="text-red-500 text-sm mb-2">{{ $message }}</p>
+            @enderror
+            <button 
+                type="button"
+                wire:click="happyIndex" 
+                wire:loading.attr="disabled"
+                wire:target="happyIndex"
+                class="w-full bg-red-500 text-white py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                <span wire:loading.remove wire:target="happyIndex">SUBMIT</span>
+                <span wire:loading wire:target="happyIndex">Saving...</span>
+            </button>
         </div>
     </template>
         </div>

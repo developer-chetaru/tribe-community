@@ -418,31 +418,68 @@ public function updatedSelectedDepartment($value)
 
     public function happyIndex()
     {
-        $this->validate([
-            'moodStatus' => 'required|integer|in:1,2,3',
-        ], [
-            'moodStatus.required' => 'Please select a mood status.',
-            'moodStatus.in' => 'Invalid mood status selected.',
+        $userId = auth()->id();
+        $user = User::find($userId);
+        
+        // Debug: Log moodStatus value and user details
+        Log::info('happyIndex called', [
+            'moodStatus' => $this->moodStatus,
+            'moodNote' => $this->moodNote,
+            'user_id' => $userId,
+            'user_status' => $user ? $user->status : null,
+            'user_orgId' => $user ? $user->orgId : null,
+            'user_has_basecamp_role' => $user ? $user->hasRole('basecamp') : false,
         ]);
 
-        $userId = auth()->id();
-        $moodValue = $this->moodStatus;
+        // Validate moodStatus
+        try {
+            $this->validate([
+                'moodStatus' => 'required|integer|in:1,2,3',
+            ], [
+                'moodStatus.required' => 'Please select a mood status.',
+                'moodStatus.in' => 'Invalid mood status selected.',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('HappyIndex validation failed', [
+                'user_id' => $userId,
+                'errors' => $e->errors(),
+                'moodStatus' => $this->moodStatus,
+            ]);
+            throw $e;
+        }
 
+        $moodValue = $this->moodStatus;
         $description = $this->moodNote ?? '';  
 
-        $user = User::where('id', $userId)
-            ->whereIn('status', ['active_verified', 'active_unverified', true, '1', 1])
-            ->first();
+        // Check user eligibility - updated to handle all active statuses
+        if (!$user) {
+            Log::warning('User not found for HappyIndex', ['user_id' => $userId]);
+            $this->dispatch('close-leave-modal');
+            session()->flash('error', 'User not found.');
+            return;
+        }
 
-        if (!$user || $user->onLeave) {
-            Log::warning('User not eligible for HappyIndex in DashboardSummary', [
+        // Check if user is on leave
+        if ($user->onLeave) {
+            Log::warning('User on leave - cannot submit HappyIndex', [
                 'user_id' => $userId,
-                'user_found' => $user ? true : false,
-                'user_status' => $user ? $user->status : null,
-                'onLeave' => $user ? $user->onLeave : null,
+                'onLeave' => $user->onLeave,
             ]);
             $this->dispatch('close-leave-modal');
-            session()->flash('error', 'User not eligible.');
+            session()->flash('error', 'You are currently on leave.');
+            return;
+        }
+
+        // Check user status - allow all active statuses (verified/unverified)
+        $allowedStatuses = ['active_verified', 'active_unverified', true, '1', 1, 'pending_payment'];
+        if (!in_array($user->status, $allowedStatuses)) {
+            Log::warning('User status not eligible for HappyIndex', [
+                'user_id' => $userId,
+                'user_status' => $user->status,
+                'allowed_statuses' => $allowedStatuses,
+            ]);
+            $this->dispatch('close-leave-modal');
+            session()->flash('error', 'Your account status does not allow sentiment submission.');
             return;
         }
 
@@ -520,8 +557,28 @@ public function updatedSelectedDepartment($value)
             'description' => $description,
         ];
         
-        $this->dispatch('close-leave-modal'); 
-        return redirect()->route('dashboard')->with('success', "Sentiment submitted successfully! Today's EI Score: $todayEIScore");
+        // Reset form fields
+        $this->moodStatus = null;
+        $this->moodNote = null;
+        
+        // Show success message
+        session()->flash('success', 'Sentiment submitted successfully!');
+        
+        // Dispatch event to close modal
+        $this->dispatch('close-leave-modal');
+        
+        // Refresh the component to show updated data
+        $this->loadData();
+        
+        Log::info('HappyIndex submitted successfully', [
+            'user_id' => $userId,
+            'mood_value' => $moodValue,
+        ]);
+        
+        session()->flash('success', "Sentiment submitted successfully! Today's EI Score: $todayEIScore");
+        
+        // Redirect after a short delay to allow modal to close
+        return redirect()->route('dashboard');
     }
 
     public function render()
