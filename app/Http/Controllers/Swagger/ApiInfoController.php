@@ -51,6 +51,11 @@ namespace App\Http\Controllers\Swagger;
  *     name="Basecamp Users",
  *     description="API endpoints specifically for basecamp users (individual £10/month subscription users)"
  * )
+ * 
+ * @OA\Tag(
+ *     name="Reflections",
+ *     description="Reflection management endpoints for creating, viewing, and managing user reflections and chat messages"
+ * )
  */
 class ApiInfoController
 {

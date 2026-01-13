@@ -1734,6 +1734,817 @@
                 ]
             }
         },
+        "/api/reflections": {
+            "get": {
+                "tags": [
+                    "Reflections"
+                ],
+                "summary": "Get user's reflection list",
+                "description": "Retrieve all reflections for the authenticated user. Returns reflections ordered by most recent first.",
+                "operationId": "43b550d716ee5a0c870fd7bc6d9b5f67",
+                "responses": {
+                    "200": {
+                        "description": "Reflections retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "integer",
+                                                        "example": 1
+                                                    },
+                                                    "topic": {
+                                                        "type": "string",
+                                                        "example": "Work-life balance"
+                                                    },
+                                                    "message": {
+                                                        "type": "string",
+                                                        "example": "I need to improve my work-life balance"
+                                                    },
+                                                    "status": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "new",
+                                                            "inprogress",
+                                                            "resolved"
+                                                        ],
+                                                        "example": "new"
+                                                    },
+                                                    "image": {
+                                                        "description": "First image URL (for backward compatibility)",
+                                                        "type": "string",
+                                                        "example": "http://example.com/storage/hptm_files/image1.jpg",
+                                                        "nullable": true
+                                                    },
+                                                    "images": {
+                                                        "description": "Array of all image URLs",
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string",
+                                                            "example": "http://example.com/storage/hptm_files/image1.jpg"
+                                                        }
+                                                    },
+                                                    "created_at": {
+                                                        "type": "string",
+                                                        "example": "2026-01-13 10:30 AM"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthenticated"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Reflections"
+                ],
+                "summary": "Create a new reflection",
+                "description": "Create a new reflection for the authenticated user. Supports multiple image attachments (up to 10 images, max 5MB each). For mobile apps, send images as 'images[]' array in multipart/form-data.",
+                "operationId": "2a3e45dcf3f3a3175d23cd0f3574c6e5",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "topic",
+                                    "message"
+                                ],
+                                "properties": {
+                                    "topic": {
+                                        "description": "Reflection topic",
+                                        "type": "string",
+                                        "maxLength": 255,
+                                        "example": "Work-life balance"
+                                    },
+                                    "message": {
+                                        "description": "Reflection message",
+                                        "type": "string",
+                                        "example": "I need to improve my work-life balance"
+                                    },
+                                    "image": {
+                                        "description": "Optional single image file (for backward compatibility, max 5MB)",
+                                        "type": "string",
+                                        "format": "binary"
+                                    },
+                                    "images[]": {
+                                        "description": "Optional multiple image files (up to 10 images, max 5MB each). Use this for mobile apps.",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "format": "binary"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Reflection created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Reflection created successfully"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "userId": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "orgId": {
+                                                    "type": "integer",
+                                                    "example": 1,
+                                                    "nullable": true
+                                                },
+                                                "topic": {
+                                                    "type": "string",
+                                                    "example": "Work-life balance"
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "example": "I need to improve my work-life balance"
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "new"
+                                                },
+                                                "image": {
+                                                    "description": "First image filename (for backward compatibility)",
+                                                    "type": "string",
+                                                    "example": "image1.jpg",
+                                                    "nullable": true
+                                                },
+                                                "images": {
+                                                    "description": "Array of all image URLs",
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string",
+                                                        "example": "http://example.com/storage/hptm_files/image1.jpg"
+                                                    }
+                                                },
+                                                "created_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                },
+                                                "updated_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthenticated"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "The given data was invalid."
+                                        },
+                                        "errors": {
+                                            "properties": {
+                                                "topic": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string",
+                                                        "example": "The topic field is required."
+                                                    }
+                                                },
+                                                "message": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string",
+                                                        "example": "The message field is required."
+                                                    }
+                                                },
+                                                "images.0": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string",
+                                                        "example": "The images.0 may not be greater than 5120 kilobytes."
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/reflections/{reflection}/chats": {
+            "get": {
+                "tags": [
+                    "Reflections"
+                ],
+                "summary": "Get chat messages for a reflection",
+                "description": "Retrieve all chat messages for a specific reflection. Only the reflection owner can access the chat.",
+                "operationId": "161b81c5127f0a667061ddedde673532",
+                "parameters": [
+                    {
+                        "name": "reflection",
+                        "in": "path",
+                        "description": "Reflection ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Chat messages retrieved successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "from": {
+                                                        "description": "User ID who sent the message",
+                                                        "type": "integer",
+                                                        "example": 1
+                                                    },
+                                                    "message": {
+                                                        "description": "Chat message text",
+                                                        "type": "string",
+                                                        "example": "How can I help you with this?"
+                                                    },
+                                                    "file": {
+                                                        "description": "First file URL (for backward compatibility)",
+                                                        "type": "string",
+                                                        "example": "http://example.com/storage/hptm_files/file.jpg",
+                                                        "nullable": true
+                                                    },
+                                                    "files": {
+                                                        "description": "Array of all file URLs if message has attachments",
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string",
+                                                            "example": "http://example.com/storage/hptm_files/file.jpg"
+                                                        }
+                                                    },
+                                                    "time": {
+                                                        "description": "Message timestamp",
+                                                        "type": "string",
+                                                        "example": "2026-01-13 10:30 AM"
+                                                    },
+                                                    "isMe": {
+                                                        "description": "Whether the message is from the authenticated user",
+                                                        "type": "boolean",
+                                                        "example": true
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthenticated"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Reflection not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Reflection not found"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Reflections"
+                ],
+                "summary": "Send a chat message to a reflection",
+                "description": "Send a chat message (text and/or file) to a specific reflection. Only the reflection owner can send messages.",
+                "operationId": "fd6c7180bceaf058063798b8f89de377",
+                "parameters": [
+                    {
+                        "name": "reflection",
+                        "in": "path",
+                        "description": "Reflection ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "properties": {
+                                    "message": {
+                                        "description": "Chat message text (required if files are not provided)",
+                                        "type": "string",
+                                        "example": "How can I help you with this?",
+                                        "nullable": true
+                                    },
+                                    "file": {
+                                        "description": "Optional single file attachment (max 2MB, for backward compatibility)",
+                                        "type": "string",
+                                        "format": "binary",
+                                        "nullable": true
+                                    },
+                                    "files[]": {
+                                        "description": "Optional multiple file attachments (up to 10 files, max 2MB each). Use this for mobile apps.",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "format": "binary"
+                                        },
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Message sent successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Message sent successfully"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "sendFrom": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "sendTo": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "reflectionId": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "example": "How can I help you with this?",
+                                                    "nullable": true
+                                                },
+                                                "file": {
+                                                    "description": "First file filename (for backward compatibility)",
+                                                    "type": "string",
+                                                    "example": "file.jpg",
+                                                    "nullable": true
+                                                },
+                                                "files": {
+                                                    "description": "Array of all file URLs",
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string",
+                                                        "example": "http://example.com/storage/hptm_files/file.jpg"
+                                                    }
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "Active"
+                                                },
+                                                "created_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                },
+                                                "updated_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthenticated"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Reflection not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Reflection not found"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "The given data was invalid."
+                                        },
+                                        "errors": {
+                                            "properties": {
+                                                "file": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string",
+                                                        "example": "The file may not be greater than 2048 kilobytes."
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/reflections/update-status": {
+            "post": {
+                "tags": [
+                    "Reflections"
+                ],
+                "summary": "Update reflection status",
+                "description": "Update the status of a reflection. Users can only update their own reflections, unless they are super_admin.",
+                "operationId": "b77034e66febf85a2b0c2088e8d3f9a5",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "status",
+                                    "id"
+                                ],
+                                "properties": {
+                                    "id": {
+                                        "description": "Reflection ID",
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "status": {
+                                        "description": "New status for the reflection",
+                                        "type": "string",
+                                        "enum": [
+                                            "inprogress",
+                                            "resolved"
+                                        ],
+                                        "example": "inprogress"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Reflection status updated successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Reflection status updated successfully."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "reflection_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "inprogress"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Unauthorized"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - User does not have permission to update this reflection",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Forbidden: You do not have permission to update this reflection."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Reflection not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Reflection not found"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "The given data was invalid."
+                                        },
+                                        "errors": {
+                                            "properties": {
+                                                "status": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string",
+                                                        "example": "The selected status is invalid."
+                                                    }
+                                                },
+                                                "id": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string",
+                                                        "example": "The id field is required."
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Something went wrong. Please try again later."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/login-admin": {
             "post": {
                 "tags": [
@@ -4167,6 +4978,10 @@
         {
             "name": "Basecamp Billing",
             "description": "Billing API endpoints for basecamp users (£10/month subscription)"
+        },
+        {
+            "name": "Reflections",
+            "description": "Reflection management endpoints for creating, viewing, and managing user reflections and chat messages"
         },
         {
             "name": "Authentication",
