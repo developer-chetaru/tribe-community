@@ -64,7 +64,7 @@ class FortifyServiceProvider extends ServiceProvider
     	// Check if password is correct
     	if (!Hash::check($request->password, $user->password)) {
     	    throw ValidationException::withMessages([
-    	        'password' => __('The provided password is incorrect.'),
+    	        'password' => __('The Entered password is incorrect.'),
     	    ]);
     	}
 

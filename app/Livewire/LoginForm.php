@@ -38,7 +38,7 @@ class LoginForm extends Component
 
         // Check if password is correct
         if (!Hash::check($this->password, $user->password)) {
-            $this->addError('password', 'The provided password is incorrect.');
+            $this->addError('password', 'The Entered password is incorrect.');
             \Log::warning('Login failed - incorrect password for: ' . $this->email);
             return;
         }
