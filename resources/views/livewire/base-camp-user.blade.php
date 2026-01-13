@@ -62,13 +62,14 @@
                 <div class="w-24 h-24 rounded-full bg-red-50 flex items-center justify-center 
                              text-[16px] sm:text-[20px] font-bold mb-5 text-[#ff2323] overflow-hidden shadow-md ring-4 ring-red-100">
 
-                    @if ($user->profile_photo_path && file_exists(public_path($user->profile_photo_path)))
-                        <img src="{{ url($user->profile_photo_path) }}"
-                             class="w-full h-full object-cover rounded-full">
+                    @if ($user->profile_photo_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($user->profile_photo_path))
+                        <img src="{{ asset('storage/' . $user->profile_photo_path) }}"
+                             class="w-full h-full object-cover rounded-full"
+                             alt="{{ $user->first_name }} {{ $user->last_name }}">
                     @else
                         @php
-                            $first = strtoupper(substr($user->first_name, 0, 1));
-                            $last  = strtoupper(substr($user->last_name, 0, 1));
+                            $first = strtoupper(substr($user->first_name ?? '', 0, 1));
+                            $last  = strtoupper(substr($user->last_name ?? '', 0, 1));
                         @endphp
                         <span>{{ $first }}{{ $last }}</span>
                     @endif
@@ -201,13 +202,14 @@
                 <div class="flex justify-center mb-6">
                     <div class="w-32 h-32 rounded-full bg-red-50 flex items-center justify-center 
                                  text-2xl font-bold text-[#ff2323] overflow-hidden shadow-md ring-4 ring-red-100">
-                        @if ($viewingUser->profile_photo_path && file_exists(public_path($viewingUser->profile_photo_path)))
-                            <img src="{{ url($viewingUser->profile_photo_path) }}"
-                                 class="w-full h-full object-cover rounded-full">
+                        @if ($viewingUser->profile_photo_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($viewingUser->profile_photo_path))
+                            <img src="{{ asset('storage/' . $viewingUser->profile_photo_path) }}"
+                                 class="w-full h-full object-cover rounded-full"
+                                 alt="{{ $viewingUser->first_name }} {{ $viewingUser->last_name }}">
                         @else
                             @php
-                                $first = strtoupper(substr($viewingUser->first_name, 0, 1));
-                                $last  = strtoupper(substr($viewingUser->last_name, 0, 1));
+                                $first = strtoupper(substr($viewingUser->first_name ?? '', 0, 1));
+                                $last  = strtoupper(substr($viewingUser->last_name ?? '', 0, 1));
                             @endphp
                             <span>{{ $first }}{{ $last }}</span>
                         @endif
