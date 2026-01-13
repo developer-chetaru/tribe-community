@@ -123,6 +123,10 @@ class SummaryController extends Controller
     $userRegistrationDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), $userTimezone)->startOfDay();
     
     switch ($filterType) {
+        case 'today':
+            $start = $userNow->copy()->startOfDay();
+            $end = $userNow->copy()->endOfDay();
+            break;
         case 'this_week':
             $start = $userNow->copy()->startOfWeek();
             $end = $userNow->copy()->endOfWeek();

@@ -31,7 +31,7 @@
 
                         <!-- Right Content -->
                         <div class="w-2/3 p-4 space-y-2" x-data="{ type: @entangle('filterType') }">
-                            <template x-for="option in ['all','this_week','last_7_days','previous_week','this_month','previous_month','custom']" :key="option">
+                            <template x-for="option in ['all','today','this_week','last_7_days','previous_week','this_month','previous_month','custom']" :key="option">
                                 <label class="flex items-center space-x-2">
                                     <input type="radio" :value="option" class="focus:ring-red-500 text-red-600" x-model="type">
                                     <span x-text="option.replace('_',' ').replace(/\b\w/g, l => l.toUpperCase())"></span>

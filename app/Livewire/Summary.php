@@ -69,6 +69,11 @@ class Summary extends Component
         $userRegistrationDate = Carbon::parse($user->created_at)->setTimezone($userTimezone)->startOfDay();
         
         switch ($this->filterType) {
+            case 'today':
+                $start = $userNow->copy()->startOfDay();
+                $end   = $userNow->copy()->endOfDay();
+                break;
+
             case 'this_week':
                 $start = $userNow->copy()->startOfWeek();
                 $end   = $userNow->copy()->endOfWeek();
