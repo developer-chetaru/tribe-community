@@ -48,11 +48,25 @@ class UpdateProfileInformationForm extends BaseUpdateProfileInformationForm
             $user->profile_photo_path = null;
             $user->save();
             
-            // Refresh the user property
-            $this->user = $user->fresh();
+            // Refresh the user property immediately from database
+            $this->user = Auth::user()->fresh();
             
-            // Dispatch event to refresh the UI
+            // Reload the component state to refresh all properties
+            $this->mount();
+            
+            // Force component refresh to update the view immediately
+            $this->dispatch('$refresh');
+            
+            // Dispatch browser events for navigation menu and other components
             $this->dispatch('photo-deleted');
+            $this->dispatch('profile-photo-deleted');
+            
+            // Also dispatch to window for Alpine.js listeners
+            $this->js('window.dispatchEvent(new CustomEvent("profile-photo-deleted"))');
+            $this->js('window.dispatchEvent(new CustomEvent("photo-deleted"))');
+            
+            // Force page reload to ensure all components refresh
+            $this->js('setTimeout(() => { window.location.reload(); }, 500)');
             
             session()->flash('message', 'Profile photo deleted successfully.');
         } catch (\Exception $e) {

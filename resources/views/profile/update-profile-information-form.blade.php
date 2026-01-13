@@ -18,21 +18,28 @@
       <!-- Profile Photo -->
         {{-- Profile Photo Upload --}}
         @if (Laravel\Jetstream\Jetstream::managesProfilePhotos())
-        <div class="flex justify-center mb-6 col-span-6 sm:col-span-6">
-          <div x-data="{ photoPreview: null }" class="relative">
+        <div class="flex justify-center mb-6 col-span-6 sm:col-span-6" 
+             wire:key="profile-photo-container-{{ $this->user->id }}-{{ $this->user->profile_photo_path ? md5($this->user->profile_photo_path) : 'no-photo' }}">
+          <div x-data="{ photoPreview: null }" 
+               x-on:photo-deleted.window="photoPreview = null"
+               x-on:profile-photo-deleted.window="photoPreview = null; $wire.$refresh()"
+               class="relative">
 
             {{-- Current Profile Photo / New Preview --}}
             <template x-if="photoPreview">
               <img :src="photoPreview" class="h-24 w-24 rounded-full object-cover" alt="New Profile Photo Preview">
             </template>
-            <template x-if="!photoPreview && '{{ $this->user->profile_photo_url }}' !== ''">
-              <img class="h-24 w-24 rounded-full object-cover" src="{{ $this->user->profile_photo_url }}" alt="{{ $this->user->name }}">
-            </template>
-            <template x-if="!photoPreview && '{{ $this->user->profile_photo_url }}' === ''">
-              <div class="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center">
-                <span class="text-gray-400 text-2xl font-semibold">{{ strtoupper(substr($this->user->first_name, 0, 1) . substr($this->user->last_name, 0, 1)) }}</span>
+            @if($this->user->profile_photo_path)
+              <img class="h-24 w-24 rounded-full object-cover" 
+                   src="{{ $this->user->profile_photo_url }}" 
+                   alt="{{ $this->user->name }}" 
+                   wire:key="current-photo-{{ $this->user->id }}-{{ md5($this->user->profile_photo_path ?? '') }}">
+            @else
+              <div class="h-24 w-24 rounded-full bg-gray-200 flex items-center justify-center" 
+                   wire:key="no-photo-{{ $this->user->id }}-{{ now()->timestamp }}">
+                <span class="text-gray-400 text-2xl font-semibold">{{ strtoupper(substr($this->user->first_name ?? '', 0, 1) . substr($this->user->last_name ?? '', 0, 1)) }}</span>
               </div>
-            </template>
+            @endif
 
             {{-- Upload Button --}}
       <label for="photo"
@@ -45,10 +52,17 @@
                 <button type="button" 
                         wire:click="deletePhoto" 
                         wire:confirm="Are you sure you want to delete your profile photo?"
-                        class="absolute top-0 right-0 bg-red-600 hover:bg-red-700 text-white w-8 h-8 rounded-full flex items-center justify-center border-2 border-white cursor-pointer z-10 shadow-lg transition-colors"
+                        wire:key="delete-btn-{{ $this->user->id }}-{{ $this->user->profile_photo_path ?? 'no-photo' }}"
+                        wire:loading.attr="disabled"
+                        wire:target="deletePhoto"
+                        class="absolute top-0 right-0 bg-red-600 hover:bg-red-700 text-white w-8 h-8 rounded-full flex items-center justify-center border-2 border-white cursor-pointer z-10 shadow-lg transition-colors disabled:opacity-50"
                         title="Delete Photo">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg wire:loading.remove wire:target="deletePhoto" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <svg wire:loading wire:target="deletePhoto" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                 </button>
             @endif

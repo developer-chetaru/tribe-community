@@ -119,19 +119,48 @@
         </button>
      @endhasanyrole
         {{-- Profile Dropdown --}}
-        <div x-data="{ open: false }" class="relative" x-cloak>
+        <div x-data="{ 
+                open: false,
+                hasPhoto: {{ Auth::check() && Laravel\Jetstream\Jetstream::managesProfilePhotos() && Auth::user()->profile_photo_path ? 'true' : 'false' }},
+                photoUrl: '{{ Auth::check() && Auth::user()->profile_photo_path ? Auth::user()->profile_photo_url : '' }}',
+                init() {
+                    // Listen for profile photo deletion events
+                    window.addEventListener('profile-photo-deleted', () => {
+                        this.hasPhoto = false;
+                        this.photoUrl = '';
+                    });
+                    window.addEventListener('photo-deleted', () => {
+                        this.hasPhoto = false;
+                        this.photoUrl = '';
+                    });
+                    // Also listen via Livewire events
+                    if (typeof Livewire !== 'undefined') {
+                        Livewire.on('profile-photo-deleted', () => {
+                            this.hasPhoto = false;
+                            this.photoUrl = '';
+                        });
+                        Livewire.on('photo-deleted', () => {
+                            this.hasPhoto = false;
+                            this.photoUrl = '';
+                        });
+                    }
+                }
+            }" 
+            class="relative" 
+            x-cloak>
             <!-- Trigger -->
             <div @click="open = !open" class="flex items-center space-x-1 cursor-pointer">
-                @if(Auth::check() && Laravel\Jetstream\Jetstream::managesProfilePhotos() && Auth::user()->profile_photo_path)
-                    <img src="{{ Auth::user()->profile_photo_url }}"
-                         alt="{{ Auth::user()->first_name }} {{ Auth::user()->last_name }}"
+                <template x-if="hasPhoto && photoUrl">
+                    <img :src="photoUrl"
+                         alt="{{ Auth::check() ? Auth::user()->first_name . ' ' . Auth::user()->last_name : 'Guest' }}"
                          class="w-8 h-8 rounded-full object-cover border">
-                @else
+                </template>
+                <template x-if="!hasPhoto || !photoUrl">
                     <svg class="w-4 h-4 sm:w-8 sm:h-8 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 12c2.67 0 8 1.34 8 4v2H4v-2c0-2.66 5.33-4 8-4z"/>
                         <circle cx="12" cy="7" r="4"/>
                     </svg>
-                @endif
+                </template>
                 <span class="text-[12px] sm:-text-[14px] font-medium text-gray-800" style="white-space: nowrap;">
                     {{ Auth::check() ? Auth::user()->first_name . ' ' . Auth::user()->last_name : 'Guest' }}
                 </span>
