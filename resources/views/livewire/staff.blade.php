@@ -93,7 +93,7 @@
         $roleMapping = [
             'organisation_user' => 'Staff',
             'organisation_admin' => 'Team Lead',
-            'director' => 'Directing',
+            'director' => 'Director',
         ];
         $userRole = $staff->roles->first()?->name;
         $displayRole = $roleMapping[$userRole] ?? ($userRole ? ucfirst($userRole) : '-');
@@ -192,7 +192,7 @@
                 @endif
 
                 @if($staff->office && ($userRole === 'organisation_user' || $userRole === 'organisation_admin'))        
-                <x-tooltip tooltipText="Make User As Directing">
+                <x-tooltip tooltipText="Make User As Director">
                     <button
                         wire:click="openDirectorModal({{ $staff->id }})"
                         class="flex justify-center items-center py-1 px-2 bg-[#ffeaec] border rounded-md border-[#FF9AA0]">
@@ -457,12 +457,12 @@
 @if($showDirectorModal && $selectedStaff)
 <div class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
     <div class="bg-white rounded-lg shadow-lg p-6 w-[400px]">
-        <h2 class="text-lg font-bold mb-4">Confirm Directing</h2>
+        <h2 class="text-lg font-bold mb-4">Confirm Director</h2>
 
         <p>
             Are you sure you want to assign 
             <span class="font-semibold text-red-600">{{ $selectedStaff->first_name }} {{ $selectedStaff->last_name }}</span> 
-            as the Directing?
+            as the Director?
         </p>
 
         <div class="mt-6 flex justify-end space-x-2">

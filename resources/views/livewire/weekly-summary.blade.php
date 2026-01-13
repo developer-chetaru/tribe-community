@@ -19,17 +19,17 @@
 
         <!-- Filters -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 my-4">
-            <select wire:model="selectedMonth" wire:change="loadSummariesFromDatabase"
+            <select wire:model.live="selectedMonth"
                     class="border border-gray-200 rounded-md py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#333] focus:ring-red-500 focus:border-red-500 w-full">
                 @foreach($validMonths as $m)
-                    <option value="{{ $m['value'] }}">{{ $m['name'] }}</option>
+                    <option value="{{ $m['value'] }}" @selected($selectedMonth == $m['value'])>{{ $m['name'] }}</option>
                 @endforeach
             </select>
 
-            <select wire:model="selectedYear" wire:change="loadSummariesFromDatabase"
+            <select wire:model.live="selectedYear"
                     class="border border-gray-200 rounded-md py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#333] focus:ring-red-500 focus:border-red-500 w-full">
                 @foreach($validYears as $y)
-                    <option value="{{ $y }}">{{ $y }}</option>
+                    <option value="{{ $y }}" @selected($selectedYear == $y)>{{ $y }}</option>
                 @endforeach
             </select>
         </div>
