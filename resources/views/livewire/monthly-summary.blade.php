@@ -1,4 +1,4 @@
-<div>
+<div class="mt-8">
     <div class="relative">
         <div class="p-4 bg-white rounded-lg shadow">
             <!-- Header -->
