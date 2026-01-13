@@ -15,6 +15,7 @@ use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ReflectionResolvedMail;
+use App\Mail\ReflectionAdminMessageMail;
 
 class ReflectionList extends Component
 {
@@ -44,7 +45,11 @@ class ReflectionList extends Component
     public $adminIds = [];
 
     protected $paginationTheme = 'tailwind';
-    protected $listeners = ['refreshReflections' => '$refresh','statusConfirmedResolved' => 'statusConfirmedResolved','statusCancelResolved' => 'statusCancelResolved',];
+    protected $listeners = [
+        'refreshReflections' => '$refresh',
+        'statusConfirmedResolved' => 'statusConfirmedResolved',
+        'statusCancelResolved' => 'statusCancelResolved',
+    ];
     
     // Handle Livewire upload errors
     public function updatedNewChatImages($value)
@@ -179,6 +184,7 @@ class ReflectionList extends Component
         ];
 
         $this->sendTo = $reflection->userId;
+        
         $this->loadChatMessages();
         $this->showChatModal = true;
         
@@ -196,6 +202,14 @@ class ReflectionList extends Component
         if ($reflection && ($user->hasRole('basecamp') || $user->hasRole('organisation_user') || $user->hasRole('organisation_admin')) && $reflection->userId !== $user->id) {
             $this->chatMessages = [];
             return;
+        }
+
+        // Mark messages as viewed when user loads chat (only for reflection owner)
+        if ($reflection && $reflection->userId === $user->id) {
+            $reflection->last_viewed_at = now();
+            $reflection->save();
+            // Refresh component to update unread count badge immediately
+            $this->dispatch('$refresh');
         }
 
         $messages = ReflectionMessage::where('reflectionId', $this->reflectionId)
@@ -485,9 +499,24 @@ class ReflectionList extends Component
             }
         }
 
-        ReflectionMessage::insert($data);
+        // Insert message and get ID
+        $messageId = DB::table('reflection_messages')->insertGetId($data);
 
-        $this->sendNotificationToUser($this->sendTo, $this->reflectionId);
+        // Check if this is the first message from admin to this reflection
+        $reflection = Reflection::find($this->reflectionId);
+        $isFirstAdminMessage = false;
+        
+        if ($reflection && $user->hasRole('super_admin')) {
+            // Count previous messages from admin (excluding the one we just inserted)
+            $previousAdminMessages = ReflectionMessage::where('reflectionId', $this->reflectionId)
+                ->where('sendFrom', '!=', $reflection->userId) // Messages from admin
+                ->where('id', '!=', $messageId) // Exclude current message
+                ->count();
+            
+            $isFirstAdminMessage = ($previousAdminMessages == 0);
+        }
+
+        $this->sendNotificationToUser($this->sendTo, $this->reflectionId, $isFirstAdminMessage);
 
         if ($user->hasRole('super_admin')) {
             try {
@@ -747,19 +776,39 @@ public function statusCancelResolved()
 
         $reflectionListTbl = $query->orderByDesc('id')->paginate(5);
 
-        $reflectionList = $reflectionListTbl->map(fn($r) => [
-            'id' => $r->id,
-            'userName' => $r->user?->name ?? '—',
-            'topic' => $r->topic,
-            'status' => $r->status,
-            'message' => $r->message,
-            'created_at' => $r->created_at,
-            'organisation' => $r->user?->organisation?->name ?? '—',
-            'office' => $r->user?->office?->name ?? '—',
-            'department' => $r->user?->department?->department ?? '—',
-            'userId' => $r->userId,
-            'orgId' => $r->orgId,
-        ]);
+        $reflectionList = $reflectionListTbl->map(function($r) use ($user) {
+            // Count unread messages (messages from admin/other users created after last_viewed_at)
+            // Only show unread count for reflection owner
+            $unreadCount = 0;
+            if ($r->userId === $user->id) {
+                $unreadQuery = ReflectionMessage::where('reflectionId', $r->id)
+                    ->where('sendFrom', '!=', $r->userId) // Messages not from reflection owner (i.e., from admin)
+                    ->where('status', 'Active');
+                
+                // Only count messages created after last_viewed_at
+                // If last_viewed_at is null, count all admin messages as unread
+                if ($r->last_viewed_at) {
+                    $unreadQuery->where('created_at', '>', $r->last_viewed_at);
+                }
+                
+                $unreadCount = $unreadQuery->count();
+            }
+            
+            return [
+                'id' => $r->id,
+                'userName' => $r->user?->name ?? '—',
+                'topic' => $r->topic,
+                'status' => $r->status,
+                'message' => $r->message,
+                'created_at' => $r->created_at,
+                'organisation' => $r->user?->organisation?->name ?? '—',
+                'office' => $r->user?->office?->name ?? '—',
+                'department' => $r->user?->department?->department ?? '—',
+                'userId' => $r->userId,
+                'orgId' => $r->orgId,
+                'unreadCount' => $unreadCount, // Unread message count
+            ];
+        });
 
         return view('livewire.reflection-list', 
         [ 'reflectionListTbl' => $reflectionListTbl,
@@ -769,10 +818,25 @@ public function statusCancelResolved()
           ])->layout('layouts.app');
     }
 
-    private function sendNotificationToUser($toUserId, $reflectionId)
+    private function sendNotificationToUser($toUserId, $reflectionId, $isFirstAdminMessage = false)
     {
         $user = User::where('id', $toUserId)->where('status', 'Active')->first();
         if (!$user) return;
+
+        $reflection = Reflection::find($reflectionId);
+        if (!$reflection) return;
+
+        $adminUser = User::find($this->sendFrom);
+        $adminName = $adminUser ? ($adminUser->name ?? 'Admin') : 'Admin';
+
+        // Improved notification message
+        $notificationTitle = $isFirstAdminMessage 
+            ? 'Admin Started Conversation' 
+            : 'New Reflection Message';
+        
+        $notificationDescription = $isFirstAdminMessage
+            ? "Admin {$adminName} has started a conversation about your reflection: {$reflection->topic}"
+            : "You have received a new message from {$adminName} about your reflection: {$reflection->topic}";
 
         $totbadge = app('App\Http\Controllers\API\ApiDotController')
             ->getIotNotificationBadgeCount(['userId' => $toUserId]);
@@ -780,8 +844,8 @@ public function statusCancelResolved()
         $notificationArray = [
             'to_bubble_user_id' => $toUserId,
             'from_bubble_user_id' => $this->sendFrom,
-            'title' => 'Reflection',
-            'description' => 'You have received a new message',
+            'title' => $notificationTitle,
+            'description' => $notificationDescription,
             'reflectionId' => $reflectionId,
             'notificationType' => 'reflectionChat',
             'created_at' => now()
@@ -791,8 +855,8 @@ public function statusCancelResolved()
 
         $notiArray = [
             'fcmToken' => $user->fcmToken,
-            'title' => 'Reflection',
-            'message' => 'You have received a new message',
+            'title' => $notificationTitle,
+            'message' => $notificationDescription,
             'totbadge' => $totbadge,
             'feedbackId' => $reflectionId,
             'notificationType' => 'reflectionChat',
@@ -801,5 +865,22 @@ public function statusCancelResolved()
         ];
 
         app('App\Http\Controllers\Admin\CommonController')->sendFcmNotify($notiArray);
+
+        // Send email notification if this is the first admin message
+        if ($isFirstAdminMessage && !empty($user->email)) {
+            try {
+                Mail::to($user->email)->send(new ReflectionAdminMessageMail($reflection, $adminUser));
+                \Log::info('📧 Reflection admin message email sent', [
+                    'reflection_id' => $reflectionId,
+                    'to' => $user->email,
+                    'from' => $adminName,
+                ]);
+            } catch (\Throwable $e) {
+                \Log::error('❌ Failed to send reflection admin message email', [
+                    'error' => $e->getMessage(),
+                    'reflection_id' => $reflectionId,
+                ]);
+            }
+        }
     }
 }

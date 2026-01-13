@@ -24,10 +24,24 @@ class ReflectionCreate extends Component
         $user = auth()->user();
         
         // Reflections is accessible to super_admin (via Universal Setting > HPTM) 
-        // and organisation_user|organisation_admin|basecamp (via standalone menu)
-        $allowedRoles = ['super_admin', 'organisation_user', 'organisation_admin', 'basecamp'];
+        // and organisation_user|organisation_admin|basecamp|director (via standalone menu)
+        $allowedRoles = ['super_admin', 'organisation_user', 'organisation_admin', 'basecamp', 'director'];
         
-        if (!$user->hasAnyRole($allowedRoles)) {
+        // Check if user has any of the allowed roles (handle case where role might not exist)
+        $hasAccess = false;
+        foreach ($allowedRoles as $role) {
+            try {
+                if ($user->hasRole($role)) {
+                    $hasAccess = true;
+                    break;
+                }
+            } catch (\Spatie\Permission\Exceptions\RoleDoesNotExist $e) {
+                // Role doesn't exist in database, skip it
+                continue;
+            }
+        }
+        
+        if (!$hasAccess) {
             abort(403, 'Unauthorized access. This page is only available for authorised users.');
         }
     }

@@ -18,6 +18,7 @@ class Reflection extends Model
         'message',
         'image',
         'status',
+        'last_viewed_at',
     ];
 
     /**

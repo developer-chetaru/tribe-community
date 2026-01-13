@@ -79,14 +79,26 @@
             <div class="grid gap-3 sm:gap-4 mt-4 sm:mt-6 grid-cols-1 lg:grid-cols-3">
 
                 {{-- Left Column: List of Reflection Boxes --}}
-                <div class="bg-white p-3 sm:p-4 border-gray-300 rounded-md border shadow-sm overflow-y-auto block">
+                <div class="bg-white p-3 sm:p-4 border-gray-300 rounded-md border shadow-sm overflow-y-auto block" wire:poll.3s="$refresh">
                     @forelse($reflectionList as $r)
                         <div 
                             class="reflection-box bg-white border-2 {{ (isset($selectedReflection['id']) && $selectedReflection['id'] == $r['id']) ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300' }} p-4 rounded-lg mb-3 cursor-pointer transition-all hover:shadow-md"
                             wire:click="openChat({{ $r['id'] }})"
                         >
                             <div class="flex items-start justify-between mb-2">
-                                <h3 class="text-gray-800 text-[16px] font-semibold flex-1 line-clamp-2">{{ $r['topic'] }}</h3>
+                                <div class="flex-1 min-w-0">
+                                    <h3 class="text-gray-800 text-[16px] font-semibold flex-1 line-clamp-2">{{ $r['topic'] }}</h3>
+                                    @if(isset($r['unreadCount']) && $r['unreadCount'] > 0)
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"></path>
+                                                </svg>
+                                                {{ $r['unreadCount'] }} {{ $r['unreadCount'] == 1 ? 'unread message' : 'unread messages' }}
+                                            </span>
+                                        </div>
+                                    @endif
+                                </div>
                                 @role('super_admin')
                                 <button 
                                     type="button"
