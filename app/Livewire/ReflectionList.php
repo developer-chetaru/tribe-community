@@ -328,9 +328,10 @@ class ReflectionList extends Component
             return;
         }
         
-        // Validate file sizes (25MB = 25 * 1024 * 1024 bytes)
+        // Validate file sizes
         if ($hasFiles) {
-            $maxSizeBytes = 25 * 1024 * 1024; // 25MB in bytes
+            $maxSizeBytes = 25 * 1024 * 1024; // 25MB in bytes for images and other files
+            $maxVideoSizeBytes = 10 * 1024 * 1024; // 10MB in bytes for videos
             $filesToCheck = [];
             
             // Collect all files to check
@@ -359,12 +360,37 @@ class ReflectionList extends Component
                             $fileSize = $file->size;
                         }
                         
-                        if ($fileSize !== null && $fileSize > $maxSizeBytes) {
-                            $fileName = method_exists($file, 'getClientOriginalName') ? $file->getClientOriginalName() : 'file';
+                        // Check if it's a video file
+                        $isVideo = false;
+                        $fileName = method_exists($file, 'getClientOriginalName') ? $file->getClientOriginalName() : 'file';
+                        
+                        if (method_exists($file, 'getClientMimeType')) {
+                            $mimeType = $file->getClientMimeType();
+                            $isVideo = str_starts_with($mimeType, 'video/');
+                        } elseif (method_exists($file, 'getMimeType')) {
+                            $mimeType = $file->getMimeType();
+                            $isVideo = str_starts_with($mimeType, 'video/');
+                        } else {
+                            $ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+                            $videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'wmv', 'flv', 'mkv', 'm4v', '3gp'];
+                            $isVideo = in_array($ext, $videoExts);
+                        }
+                        
+                        if ($fileSize !== null) {
                             $fileSizeMB = round($fileSize / (1024 * 1024), 2);
-                            $this->alertType = 'error';
-                            $this->alertMessage = "File '{$fileName}' is too large ({$fileSizeMB}MB). Maximum file size is 25MB.";
-                            return;
+                            
+                            // Check video size limit (10MB)
+                            if ($isVideo && $fileSize > $maxVideoSizeBytes) {
+                                $this->alertType = 'error';
+                                $this->alertMessage = "Video file '{$fileName}' is too large ({$fileSizeMB}MB). Maximum video size is 10MB.";
+                                return;
+                            }
+                            // Check general file size limit (25MB)
+                            if (!$isVideo && $fileSize > $maxSizeBytes) {
+                                $this->alertType = 'error';
+                                $this->alertMessage = "File '{$fileName}' is too large ({$fileSizeMB}MB). Maximum file size is 25MB.";
+                                return;
+                            }
                         }
                     } catch (\Exception $e) {
                         // Continue if we can't check size

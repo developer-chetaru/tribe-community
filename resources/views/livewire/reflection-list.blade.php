@@ -482,10 +482,18 @@
                                                 const file = item.getAsFile();
                                                 if (!file) continue;
                                                 
-                                                // Check file size (25MB limit)
-                                                const maxSize = 25 * 1024 * 1024;
-                                                if (file.size > maxSize) {
-                                                    alert('Pasted image is too large (' + (file.size / (1024 * 1024)).toFixed(2) + 'MB). Maximum file size is 25MB.');
+                                                // Check file size
+                                                const maxSize = 25 * 1024 * 1024; // 25MB for images
+                                                const maxVideoSize = 10 * 1024 * 1024; // 10MB for videos
+                                                const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                                                
+                                                if (file.type.startsWith('video/')) {
+                                                    if (file.size > maxVideoSize) {
+                                                        alert('Pasted video is too large (' + fileSizeMB + 'MB). Maximum video size is 10MB.');
+                                                        return;
+                                                    }
+                                                } else if (file.size > maxSize) {
+                                                    alert('Pasted image is too large (' + fileSizeMB + 'MB). Maximum file size is 25MB.');
                                                     return;
                                                 }
                                                 
@@ -552,20 +560,8 @@
                                         class="hidden" 
                                         accept="image/*,video/*,.pdf,.doc,.docx" 
                                         multiple
-                                        x-on:change="
-                                            handleFileSelection($event, {{ $maxFiles }});
-                                            $wire.set('alertMessage', '');
-                                        "
-                                        x-on:livewire-upload-finish="
-                                            $wire.$refresh();
-                                            // Update previews after upload completes
-                                            setTimeout(() => {
-                                                const form = $el.closest('form');
-                                                if (form) {
-                                                    form.dispatchEvent(new CustomEvent('livewire-upload-finish'));
-                                                }
-                                            }, 100);
-                                        "
+                                        x-on:change="handleFileSelection($event, {{ $maxFiles }}); $wire.set('alertMessage', ''); const files = $event.target.files; if (files && files.length > 0) { if (!filePreviews) { filePreviews = {}; } Object.keys(filePreviews).forEach(key => { if (filePreviews[key] && filePreviews[key].startsWith('blob:')) { URL.revokeObjectURL(filePreviews[key]); } }); filePreviews = {}; for (let i = 0; i < files.length; i++) { const file = files[i]; if (file.type.startsWith('image/') || file.type.startsWith('video/')) { filePreviews[i] = URL.createObjectURL(file); } } }"
+                                        x-on:livewire-upload-finish="$wire.$refresh(); setTimeout(() => { const form = $el.closest('form'); if (form) { form.dispatchEvent(new CustomEvent('livewire-upload-finish')); } }, 100);"
                                     >
 
                                     <button 
@@ -657,63 +653,110 @@
                                                      x-data="{ 
                                                         index: {{ $index }},
                                                         previewUrl: null,
-                                                        serverPreviewUrl: '{{ $serverPreviewUrl ?? '' }}'
-                                                     }"
-                                                     x-init="
-                                                        const form = $el.closest('form');
-                                                        const updatePreview = () => {
-                                                            // First check client-side preview (immediate)
-                                                            if (form && form._x_dataStack && form._x_dataStack[0]) {
-                                                                const filePreviews = form._x_dataStack[0].filePreviews;
-                                                                if (filePreviews && filePreviews[index]) {
-                                                                    previewUrl = filePreviews[index];
+                                                        serverPreviewUrl: '{{ $serverPreviewUrl ?? '' }}',
+                                                        init() {
+                                                            const self = this;
+                                                            const form = this.$el.closest('form');
+                                                            
+                                                            const updatePreview = () => {
+                                                                // First check client-side preview from form's filePreviews (immediate)
+                                                                if (form && form._x_dataStack && form._x_dataStack[0]) {
+                                                                    const filePreviews = form._x_dataStack[0].filePreviews;
+                                                                    if (filePreviews && filePreviews[self.index] !== undefined && filePreviews[self.index] !== null) {
+                                                                        self.previewUrl = filePreviews[self.index];
+                                                                        return true;
+                                                                    }
+                                                                }
+                                                                
+                                                                // For images, try to create preview from file input directly
+                                                                @if($isImage)
+                                                                const fileInput = document.getElementById('chatFileInput');
+                                                                if (fileInput && fileInput.files && fileInput.files[self.index]) {
+                                                                    const file = fileInput.files[self.index];
+                                                                    if (file && file.type.startsWith('image/')) {
+                                                                        // Store in form's filePreviews for consistency
+                                                                        if (form && form._x_dataStack && form._x_dataStack[0]) {
+                                                                            if (!form._x_dataStack[0].filePreviews) {
+                                                                                form._x_dataStack[0].filePreviews = {};
+                                                                            }
+                                                                            form._x_dataStack[0].filePreviews[self.index] = URL.createObjectURL(file);
+                                                                        }
+                                                                        self.previewUrl = URL.createObjectURL(file);
+                                                                        return true;
+                                                                    }
+                                                                }
+                                                                @endif
+                                                                
+                                                                // Then check server-side preview (after upload)
+                                                                if (self.serverPreviewUrl) {
+                                                                    self.previewUrl = self.serverPreviewUrl;
                                                                     return true;
                                                                 }
-                                                            }
-                                                            // Then check server-side preview (after upload)
-                                                            if (serverPreviewUrl) {
-                                                                previewUrl = serverPreviewUrl;
-                                                                return true;
-                                                            }
-                                                            return false;
-                                                        };
-                                                        updatePreview();
-                                                        // Watch for changes every 100ms for faster preview
-                                                        let checkCount = 0;
-                                                        const maxChecks = 50; // Stop after 5 seconds (50 * 100ms)
-                                                        const interval = setInterval(() => {
-                                                            checkCount++;
-                                                            if (updatePreview() || checkCount >= maxChecks) {
-                                                                clearInterval(interval);
-                                                            }
-                                                        }, 100);
-                                                        // Listen for upload finish to update server preview
-                                                        $el.closest('form').addEventListener('livewire-upload-finish', () => {
-                                                            // Refresh to get server preview URL
-                                                            setTimeout(() => {
-                                                                if (serverPreviewUrl) {
-                                                                    previewUrl = serverPreviewUrl;
+                                                                
+                                                                return false;
+                                                            };
+                                                            
+                                                            // Try to get preview immediately
+                                                            updatePreview();
+                                                            
+                                                            // Watch for changes every 50ms for faster preview
+                                                            let checkCount = 0;
+                                                            const maxChecks = 100; // Stop after 5 seconds (100 * 50ms)
+                                                            const interval = setInterval(() => {
+                                                                checkCount++;
+                                                                if (updatePreview() || checkCount >= maxChecks) {
+                                                                    clearInterval(interval);
                                                                 }
-                                                            }, 500);
-                                                        });
-                                                        // Cleanup on component destroy
-                                                        $el.addEventListener('alpine:destroy', () => {
-                                                            clearInterval(interval);
-                                                        });
-                                                     ">
+                                                            }, 50);
+                                                            
+                                                            // Listen for upload finish to update server preview
+                                                            const formEl = this.$el.closest('form');
+                                                            if (formEl) {
+                                                                formEl.addEventListener('livewire-upload-finish', () => {
+                                                                    setTimeout(() => {
+                                                                        if (self.serverPreviewUrl) {
+                                                                            self.previewUrl = self.serverPreviewUrl;
+                                                                        }
+                                                                    }, 500);
+                                                                });
+                                                            }
+                                                            
+                                                            // Listen for file input changes
+                                                            const fileInput = document.getElementById('chatFileInput');
+                                                            if (fileInput) {
+                                                                fileInput.addEventListener('change', () => {
+                                                                    setTimeout(() => updatePreview(), 50);
+                                                                });
+                                                            }
+                                                            
+                                                            // Cleanup on component destroy
+                                                            this.$el.addEventListener('alpine:destroy', () => {
+                                                                clearInterval(interval);
+                                                                if (self.previewUrl && self.previewUrl.startsWith('blob:')) {
+                                                                    URL.revokeObjectURL(self.previewUrl);
+                                                                }
+                                                            });
+                                                        }
+                                                     }">
                                                     @if($isImage)
-                                                        {{-- Image Preview - show image if available, otherwise just filename --}}
-                                                        <div x-show="previewUrl" style="display: none;" class="bg-white">
+                                                        {{-- Image Preview - Always show image preview for images --}}
+                                                        <div class="bg-gray-100 w-full h-24 sm:h-32 relative overflow-hidden">
                                                             <img 
                                                                 x-bind:src="previewUrl"
                                                                 alt="{{ $fileName }}"
-                                                                class="w-full h-24 sm:h-32 object-cover bg-white"
+                                                                class="w-full h-full object-cover"
                                                                 x-on:error="previewUrl = null"
+                                                                x-show="previewUrl"
+                                                                style="display: none;"
+                                                                x-cloak
                                                             >
-                                                        </div>
-                                                        {{-- Show only filename if preview not available --}}
-                                                        <div class="w-full h-24 sm:h-32 flex items-center justify-center bg-white px-2" x-show="!previewUrl">
-                                                            <span class="text-[10px] sm:text-xs text-gray-600 text-center break-words">{{ $fileName }}</span>
+                                                            <div class="w-full h-full flex items-center justify-center bg-gray-100 px-2" 
+                                                                 x-show="!previewUrl"
+                                                                 style="display: flex;"
+                                                                 x-cloak
+                                                            >
+                                                                <span class="text-[10px] sm:text-xs text-gray-600 text-center break-words">{{ $fileName }}</span>
+                                                            </div>
                                                         </div>
                                                     @elseif($isVideo)
                                                         {{-- Video Preview - show video if available, otherwise just filename --}}
@@ -830,11 +873,22 @@
                 event.target.value = '';
                 return false;
             }
-            // Check file sizes (25MB = 25 * 1024 * 1024 bytes)
+            // Check file sizes
             const maxSize = 25 * 1024 * 1024; // 25MB in bytes
+            const maxVideoSize = 10 * 1024 * 1024; // 10MB in bytes for videos
             for (let i = 0; i < files.length; i++) {
-                if (files[i].size > maxSize) {
-                    alert('File "' + files[i].name + '" is too large (' + (files[i].size / (1024 * 1024)).toFixed(2) + 'MB). Maximum file size is 25MB.');
+                const file = files[i];
+                const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                
+                // Check if it's a video file
+                if (file.type.startsWith('video/')) {
+                    if (file.size > maxVideoSize) {
+                        alert('Video file "' + file.name + '" is too large (' + fileSizeMB + 'MB). Maximum video size is 10MB.');
+                        event.target.value = '';
+                        return false;
+                    }
+                } else if (file.size > maxSize) {
+                    alert('File "' + file.name + '" is too large (' + fileSizeMB + 'MB). Maximum file size is 25MB.');
                     event.target.value = '';
                     return false;
                 }
