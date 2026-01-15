@@ -136,7 +136,7 @@
                     @elseif($item['status'] === 'Missed')
                         <span class="date-time text-[12px] sm:text-[14px] text-[#01010180]">
                             {{ $item['date'] }}
-                            <span class="ml-1 p-1 bg-yellow-500 rounded-sm px-2 text-white">
+                            <span class="ml-1 p-1 bg-red-500 rounded-sm px-2 text-white">
                                 Missed
                             </span>
                         </span>
