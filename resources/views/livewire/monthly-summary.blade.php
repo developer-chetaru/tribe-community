@@ -32,7 +32,7 @@
                                 @if(!empty($summary['summary']))
                                     {{ $summary['summary'] }}
                                 @else
-                                    <span class="text-gray-500 italic">Report not generated yet.</span>
+                                    <span class="text-gray-500 italic">Summary is not available.</span>
                                 @endif
                             </p>
                         </div>

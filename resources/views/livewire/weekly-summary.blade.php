@@ -51,7 +51,7 @@
                                 {{ $summary['summary'] }}
                                 @php $allEmpty = false; @endphp
                             @else
-                                <span class="text-gray-500 italic">Report not generated yet.</span>
+                                <span class="text-gray-500 italic">Summary is not available.</span>
                             @endif
                         </p>
                     </div>
@@ -60,7 +60,7 @@
 
             @else
                 <div class="p-0 sm:p-4 text-center text-gray-500">
-                    <p>Report not generated yet! <br>Your weekly sentiment summary is generated every Sunday. <br>
+                    <p>Summary is not available! <br>Your weekly sentiment summary is generated every Sunday. <br>
                     You’ll be able to view your updated summary after that.</p>
                 </div>
             @endif

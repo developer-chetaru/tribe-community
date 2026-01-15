@@ -122,14 +122,27 @@ public function render()
 	
     $staffList = $staffQuery->paginate(10);
 
+    // Get unique departments - fix for duplicate entries
     $departments = User::where('orgId', $currentUserOrgId)
-                      
-                       ->with('department.allDepartment') 
-                       ->get()
-                       ->pluck('department')           
-                       ->filter()                     
-                       ->unique('id');       
-
+                       ->whereNotNull('departmentId')
+                       ->distinct()
+                       ->pluck('departmentId')
+                       ->filter()
+                       ->unique()
+                       ->values();
+    
+    // Fetch departments with their allDepartment relationship
+    $departments = Department::whereIn('id', $departments)
+                              ->with('allDepartment')
+                              ->get()
+                              ->filter(function($dept) {
+                                  return $dept->allDepartment !== null;
+                              })
+                              ->unique(function($dept) {
+                                  // Use all_department_id to ensure uniqueness by AllDepartment name
+                                  return $dept->all_department_id;
+                              })
+                              ->values();
 
     $organisationName = optional($staffList->first()?->organisation)->name 
                         ?? optional(Organisation::find($currentUserOrgId))->name;
