@@ -135,6 +135,51 @@ Route::get('/basecamp/billing', \App\Livewire\BasecampBilling::class)->name('bas
 // Account Suspended Page - Accessible to authenticated users with suspended accounts
 // Account Restricted Page - Accessible to authenticated users with suspended/inactive accounts
 Route::middleware(['auth:sanctum', config('jetstream.auth_session')])->get('/account/restricted', function () {
+    $user = auth()->user();
+    $isBasecamp = $user && $user->hasRole('basecamp');
+    
+    // Check if both status is inactive AND payment is unpaid
+    $isInactive = false;
+    $hasUnpaidInvoice = false;
+    
+    if ($isBasecamp) {
+        $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
+            ->where('tier', 'basecamp')
+            ->whereIn('status', ['suspended', 'inactive'])
+            ->orderBy('id', 'desc')
+            ->first();
+            
+        if ($subscription && $subscription->status === 'inactive') {
+            $isInactive = true;
+            
+            // Check for unpaid invoice
+            $hasUnpaidInvoice = \App\Models\Invoice::where('subscription_id', $subscription->id)
+                ->orWhere(function($q) use ($user) {
+                    $q->where('user_id', $user->id)->where('tier', 'basecamp');
+                })
+                ->whereIn('status', ['unpaid', 'pending', 'failed'])
+                ->exists();
+        }
+    } else {
+        $subscriptionService = new \App\Services\SubscriptionService();
+        $subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId ?? 0);
+        
+        if (isset($subscriptionStatus['status']) && $subscriptionStatus['status'] === 'inactive') {
+            $isInactive = true;
+            
+            // Check for unpaid invoice for organisation
+            $hasUnpaidInvoice = \App\Models\Invoice::where('organisation_id', $user->orgId)
+                ->whereIn('status', ['unpaid', 'pending', 'failed'])
+                ->exists();
+        }
+    }
+    
+    // If BOTH inactive AND unpaid, redirect to dashboard (shows payment modal)
+    if ($isInactive && $hasUnpaidInvoice) {
+        return redirect()->route('dashboard');
+    }
+    
+    // Otherwise show account suspended page
     return view('account.suspended');
 })->name('account.restricted');
 
