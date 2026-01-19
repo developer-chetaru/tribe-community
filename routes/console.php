@@ -53,3 +53,13 @@ Schedule::command('onesignal:update-working-day-status --time=11:10')
         ->hourly() // Changed from dailyAt to hourly for timezone-based filtering
         ->withoutOverlapping()
         ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+// -------------------------
+// Sync all user tags to OneSignal every minute
+// This ensures all tags (user_type, has_working_today, timezone, has_submitted_today, 
+// email_subscribed, status, name) are up to date in OneSignal
+// -------------------------
+Schedule::command('onesignal:sync-all-tags')
+        ->everyMinute()
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/onesignal-sync.log'));
