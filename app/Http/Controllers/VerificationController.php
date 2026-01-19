@@ -80,6 +80,18 @@ class VerificationController extends Controller
                     'already_verified' => true,
                 ]);
             }
+            
+            // Detect if user is on mobile browser
+            $userAgent = strtolower($request->header('User-Agent', ''));
+            $isMobileBrowser = str_contains($userAgent, 'mobile') || 
+                              str_contains($userAgent, 'android') || 
+                              str_contains($userAgent, 'iphone') || 
+                              str_contains($userAgent, 'ipad');
+            
+            $redirectUrl = $isMobileBrowser 
+                ? 'tribe365://login' // Deep link to app login
+                : url('/login'); // Web login
+            
             // Already verified - show message and redirect
             return response("
                 <html>
@@ -88,11 +100,11 @@ class VerificationController extends Controller
                 </head>
                 <body style='text-align:center; padding:50px; font-family:sans-serif;'>
                     <h2 style='color:orange;'>Warning: This account is already active.</h2>
-                    <p>You will be redirected in 5 seconds...</p>
+                    <p>You will be redirected in 3 seconds...</p>
                     <script>
                         setTimeout(function() {
-                            window.location.href = '".url('/login')."';
-                        }, 5000);
+                            window.location.href = '{$redirectUrl}';
+                        }, 3000);
                     </script>
                 </body>
                 </html>
@@ -163,7 +175,18 @@ class VerificationController extends Controller
         // Web response (HTML)
         // Check if this is a basecamp user who needs to set up billing
         $isBasecamp = $user->hasRole('basecamp');
-        $redirectUrl = url('/login'); // Always redirect to login after verification
+        
+        // Detect if user is on mobile browser (for app deep link redirect)
+        $userAgent = strtolower($request->header('User-Agent', ''));
+        $isMobileBrowser = str_contains($userAgent, 'mobile') || 
+                          str_contains($userAgent, 'android') || 
+                          str_contains($userAgent, 'iphone') || 
+                          str_contains($userAgent, 'ipad');
+        
+        // Redirect URL: app deep link for mobile browsers, web login for desktop
+        $redirectUrl = $isMobileBrowser 
+            ? 'tribe365://verification-success' // Deep link to open app
+            : url('/login'); // Web login for desktop
             // --------------------------------------
             // Create HTML email body from your template
             // --------------------------------------
@@ -247,8 +270,7 @@ class VerificationController extends Controller
                     'error' => $e->getMessage(),
                 ]);
             }
-            // Return success page
-            $redirectUrl = url('/login');
+            // Return success page with redirect (already set above based on mobile/desktop)
             return response('
                 <html>
                 <head>
@@ -256,11 +278,11 @@ class VerificationController extends Controller
                 </head>
                 <body style="text-align:center; padding:50px; font-family:sans-serif;">
                     <h2 style="color:green;">Your account has been activated successfully!</h2>
-                    <p>You will be redirected in 5 seconds...</p>
+                    <p>You will be redirected in 3 seconds...</p>
                     <script>
                         setTimeout(function() {
                             window.location.href = "' . $redirectUrl . '";
-                        }, 5000);
+                        }, 3000);
                     </script>
                 </body>
                 </html>
