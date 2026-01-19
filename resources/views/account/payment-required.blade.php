@@ -33,7 +33,7 @@
 
             {{-- Pay Now Button --}}
             <div class="mb-6">
-                <a href="{{ $isBasecamp ?? false ? route('basecamp.billing') : route('billing') }}" 
+                <a href="{{ $isBasecamp ?? false ? route('basecamp.checkout.redirect') : route('billing') }}" 
                    class="w-full block text-center bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-150 ease-in-out">
                     Pay Now
                 </a>
