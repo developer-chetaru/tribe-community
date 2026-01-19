@@ -55,11 +55,12 @@ Schedule::command('onesignal:update-working-day-status --time=11:10')
         ->appendOutputTo(storage_path('logs/scheduler.log'));
 
 // -------------------------
-// Sync all user tags to OneSignal every minute
+// Sync all user tags to OneSignal every 5 minutes
 // This ensures all tags (user_type, has_working_today, timezone, has_submitted_today, 
 // email_subscribed, status, name) are up to date in OneSignal
+// Changed from everyMinute() to everyFiveMinutes() to avoid API rate limits
 // -------------------------
 Schedule::command('onesignal:sync-all-tags')
-        ->everyMinute()
+        ->everyFiveMinutes()
         ->withoutOverlapping()
         ->appendOutputTo(storage_path('logs/onesignal-sync.log'));

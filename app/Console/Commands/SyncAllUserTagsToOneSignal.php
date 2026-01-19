@@ -21,7 +21,7 @@ class SyncAllUserTagsToOneSignal extends Command
      *
      * @var string
      */
-    protected $description = 'Sync all user tags to OneSignal (runs every minute)';
+    protected $description = 'Sync all user tags to OneSignal (runs every 5 minutes)';
 
     /**
      * Execute the console command.
@@ -78,6 +78,9 @@ class SyncAllUserTagsToOneSignal extends Command
                         'user_id' => $user->id,
                     ]);
                 }
+                
+                // Add small delay to avoid rate limiting (50ms between users)
+                usleep(50000); // 50ms = 0.05 seconds
             } catch (\Throwable $e) {
                 $stats['failed']++;
                 Log::error('OneSignal tag sync exception', [
