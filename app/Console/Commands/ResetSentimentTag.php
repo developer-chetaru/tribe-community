@@ -18,8 +18,8 @@ class ResetSentimentTag extends Command
         $this->info('Checking for users at midnight in their timezone...');
         Log::info('Cron: ResetSentimentTag started');
 
-        // Get all active users
-        $users = User::where('status', 1)->get();
+        // Get all active users (verified and unverified)
+        $users = User::whereIn('status', ['active_verified', 'active_unverified'])->get();
         
         $usersToReset = $users->filter(function ($user) {
             // Get user's timezone safely using helper

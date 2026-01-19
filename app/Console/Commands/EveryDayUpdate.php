@@ -994,8 +994,8 @@ public function generateWeeklySummary()
 {
     Log::info("WeeklySummary generation started");
     
-    // Get all active users
-    $users = User::where('status', 1)->get();
+    // Get all active users (verified and unverified)
+    $users = User::whereIn('status', ['active_verified', 'active_unverified'])->get();
     
     if ($users->isEmpty()) {
         Log::info("WeeklySummary: No active users found.");
