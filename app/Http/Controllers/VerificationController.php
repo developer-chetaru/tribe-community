@@ -89,7 +89,7 @@ class VerificationController extends Controller
                               str_contains($userAgent, 'ipad');
             
             $redirectUrl = $isMobileBrowser 
-                ? 'tribe365://login' // Deep link to app login
+                ? url('/app-redirect') // Redirect to app-redirect handler
                 : url('/login'); // Web login
             
             // Already verified - show message and redirect
@@ -183,9 +183,9 @@ class VerificationController extends Controller
                           str_contains($userAgent, 'iphone') || 
                           str_contains($userAgent, 'ipad');
         
-        // Redirect URL: app deep link for mobile browsers, web login for desktop
+        // Redirect URL: app-redirect handler for mobile, web login for desktop
         $redirectUrl = $isMobileBrowser 
-            ? 'tribe365://verification-success' // Deep link to open app
+            ? url('/app-redirect') // Redirect to app-redirect handler which will open app
             : url('/login'); // Web login for desktop
             // --------------------------------------
             // Create HTML email body from your template
