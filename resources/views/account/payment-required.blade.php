@@ -33,10 +33,44 @@
 
             {{-- Pay Now Button --}}
             <div class="mb-6">
-                <a href="{{ $isBasecamp ?? false ? route('basecamp.checkout.redirect') : route('billing') }}" 
-                   class="w-full block text-center bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-150 ease-in-out">
-                    Pay Now
-                </a>
+                @php
+                    $user = auth()->user();
+                    $isBasecampUser = $isBasecamp ?? ($user && $user->hasRole('basecamp'));
+                    
+                    // Get unpaid invoice for this user
+                    $unpaidInvoice = null;
+                    if ($isBasecampUser) {
+                        $unpaidInvoice = \App\Models\Invoice::where('user_id', $user->id)
+                            ->where('tier', 'basecamp')
+                            ->whereIn('status', ['unpaid', 'pending', 'failed'])
+                            ->orderBy('created_at', 'desc')
+                            ->first();
+                    } else {
+                        $unpaidInvoice = \App\Models\Invoice::where('organisation_id', $user->orgId)
+                            ->whereIn('status', ['unpaid', 'pending', 'failed'])
+                            ->orderBy('created_at', 'desc')
+                            ->first();
+                    }
+                @endphp
+                
+                @if($isBasecampUser && $unpaidInvoice)
+                    {{-- Direct Stripe checkout form for basecamp users --}}
+                    <form id="paymentForm" action="{{ route('basecamp.checkout.create') }}" method="POST">
+                        @csrf
+                        <input type="hidden" name="invoice_id" value="{{ $unpaidInvoice->id }}">
+                        <input type="hidden" name="user_id" value="{{ $user->id }}">
+                        <button type="submit" 
+                                class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-150 ease-in-out">
+                            Pay Now
+                        </button>
+                    </form>
+                @else
+                    {{-- Fallback to billing page --}}
+                    <a href="{{ $isBasecampUser ? route('basecamp.billing') : route('billing') }}" 
+                       class="w-full block text-center bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-150 ease-in-out">
+                        Pay Now
+                    </a>
+                @endif
             </div>
 
             {{-- Help Text --}}
