@@ -47,12 +47,10 @@ class VerificationController extends Controller
     public function verify(Request $request, $id)
     {
         // Check if request is from mobile app (expects JSON) or web (expects HTML)
+        // Only check Accept header - mobile apps should send Accept: application/json
+        // Web browsers (desktop and mobile) will get HTML response
         $isMobileApp = $request->wantsJson() || 
-                      $request->header('Accept') === 'application/json' ||
-                      str_contains(strtolower($request->header('User-Agent', '')), 'mobile') ||
-                      str_contains(strtolower($request->header('User-Agent', '')), 'android') ||
-                      str_contains(strtolower($request->header('User-Agent', '')), 'iphone') ||
-                      str_contains(strtolower($request->header('User-Agent', '')), 'ipad');
+                      $request->header('Accept') === 'application/json';
         
         if (! $request->hasValidSignature()) {
             if ($isMobileApp) {
