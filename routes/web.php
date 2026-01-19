@@ -141,6 +141,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session')])->get('/acc
     // Check if both status is inactive AND payment is unpaid
     $isInactive = false;
     $hasUnpaidInvoice = false;
+    $invoiceAmount = null;
     
     if ($isBasecamp) {
         $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
@@ -152,13 +153,19 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session')])->get('/acc
         if ($subscription && $subscription->status === 'inactive') {
             $isInactive = true;
             
-            // Check for unpaid invoice
-            $hasUnpaidInvoice = \App\Models\Invoice::where('subscription_id', $subscription->id)
+            // Check for unpaid invoice and get amount
+            $unpaidInvoice = \App\Models\Invoice::where('subscription_id', $subscription->id)
                 ->orWhere(function($q) use ($user) {
                     $q->where('user_id', $user->id)->where('tier', 'basecamp');
                 })
                 ->whereIn('status', ['unpaid', 'pending', 'failed'])
-                ->exists();
+                ->orderBy('created_at', 'desc')
+                ->first();
+                
+            if ($unpaidInvoice) {
+                $hasUnpaidInvoice = true;
+                $invoiceAmount = $unpaidInvoice->total_amount;
+            }
         }
     } else {
         $subscriptionService = new \App\Services\SubscriptionService();
@@ -168,15 +175,24 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session')])->get('/acc
             $isInactive = true;
             
             // Check for unpaid invoice for organisation
-            $hasUnpaidInvoice = \App\Models\Invoice::where('organisation_id', $user->orgId)
+            $unpaidInvoice = \App\Models\Invoice::where('organisation_id', $user->orgId)
                 ->whereIn('status', ['unpaid', 'pending', 'failed'])
-                ->exists();
+                ->orderBy('created_at', 'desc')
+                ->first();
+                
+            if ($unpaidInvoice) {
+                $hasUnpaidInvoice = true;
+                $invoiceAmount = $unpaidInvoice->total_amount;
+            }
         }
     }
     
-    // If BOTH inactive AND unpaid, redirect to dashboard (shows payment modal)
+    // If BOTH inactive AND unpaid, show payment required page directly
     if ($isInactive && $hasUnpaidInvoice) {
-        return redirect()->route('dashboard');
+        return view('account.payment-required', [
+            'amount' => $invoiceAmount ?? 12.00,
+            'isBasecamp' => $isBasecamp
+        ]);
     }
     
     // Otherwise show account suspended page
