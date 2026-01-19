@@ -52,8 +52,14 @@ class VerifyCsrfToken extends Middleware
             ], 419);
         }
         
-        // For regular requests, use default behavior
-        return parent::handleTokenMismatch($request, $exception);
+        // For logout requests specifically, clear session and redirect to login
+        if ($request->is('logout')) {
+            session()->flush(); // Clear expired session
+            return redirect()->route('login')->with('message', 'Your session has expired. Please login again.');
+        }
+        
+        // For regular requests, redirect to previous page with error message
+        return redirect()->back()->with('error', 'Your session has expired. Please refresh the page and try again.');
     }
 }
 
