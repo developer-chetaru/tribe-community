@@ -103,7 +103,8 @@ class VerificationController extends Controller
                 
                 if (str_contains($userAgent, 'android')) {
                     $platform = 'android';
-                    $intentUrl = "intent://dashboard#Intent;scheme=tribe365;package={$androidPackage};end";
+                    // Use custom scheme only (no Intent URL to avoid automatic Play Store redirect)
+                    $intentUrl = 'tribe365://dashboard'; // Custom scheme for Android
                     $fallback = $androidStore;
                 } elseif (str_contains($userAgent, 'iphone') || str_contains($userAgent, 'ipad') || str_contains($userAgent, 'ipod')) {
                     $platform = 'ios';
@@ -226,10 +227,11 @@ class VerificationController extends Controller
             $schemeUrl = null;
             $fallback = null;
             
-            if (str_contains($userAgent, 'android')) {
-                $platform = 'android';
-                $intentUrl = "intent://dashboard#Intent;scheme=tribe365;package={$androidPackage};end";
-                $fallback = $androidStore;
+                if (str_contains($userAgent, 'android')) {
+                    $platform = 'android';
+                    // Use custom scheme only (no Intent URL to avoid automatic Play Store redirect)
+                    $intentUrl = 'tribe365://dashboard'; // Custom scheme for Android
+                    $fallback = $androidStore;
             } elseif (str_contains($userAgent, 'iphone') || str_contains($userAgent, 'ipad') || str_contains($userAgent, 'ipod')) {
                 $platform = 'ios';
                 $schemeUrl = 'tribe365://dashboard';

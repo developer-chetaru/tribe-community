@@ -118,15 +118,16 @@
     <script>
         (function() {
             var appOpened = false;
-            var fallbackTimer;
+            var popupTimer;
             var startTime = Date.now();
             var popupShown = false;
+            var triedToOpenApp = false;
             
             // Detect if app opened (page becomes hidden/blurred)
             function checkAppOpened() {
                 if (document.hidden || document.webkitHidden) {
                     appOpened = true;
-                    clearTimeout(fallbackTimer);
+                    clearTimeout(popupTimer);
                 }
             }
             
@@ -135,15 +136,18 @@
             document.addEventListener('webkitvisibilitychange', checkAppOpened);
             window.addEventListener('blur', function() {
                 appOpened = true;
-                clearTimeout(fallbackTimer);
+                clearTimeout(popupTimer);
             });
             
             // Show popup with options
             function showPopup() {
                 if (popupShown) return;
                 popupShown = true;
+                clearTimeout(popupTimer);
                 var overlay = document.getElementById('popup-overlay');
-                overlay.classList.add('show');
+                if (overlay) {
+                    overlay.classList.add('show');
+                }
             }
             
             // Redirect to web dashboard
@@ -156,36 +160,104 @@
                 window.location.href = "{{ $fallback }}";
             }
             
-            // Fallback function - show popup if app didn't open
-            function handleAppNotOpened() {
-                if (!appOpened && (Date.now() - startTime > 1500)) {
+            // Check if app opened - show popup if not
+            function checkAndShowPopup() {
+                // Wait a bit more to ensure detection
+                var elapsed = Date.now() - startTime;
+                if (!appOpened && elapsed > 2000) {
                     showPopup();
+                } else if (!appOpened) {
+                    // Check again after a short delay
+                    popupTimer = setTimeout(function() {
+                        if (!appOpened) {
+                            showPopup();
+                        }
+                    }, 500);
                 }
             }
             
             @if($platform === 'android')
-                // Try to open Android app via Intent
-                var intentUrl = "{{ $intentUrl }}";
-                window.location.href = intentUrl;
+                // For Android, try opening app using custom scheme (no automatic redirect to Play Store)
+                triedToOpenApp = true;
                 
-                // Check after 2 seconds if app didn't open
-                fallbackTimer = setTimeout(handleAppNotOpened, 2000);
+                var schemeUrl = "{{ $intentUrl }}"; // This is now tribe365://dashboard
+                
+                // Method 1: Use hidden iframe to try opening app (doesn't trigger page navigation)
+                var iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.style.width = '1px';
+                iframe.style.height = '1px';
+                iframe.style.position = 'absolute';
+                iframe.style.left = '-9999px';
+                iframe.src = schemeUrl;
+                document.body.appendChild(iframe);
+                
+                // Method 2: Also try direct navigation after a small delay
+                setTimeout(function() {
+                    if (!appOpened) {
+                        try {
+                            window.location.href = schemeUrl;
+                        } catch(e) {
+                            // Ignore errors
+                        }
+                    }
+                }, 300);
+                
+                // Check after 2.5 seconds if app didn't open - show popup
+                popupTimer = setTimeout(function() {
+                    if (!appOpened) {
+                        showPopup();
+                    }
+                }, 2500);
+                
+                // Also check on page focus/blur (if user comes back, app didn't open)
+                var wasHidden = false;
+                document.addEventListener('visibilitychange', function() {
+                    if (document.hidden) {
+                        wasHidden = true;
+                    } else if (wasHidden && !appOpened) {
+                        // Page became visible again - app probably didn't open
+                        setTimeout(function() {
+                            if (!appOpened && !popupShown) {
+                                showPopup();
+                            }
+                        }, 500);
+                    }
+                });
             @endif
 
             @if($platform === 'ios')
+                triedToOpenApp = true;
+                
                 // Try to open iOS app via custom scheme
                 var schemeUrl = "{{ $schemeUrl }}";
-                window.location.href = schemeUrl;
                 
-                // Check after 2 seconds if app didn't open
-                fallbackTimer = setTimeout(handleAppNotOpened, 2000);
+                // Use iframe method first
+                var iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.style.width = '1px';
+                iframe.style.height = '1px';
+                iframe.src = schemeUrl;
+                document.body.appendChild(iframe);
                 
-                // Additional check: if still visible after 1.5s, likely app didn't open
+                // Also try direct navigation
+                setTimeout(function() {
+                    if (!appOpened) {
+                        window.location.href = schemeUrl;
+                    }
+                }, 100);
+                
+                // Check after 2.5 seconds if app didn't open
+                popupTimer = setTimeout(function() {
+                    checkAndShowPopup();
+                }, 2500);
+                
+                // Additional check: if still visible after 2s, likely app didn't open
                 setTimeout(function() {
                     if (!appOpened && !document.hidden) {
-                        handleAppNotOpened();
+                        checkAndShowPopup();
                     }
-                }, 1500);
+                }, 2000);
             @endif
             
             // If desktop, redirect directly to web
