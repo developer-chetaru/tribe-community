@@ -256,7 +256,7 @@ class GracePeriodBanner extends Component
                     ]],
                     'mode' => 'subscription',
                     'success_url' => route('basecamp.billing.payment.success') . '?session_id={CHECKOUT_SESSION_ID}&invoice_id=' . $this->invoice->id . '&user_id=' . $user->id,
-                    'cancel_url' => route('basecamp.billing') . '?user_id=' . $user->id,
+                    'cancel_url' => route('dashboard'),
                     'metadata' => [
                         'invoice_id' => $this->invoice->id,
                         'user_id' => $user->id,

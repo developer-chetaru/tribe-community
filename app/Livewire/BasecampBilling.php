@@ -305,7 +305,7 @@ class BasecampBilling extends Component
                 ]],
                 'mode' => 'subscription',
                 'success_url' => route('basecamp.billing.payment.success') . '?session_id={CHECKOUT_SESSION_ID}&invoice_id=' . $this->selectedInvoice->id . '&user_id=' . $this->userId,
-                'cancel_url' => route('basecamp.billing') . '?user_id=' . $this->userId,
+                'cancel_url' => route('dashboard'),
                 'customer_email' => $user->email,
                 'metadata' => [
                     'invoice_id' => $this->selectedInvoice->id,
