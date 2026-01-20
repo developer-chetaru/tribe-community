@@ -239,11 +239,21 @@
                                     <h5 class="text-sm font-semibold mb-2 text-gray-900">Next Invoice</h5>
                                     <div class="flex items-center justify-between">
                                         <div>
-                                            <p class="text-xs text-gray-600 mb-1">Amount</p>
+                                            <p class="text-xs text-gray-600 mb-1">Amount (incl. VAT)</p>
                                             <p class="font-semibold text-gray-900">
                                                 £{{ isset($stripeDetails['upcoming_invoice']['amount_due']) ? number_format($stripeDetails['upcoming_invoice']['amount_due'] / 100, 2) : 'N/A' }}
                                                 {{ isset($stripeDetails['upcoming_invoice']['currency']) ? strtoupper($stripeDetails['upcoming_invoice']['currency']) : '' }}
                                             </p>
+                                            @if(isset($stripeDetails['upcoming_invoice']['amount_due']))
+                                                @php
+                                                    $totalAmount = $stripeDetails['upcoming_invoice']['amount_due'] / 100;
+                                                    $subtotal = $totalAmount / 1.20; // Reverse calculate subtotal (assuming 20% VAT)
+                                                    $taxAmount = $totalAmount - $subtotal;
+                                                @endphp
+                                                <p class="text-xs text-gray-500 mt-1">
+                                                    Subtotal: £{{ number_format($subtotal, 2) }} + VAT (20%): £{{ number_format($taxAmount, 2) }}
+                                                </p>
+                                            @endif
                                         </div>
                                         <div class="text-right">
                                             <p class="text-xs text-gray-600 mb-1">Due Date</p>
@@ -358,7 +368,20 @@
                             <tr>
                                 <td class="px-6 py-4 whitespace-nowrap">{{ $invoice->invoice_number }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">{{ $invoice->invoice_date->format('M d, Y') }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap">£{{ number_format($invoice->total_amount, 2) }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div>
+                                        <span class="font-semibold">£{{ number_format($invoice->total_amount, 2) }}</span>
+                                        <span class="text-xs text-gray-500 block">(incl. VAT)</span>
+                                    </div>
+                                    @if($invoice->tax_amount > 0)
+                                        <div class="text-xs text-gray-500 mt-1">
+                                            Subtotal: £{{ number_format($invoice->subtotal ?? ($invoice->total_amount / 1.20), 2) }}
+                                            @if($invoice->tax_amount)
+                                                + VAT: £{{ number_format($invoice->tax_amount, 2) }}
+                                            @endif
+                                        </div>
+                                    @endif
+                                </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <span class="px-2 py-1 text-xs rounded-full 
                                         {{ $invoice->status === 'paid' ? 'bg-green-100 text-green-800' : 
