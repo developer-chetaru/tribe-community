@@ -232,15 +232,133 @@
                         <p class="text-gray-900">{{ $viewingUser->country_code ?? '' }}{{ $viewingUser->phone }}</p>
                     </div>
                     @endif
+                    {{-- Account Status --}}
                     <div>
-                        <label class="text-sm font-semibold text-gray-600">Status</label>
-                            <p class="text-gray-900">
-                                <span class="px-3 py-1 rounded-full text-sm font-medium 
-                                    {{ $viewingUser->status == "active_verified" ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                    
-                                    {{ Str::title(str_replace('_', ' ', $viewingUser->status)) }}
-                                </span>
-                            </p>
+                        <label class="text-sm font-semibold text-gray-600">Account Status</label>
+                        <div class="mt-1">
+                            @php
+                                $accountStatus = $viewingUser->status;
+                                $accountStatusText = '';
+                                $accountStatusClass = '';
+                                
+                                // Determine account status
+                                if (in_array($accountStatus, ['active_verified', 'active_unverified', 'pending_payment', 'suspended', 'cancelled', 'inactive'])) {
+                                    switch($accountStatus) {
+                                        case 'active_verified':
+                                        case 'active_unverified':
+                                            $accountStatusText = 'Active ✓';
+                                            $accountStatusClass = 'bg-green-100 text-green-800 border border-green-300';
+                                            break;
+                                        case 'pending_payment':
+                                            $accountStatusText = 'Pending Payment 💳';
+                                            $accountStatusClass = 'bg-yellow-100 text-yellow-800 border border-yellow-300';
+                                            break;
+                                        case 'suspended':
+                                            $accountStatusText = 'Suspended 🚫';
+                                            $accountStatusClass = 'bg-red-100 text-red-800 border border-red-300';
+                                            break;
+                                        case 'cancelled':
+                                            $accountStatusText = 'Cancelled ❌';
+                                            $accountStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
+                                            break;
+                                        case 'inactive':
+                                            $accountStatusText = 'Inactive ⏸';
+                                            $accountStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
+                                            break;
+                                        default:
+                                            $accountStatusText = 'Unknown';
+                                            $accountStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
+                                    }
+                                } elseif ($accountStatus === true || $accountStatus === '1' || $accountStatus === 1) {
+                                    $accountStatusText = 'Active (Legacy) ✓';
+                                    $accountStatusClass = 'bg-blue-100 text-blue-800 border border-blue-300';
+                                } elseif ($accountStatus === false || $accountStatus === '0' || $accountStatus === 0 || $accountStatus === null) {
+                                    $accountStatusText = 'Inactive ⏸';
+                                    $accountStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
+                                } else {
+                                    $accountStatusText = 'Not Set';
+                                    $accountStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
+                                }
+                            @endphp
+                            <span class="px-3 py-1.5 rounded-full text-sm font-semibold {{ $accountStatusClass }} inline-block">
+                                {{ $accountStatusText }}
+                            </span>
+                        </div>
+                    </div>
+
+                    {{-- Email Verification Status --}}
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">Email Status</label>
+                        <div class="mt-1">
+                            @php
+                                $emailVerified = $viewingUser->email_verified_at !== null;
+                                $emailStatusText = $emailVerified ? 'Verified ✓' : 'Not Verified ⚠';
+                                $emailStatusClass = $emailVerified 
+                                    ? 'bg-green-100 text-green-800 border border-green-300' 
+                                    : 'bg-orange-100 text-orange-800 border border-orange-300';
+                            @endphp
+                            <span class="px-3 py-1.5 rounded-full text-sm font-semibold {{ $emailStatusClass }} inline-block">
+                                {{ $emailStatusText }}
+                            </span>
+                            @if($emailVerified && $viewingUser->email_verified_at)
+                                <p class="text-xs text-gray-500 mt-1">Verified on {{ $viewingUser->email_verified_at->format('M d, Y') }}</p>
+                            @else
+                                <p class="text-xs text-gray-500 mt-1">Email verification pending</p>
+                            @endif
+                        </div>
+                    </div>
+
+                    {{-- Payment/Subscription Status --}}
+                    <div>
+                        <label class="text-sm font-semibold text-gray-600">Payment Status</label>
+                        <div class="mt-1">
+                            @php
+                                $subscription = \App\Models\SubscriptionRecord::where('user_id', $viewingUser->id)
+                                    ->orderBy('created_at', 'desc')
+                                    ->first();
+                                
+                                if ($subscription) {
+                                    $paymentStatus = $subscription->status;
+                                    switch($paymentStatus) {
+                                        case 'active':
+                                            $paymentStatusText = 'Active ✓';
+                                            $paymentStatusClass = 'bg-green-100 text-green-800 border border-green-300';
+                                            $paymentDescription = 'Subscription is active';
+                                            if ($subscription->current_period_end) {
+                                                $paymentDescription .= ' until ' . $subscription->current_period_end->format('M d, Y');
+                                            }
+                                            break;
+                                        case 'past_due':
+                                            $paymentStatusText = 'Past Due ⚠';
+                                            $paymentStatusClass = 'bg-yellow-100 text-yellow-800 border border-yellow-300';
+                                            $paymentDescription = 'Payment is overdue';
+                                            break;
+                                        case 'suspended':
+                                            $paymentStatusText = 'Suspended 🚫';
+                                            $paymentStatusClass = 'bg-red-100 text-red-800 border border-red-300';
+                                            $paymentDescription = 'Subscription is suspended';
+                                            break;
+                                        case 'cancelled':
+                                            $paymentStatusText = 'Cancelled ❌';
+                                            $paymentStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
+                                            $paymentDescription = 'Subscription has been cancelled';
+                                            break;
+                                        default:
+                                            $paymentStatusText = ucfirst(str_replace('_', ' ', $paymentStatus));
+                                            $paymentStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
+                                            $paymentDescription = 'Subscription status: ' . $paymentStatus;
+                                    }
+                                } else {
+                                    $paymentStatusText = 'No Subscription';
+                                    $paymentStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
+                                    $paymentDescription = 'No subscription record found';
+                                }
+                            @endphp
+                            <span class="px-3 py-1.5 rounded-full text-sm font-semibold {{ $paymentStatusClass }} inline-block">
+                                {{ $paymentStatusText }}
+                            </span>
+                            <p class="text-xs text-gray-500 mt-1">{{ $paymentDescription ?? '' }}</p>
+                        </div>
                     </div>
                     @if($viewingUser->created_at)
                     <div>
