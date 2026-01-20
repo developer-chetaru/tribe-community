@@ -22,6 +22,16 @@ class UpdateProfileInformationForm extends BaseUpdateProfileInformationForm
         if (!isset($this->state['timezone'])) {
             $this->state['timezone'] = Auth::user()->timezone ?? '';
         }
+        
+        // Set default country code to UK (+44) if not already set or if it's +1 (US)
+        $userCountryCode = Auth::user()->country_code ?? null;
+        if (!isset($this->state['country_code']) || empty($this->state['country_code']) || 
+            $this->state['country_code'] === '+1' || $this->state['country_code'] === '1' ||
+            $userCountryCode === '+1' || $userCountryCode === '1') {
+            $this->state['country_code'] = '+44';
+        } else {
+            $this->state['country_code'] = $userCountryCode ?? '+44';
+        }
     }
 
     /**

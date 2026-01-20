@@ -43,7 +43,7 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
                 'first_name' => $input['first_name'],
                 'last_name'  => $input['last_name'],
                 'email'      => $input['email'],
-              	'country_code' => $input['country_code'] ?? '+1',
+              	'country_code' => $input['country_code'] ?? '+44',
                 'phone'      => $input['phone'] ?? null,
                 'timezone'   => $input['timezone'] ?? null,
             ])->save();

@@ -125,7 +125,7 @@
                                 'state.phone',
                                 'state.country_code',
                                 @js($state['phone'] ?? ''),
-                                @js($state['country_code'] ?? '+91')
+                                @js($state['country_code'] ?? '+44')
                             );
                         }, 100);
                     "
@@ -842,18 +842,88 @@
         </x-button>
     </x-slot>
 </x-form-section>
+
+<style>
+/* Style for intl-tel-input dropdown - show only English names and enable search */
+.iti__country-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Ensure search box is visible and styled */
+.iti__search-box {
+    padding: 8px !important;
+    border-bottom: 1px solid #ccc !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    display: block !important;
+    font-size: 14px !important;
+}
+
+.iti__search-box:focus {
+    outline: 2px solid #EB1C24 !important;
+    outline-offset: -2px !important;
+    border-color: #EB1C24 !important;
+}
+
+/* Hide native script characters - show only English */
+.iti__country-name {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+/* Ensure country list items show properly */
+.iti__country {
+    padding: 5px 10px !important;
+}
+
+/* Make sure search box container is visible */
+.iti__search-container {
+    display: block !important;
+    position: relative !important;
+}
+
+/* Hide native script characters in country names using CSS as backup */
+.iti__country-name::after {
+    content: none !important;
+}
+
+/* Hide any text in parentheses - this is a CSS fallback */
+.iti__country {
+    position: relative;
+}
+
+/* Try to hide native scripts using CSS - this is a fallback method */
+.iti__country-name {
+    unicode-bidi: isolate;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+/* Additional CSS to ensure clean display */
+.iti__country-list .iti__country {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+</style>
+
 <!-- Include intl-tel-input JS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.21/js/intlTelInput.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.21/js/utils.js"></script>
 
 <script>
 function initTelInput(input, livewire, phoneField, countryField, initialPhone = '', initialCountryCode = null) {
-    const initialDialCode = (initialCountryCode || '+91').replace('+', '');
-    let initialIsoCode = 'in';
-    let useGeoIp = true;
+    // Force UK (+44) if country code is null, empty, or +1 (US)
+    let effectiveCountryCode = initialCountryCode;
+    if (!effectiveCountryCode || effectiveCountryCode === null || effectiveCountryCode === '' || effectiveCountryCode === '+1' || effectiveCountryCode === '1') {
+        effectiveCountryCode = '+44';
+        // Update Livewire state to reflect UK
+        livewire.set(countryField, '+44');
+    }
+    
+    const initialDialCode = effectiveCountryCode.replace('+', '');
+    let initialIsoCode = 'gb'; // Default to UK
 
-    if (initialCountryCode) {
-        useGeoIp = false;
+    if (effectiveCountryCode && effectiveCountryCode !== '+44') {
         if (window.intlTelInputGlobals) {
             try {
                 const countryDataList = window.intlTelInputGlobals.getCountryData();
@@ -867,17 +937,280 @@ function initTelInput(input, livewire, phoneField, countryField, initialPhone = 
         }
     }
 
+    // Override country data to remove native names BEFORE initializing
+    // This modifies the library's internal data structure
+    if (window.intlTelInputGlobals) {
+        try {
+            const countryData = window.intlTelInputGlobals.getCountryData();
+            // Remove native names from country data - keep only English names
+            countryData.forEach(country => {
+                if (country.name) {
+                    // Remove everything in parentheses (native scripts)
+                    const originalName = country.name;
+                    country.name = country.name.replace(/\s*\([^)]*\)/g, '').trim();
+                    // Store original for reference but use clean name
+                    country.originalName = originalName;
+                }
+            });
+            
+            // Also override the library's method that formats country names if possible
+            if (window.intlTelInputGlobals.formatCountryName) {
+                const originalFormat = window.intlTelInputGlobals.formatCountryName;
+                window.intlTelInputGlobals.formatCountryName = function(country) {
+                    const formatted = originalFormat.call(this, country);
+                    return formatted.replace(/\s*\([^)]*\)/g, '').trim();
+                };
+            }
+        } catch (e) {
+            console.log('Error modifying country data:', e);
+        }
+    }
+    
     let iti = window.intlTelInput(input, {
-        initialCountry: useGeoIp ? "auto" : initialIsoCode,
+        initialCountry: initialIsoCode, // Always use UK (gb) as default
         separateDialCode: true,
-        geoIpLookup: useGeoIp ? function (callback) {
-            fetch("https://ipapi.co/json")
-                .then(res => res.json())
-                .then(data => callback(data.country_code))
-                .catch(() => callback("in"));
-        } : undefined,
+        allowDropdown: true, // Enable dropdown (includes search functionality)
         utilsScript: "https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.21/js/utils.js",
     });
+    
+    // Immediately clean country names after initialization
+    setTimeout(() => {
+        updateCountryNames();
+    }, 100);
+    
+    // Build country data map for English names
+    let countryDataMap = {};
+    if (window.intlTelInputGlobals) {
+        try {
+            const countryData = window.intlTelInputGlobals.getCountryData();
+            countryData.forEach(country => {
+                // Store clean English name (without native script)
+                let cleanName = country.name || '';
+                cleanName = cleanName.replace(/\s*\([^)]*\)/g, '').trim();
+                countryDataMap[country.iso2] = cleanName;
+            });
+        } catch (e) {
+            console.log('Error building country map:', e);
+        }
+    }
+    
+    // Override country names to show only English names - REMOVE ALL PARENTHESES
+    // This removes native language names like "Azerbaijan (Azərbaycan)", "Bahrain (البحرين)", etc.
+    const updateCountryNames = () => {
+        try {
+            const countryList = document.querySelectorAll('.iti__country');
+            
+            countryList.forEach((countryEl) => {
+                const countryCode = countryEl.getAttribute('data-country-code');
+                if (!countryCode) return;
+                
+                // Get dial code - try multiple methods
+                let dialCode = countryEl.getAttribute('data-dial-code');
+                if (!dialCode) {
+                    // Try to get from country data
+                    if (window.intlTelInputGlobals) {
+                        const countryData = window.intlTelInputGlobals.getCountryData();
+                        const country = countryData.find(c => c.iso2 === countryCode);
+                        if (country) {
+                            dialCode = country.dialCode;
+                        }
+                    }
+                }
+                
+                // Fallback: extract from text
+                if (!dialCode) {
+                    const text = countryEl.textContent || countryEl.innerText || '';
+                    const dialCodeMatch = text.match(/\+(\d+)/);
+                    if (dialCodeMatch) {
+                        dialCode = dialCodeMatch[1];
+                    }
+                }
+                
+                if (!dialCode) return;
+                
+                // Get English name from our map
+                let englishName = countryDataMap[countryCode];
+                
+                // If no English name in map, extract from current text
+                if (!englishName) {
+                    let text = countryEl.textContent || countryEl.innerText || '';
+                    // Remove everything in parentheses - AGGRESSIVE
+                    text = text.replace(/\([^)]*\)/g, '');
+                    text = text.replace(/\([^)]*\)/g, ''); // Run twice
+                    // Remove dial code
+                    text = text.replace(/\s*\+\d+\s*/g, '').trim();
+                    // Clean spaces
+                    englishName = text.replace(/\s+/g, ' ').trim();
+                }
+                
+                if (!englishName) return;
+                
+                // FORCE REMOVE ALL PARENTHESES - Direct DOM manipulation
+                const countryNameEl = countryEl.querySelector('.iti__country-name');
+                
+                if (countryNameEl) {
+                    // Get all text nodes and remove parentheses content
+                    const walker = document.createTreeWalker(
+                        countryNameEl,
+                        NodeFilter.SHOW_TEXT,
+                        null,
+                        false
+                    );
+                    
+                    let textNode;
+                    while (textNode = walker.nextNode()) {
+                        let text = textNode.textContent;
+                        // Remove everything in parentheses
+                        text = text.replace(/\([^)]*\)/g, '');
+                        textNode.textContent = text;
+                    }
+                    
+                    // Also set the main text content to clean name
+                    countryNameEl.textContent = englishName;
+                    countryNameEl.innerHTML = englishName; // Force replace HTML
+                }
+                
+                // Check entire element for parentheses and remove
+                let fullText = countryEl.textContent || countryEl.innerText || '';
+                if (fullText.includes('(') || fullText.includes(')')) {
+                    // Force rebuild the element with clean name
+                    const dialCodePart = '+' + dialCode;
+                    // Preserve the structure but with clean name
+                    countryEl.innerHTML = '';
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'iti__country-name';
+                    nameSpan.textContent = englishName;
+                    countryEl.appendChild(nameSpan);
+                    
+                    const dialSpan = document.createElement('span');
+                    dialSpan.className = 'iti__dial-code';
+                    dialSpan.textContent = ' ' + dialCodePart;
+                    countryEl.appendChild(dialSpan);
+                }
+            });
+        } catch (e) {
+            console.log('Country name update error:', e);
+        }
+    };
+    
+    // Update country names when dropdown opens - run aggressively
+    const handleDropdownOpen = () => {
+        // Run immediately and multiple times to catch all render phases
+        updateCountryNames();
+        setTimeout(updateCountryNames, 5);
+        setTimeout(updateCountryNames, 10);
+        setTimeout(updateCountryNames, 25);
+        setTimeout(updateCountryNames, 50);
+        setTimeout(updateCountryNames, 100);
+        setTimeout(updateCountryNames, 200);
+        setTimeout(updateCountryNames, 300);
+    };
+    
+    // Listen for all dropdown events
+    input.addEventListener('click', handleDropdownOpen);
+    input.addEventListener('focus', handleDropdownOpen);
+    input.addEventListener('mousedown', handleDropdownOpen);
+    
+    // Watch for flag click (opens dropdown)
+    setTimeout(() => {
+        const flagContainer = input.closest('.iti')?.querySelector('.iti__selected-flag');
+        if (flagContainer) {
+            flagContainer.addEventListener('click', handleDropdownOpen);
+            flagContainer.addEventListener('mousedown', handleDropdownOpen);
+        }
+    }, 100);
+    
+    // Observe dropdown list for changes - VERY AGGRESSIVE - removes parentheses immediately
+    const observer = new MutationObserver((mutations) => {
+        // Run immediately on any change
+        updateCountryNames();
+        // Also run after short delays to catch re-renders
+        setTimeout(updateCountryNames, 5);
+        setTimeout(updateCountryNames, 10);
+        setTimeout(updateCountryNames, 25);
+        
+        // Also directly remove parentheses from any added text nodes
+        mutations.forEach((mutation) => {
+            mutation.addedNodes.forEach((node) => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    let text = node.textContent;
+                    if (text && (text.includes('(') || text.includes(')'))) {
+                        text = text.replace(/\([^)]*\)/g, '');
+                        node.textContent = text;
+                    }
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    // Check all text nodes in the added element
+                    const walker = document.createTreeWalker(
+                        node,
+                        NodeFilter.SHOW_TEXT,
+                        null,
+                        false
+                    );
+                    let textNode;
+                    while (textNode = walker.nextNode()) {
+                        let text = textNode.textContent;
+                        if (text && (text.includes('(') || text.includes(')'))) {
+                            text = text.replace(/\([^)]*\)/g, '');
+                            textNode.textContent = text;
+                        }
+                    }
+                }
+            });
+        });
+    });
+    
+    // Set up observers
+    setTimeout(() => {
+        // Observe country list container
+        const countryListContainer = document.querySelector('.iti__country-list');
+        if (countryListContainer) {
+            observer.observe(countryListContainer, { 
+                childList: true, 
+                subtree: true,
+                characterData: true,
+                attributes: true
+            });
+            // Run immediately
+            updateCountryNames();
+        }
+        
+        // Observe document body for when dropdown is added
+        const bodyObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === 1) {
+                        if (node.classList?.contains('iti__country-list') || 
+                            node.querySelector?.('.iti__country-list')) {
+                            updateCountryNames();
+                            setTimeout(updateCountryNames, 5);
+                            setTimeout(updateCountryNames, 10);
+                            setTimeout(updateCountryNames, 25);
+                            setTimeout(updateCountryNames, 50);
+                        }
+                    }
+                });
+            });
+        });
+        
+        bodyObserver.observe(document.body, { childList: true, subtree: true });
+        
+        // Also observe the iti container
+        const itiContainer = input.closest('.iti');
+        if (itiContainer) {
+            const itiObserver = new MutationObserver(() => {
+                updateCountryNames();
+            });
+            itiObserver.observe(itiContainer, { childList: true, subtree: true });
+        }
+    }, 300);
+
+    // Force set UK as default immediately after initialization
+    setTimeout(() => {
+        if (!initialCountryCode || initialCountryCode === null || initialCountryCode === '' || initialCountryCode === '+1' || initialCountryCode === '1') {
+            iti.setCountry('gb');
+            livewire.set(countryField, '+44');
+        }
+    }, 200);
 
     function updateValues() {
         let phoneNumber = iti.isValidNumber()
@@ -885,7 +1218,7 @@ function initTelInput(input, livewire, phoneField, countryField, initialPhone = 
             : input.value;
 
         const countryData = iti.getSelectedCountryData();
-        const dialCode = countryData.dialCode || initialDialCode || '91';
+        const dialCode = countryData.dialCode || initialDialCode || '44';
         let justPhone = phoneNumber.startsWith(`+${dialCode}`)
             ? phoneNumber.replace(`+${dialCode}`, '')
             : input.value;
@@ -894,17 +1227,29 @@ function initTelInput(input, livewire, phoneField, countryField, initialPhone = 
         livewire.set(countryField, `+${dialCode}`);
     }
 
-    if (initialPhone || initialCountryCode) {
-        const fullNumber = `${initialCountryCode || '+91'}${initialPhone}`.replace(/\s/g, '');
+    // Use effectiveCountryCode instead of initialCountryCode
+    if (initialPhone || effectiveCountryCode) {
+        const fullNumber = `${effectiveCountryCode || '+44'}${initialPhone}`.replace(/\s/g, '');
 
         setTimeout(() => {
-            if (fullNumber.replace('+', '').trim().length) {
+            if (fullNumber.replace('+', '').trim().length && initialPhone) {
                 iti.setNumber(fullNumber);
+            } else {
+                // If no phone number, ensure UK is set
+                if (effectiveCountryCode === '+44' || !initialCountryCode || initialCountryCode === '+1' || initialCountryCode === '1') {
+                    iti.setCountry('gb');
+                    livewire.set(countryField, '+44');
+                }
             }
             updateValues();
-        }, 50);
+        }, 150);
     } else {
-        updateValues();
+        // If no initial phone or country code, set UK as default
+        setTimeout(() => {
+            iti.setCountry('gb');
+            livewire.set(countryField, '+44');
+            updateValues();
+        }, 200);
     }
 
     input.addEventListener("input", updateValues);
