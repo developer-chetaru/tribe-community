@@ -88,9 +88,39 @@ class VerificationController extends Controller
                               str_contains($userAgent, 'iphone') || 
                               str_contains($userAgent, 'ipad');
             
-            $redirectUrl = $isMobileBrowser 
-                ? url('/app-redirect') // Redirect to app-redirect handler
-                : url('/login'); // Web login
+            // For mobile devices, use verification redirect view with app detection and popup
+            if ($isMobileBrowser) {
+                $androidPackage = 'com.chetaru.tribe365_new';
+                $androidStore = "https://play.google.com/store/apps/details?id={$androidPackage}";
+                $iosStore = "https://apps.apple.com/app/id1435273330";
+                $webUrl = url('/login');
+                
+                // Determine platform
+                $platform = 'desktop';
+                $intentUrl = null;
+                $schemeUrl = null;
+                $fallback = null;
+                
+                if (str_contains($userAgent, 'android')) {
+                    $platform = 'android';
+                    $intentUrl = "intent://dashboard#Intent;scheme=tribe365;package={$androidPackage};end";
+                    $fallback = $androidStore;
+                } elseif (str_contains($userAgent, 'iphone') || str_contains($userAgent, 'ipad') || str_contains($userAgent, 'ipod')) {
+                    $platform = 'ios';
+                    $schemeUrl = 'tribe365://dashboard';
+                    $fallback = $iosStore;
+                }
+                
+                return response()->view('verification-redirect', [
+                    'platform' => $platform,
+                    'intentUrl' => $intentUrl,
+                    'schemeUrl' => $schemeUrl,
+                    'fallback' => $fallback,
+                    'webUrl' => $webUrl,
+                ]);
+            }
+            
+            $redirectUrl = url('/login');
             
             // Already verified - show message and redirect
             return response("
@@ -183,10 +213,40 @@ class VerificationController extends Controller
                           str_contains($userAgent, 'iphone') || 
                           str_contains($userAgent, 'ipad');
         
-        // Redirect URL: app-redirect handler for mobile, web login for desktop
-        $redirectUrl = $isMobileBrowser 
-            ? url('/app-redirect') // Redirect to app-redirect handler which will open app
-            : url('/login'); // Web login for desktop
+        // For mobile devices, use verification redirect view with app detection and popup
+        if ($isMobileBrowser) {
+            $androidPackage = 'com.chetaru.tribe365_new';
+            $androidStore = "https://play.google.com/store/apps/details?id={$androidPackage}";
+            $iosStore = "https://apps.apple.com/app/id1435273330";
+            $webUrl = url('/dashboard');
+            
+            // Determine platform
+            $platform = 'desktop';
+            $intentUrl = null;
+            $schemeUrl = null;
+            $fallback = null;
+            
+            if (str_contains($userAgent, 'android')) {
+                $platform = 'android';
+                $intentUrl = "intent://dashboard#Intent;scheme=tribe365;package={$androidPackage};end";
+                $fallback = $androidStore;
+            } elseif (str_contains($userAgent, 'iphone') || str_contains($userAgent, 'ipad') || str_contains($userAgent, 'ipod')) {
+                $platform = 'ios';
+                $schemeUrl = 'tribe365://dashboard';
+                $fallback = $iosStore;
+            }
+            
+            return response()->view('verification-redirect', [
+                'platform' => $platform,
+                'intentUrl' => $intentUrl,
+                'schemeUrl' => $schemeUrl,
+                'fallback' => $fallback,
+                'webUrl' => $webUrl,
+            ]);
+        }
+        
+        // Desktop: redirect to login
+        $redirectUrl = url('/login');
             // --------------------------------------
             // Create HTML email body from your template
             // --------------------------------------
