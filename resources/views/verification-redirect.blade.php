@@ -24,6 +24,28 @@
             text-align: center;
             color: #333;
         }
+        .success-message {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .success-message h2 {
+            color: #16A34A;
+            margin-bottom: 15px;
+            font-size: 24px;
+        }
+        .success-message.warning h2 {
+            color: #F59E0B;
+        }
+        .success-message p {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
         .spinner {
             border: 4px solid #f3f3f3;
             border-top: 4px solid #EB1C24;
@@ -31,7 +53,13 @@
             width: 50px;
             height: 50px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            margin: 20px auto;
+        }
+        .countdown {
+            color: #EB1C24;
+            font-weight: 600;
+            font-size: 18px;
+            margin-top: 15px;
         }
         @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -122,6 +150,38 @@
             var startTime = Date.now();
             var popupShown = false;
             var triedToOpenApp = false;
+            var messageShown = false;
+            var countdown = 5;
+            var messageType = "{{ $message ?? 'account_activated' }}";
+            
+            // Show success message first
+            function showSuccessMessage() {
+                if (messageShown) return;
+                messageShown = true;
+                var loadingContainer = document.querySelector('.loading-container');
+                var messageText = messageType === 'already_activated' 
+                    ? '<h2>⚠️ Account Already Activated</h2><p>This account is already active. Opening app...</p>'
+                    : '<h2>✅ Account Activated Successfully!</h2><p>Your account has been activated. Opening app...</p>';
+                
+                loadingContainer.innerHTML = '<div class="success-message ' + (messageType === 'already_activated' ? 'warning' : '') + '">' + messageText + '<div class="spinner"></div><div class="countdown" id="countdown">Opening app in <span id="count">5</span> seconds...</div></div>';
+            }
+            
+            // Update countdown
+            function updateCountdown() {
+                var countElement = document.getElementById('count');
+                if (countElement && countdown >= 0) {
+                    countElement.textContent = countdown;
+                    if (countdown > 0) {
+                        countdown--;
+                        setTimeout(updateCountdown, 1000);
+                    } else {
+                        var countdownEl = document.getElementById('countdown');
+                        if (countdownEl) {
+                            countdownEl.textContent = 'Opening app...';
+                        }
+                    }
+                }
+            }
             
             // Detect if app opened (page becomes hidden/blurred)
             function checkAppOpened() {
@@ -176,39 +236,53 @@
                 }
             }
             
+            // Show message when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    showSuccessMessage();
+                    updateCountdown();
+                });
+            } else {
+                showSuccessMessage();
+                updateCountdown();
+            }
+            
             @if($platform === 'android')
                 // For Android, try opening app using custom scheme (no automatic redirect to Play Store)
-                triedToOpenApp = true;
-                
-                var schemeUrl = "{{ $intentUrl }}"; // This is now tribe365://dashboard
-                
-                // Method 1: Use hidden iframe to try opening app (doesn't trigger page navigation)
-                var iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.style.width = '1px';
-                iframe.style.height = '1px';
-                iframe.style.position = 'absolute';
-                iframe.style.left = '-9999px';
-                iframe.src = schemeUrl;
-                document.body.appendChild(iframe);
-                
-                // Method 2: Also try direct navigation after a small delay
+                // Wait 5 seconds before trying to open app (to show message)
                 setTimeout(function() {
-                    if (!appOpened) {
-                        try {
-                            window.location.href = schemeUrl;
-                        } catch(e) {
-                            // Ignore errors
+                    triedToOpenApp = true;
+                    
+                    var schemeUrl = "{{ $intentUrl }}"; // This is now tribe365://dashboard
+                    
+                    // Method 1: Use hidden iframe to try opening app (doesn't trigger page navigation)
+                    var iframe = document.createElement('iframe');
+                    iframe.style.display = 'none';
+                    iframe.style.width = '1px';
+                    iframe.style.height = '1px';
+                    iframe.style.position = 'absolute';
+                    iframe.style.left = '-9999px';
+                    iframe.src = schemeUrl;
+                    document.body.appendChild(iframe);
+                    
+                    // Method 2: Also try direct navigation after a small delay
+                    setTimeout(function() {
+                        if (!appOpened) {
+                            try {
+                                window.location.href = schemeUrl;
+                            } catch(e) {
+                                // Ignore errors
+                            }
                         }
-                    }
-                }, 300);
-                
-                // Check after 2.5 seconds if app didn't open - show popup
-                popupTimer = setTimeout(function() {
-                    if (!appOpened) {
-                        showPopup();
-                    }
-                }, 2500);
+                    }, 300);
+                    
+                    // Check after 2.5 seconds if app didn't open - show popup
+                    popupTimer = setTimeout(function() {
+                        if (!appOpened) {
+                            showPopup();
+                        }
+                    }, 2500);
+                }, 5000); // Wait 5 seconds before trying to open app
                 
                 // Also check on page focus/blur (if user comes back, app didn't open)
                 var wasHidden = false;
@@ -227,37 +301,40 @@
             @endif
 
             @if($platform === 'ios')
-                triedToOpenApp = true;
-                
-                // Try to open iOS app via custom scheme
-                var schemeUrl = "{{ $schemeUrl }}";
-                
-                // Use iframe method first
-                var iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.style.width = '1px';
-                iframe.style.height = '1px';
-                iframe.src = schemeUrl;
-                document.body.appendChild(iframe);
-                
-                // Also try direct navigation
+                // Wait 5 seconds before trying to open app (to show message)
                 setTimeout(function() {
-                    if (!appOpened) {
-                        window.location.href = schemeUrl;
-                    }
-                }, 100);
-                
-                // Check after 2.5 seconds if app didn't open
-                popupTimer = setTimeout(function() {
-                    checkAndShowPopup();
-                }, 2500);
-                
-                // Additional check: if still visible after 2s, likely app didn't open
-                setTimeout(function() {
-                    if (!appOpened && !document.hidden) {
+                    triedToOpenApp = true;
+                    
+                    // Try to open iOS app via custom scheme
+                    var schemeUrl = "{{ $schemeUrl }}";
+                    
+                    // Use iframe method first
+                    var iframe = document.createElement('iframe');
+                    iframe.style.display = 'none';
+                    iframe.style.width = '1px';
+                    iframe.style.height = '1px';
+                    iframe.src = schemeUrl;
+                    document.body.appendChild(iframe);
+                    
+                    // Also try direct navigation
+                    setTimeout(function() {
+                        if (!appOpened) {
+                            window.location.href = schemeUrl;
+                        }
+                    }, 100);
+                    
+                    // Check after 2.5 seconds if app didn't open
+                    popupTimer = setTimeout(function() {
                         checkAndShowPopup();
-                    }
-                }, 2000);
+                    }, 2500);
+                    
+                    // Additional check: if still visible after 2s, likely app didn't open
+                    setTimeout(function() {
+                        if (!appOpened && !document.hidden) {
+                            checkAndShowPopup();
+                        }
+                    }, 2000);
+                }, 5000); // Wait 5 seconds before trying to open app
             @endif
             
             // If desktop, redirect directly to web
@@ -270,7 +347,7 @@
 <body>
     <div class="loading-container">
         <div class="spinner"></div>
-        <p>Opening app...</p>
+        <p>Loading...</p>
     </div>
     
     <!-- Popup for when app is not installed -->

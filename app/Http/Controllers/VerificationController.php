@@ -118,6 +118,7 @@ class VerificationController extends Controller
                     'schemeUrl' => $schemeUrl,
                     'fallback' => $fallback,
                     'webUrl' => $webUrl,
+                    'message' => 'already_activated',
                 ]);
             }
             
@@ -244,6 +245,7 @@ class VerificationController extends Controller
                 'schemeUrl' => $schemeUrl,
                 'fallback' => $fallback,
                 'webUrl' => $webUrl,
+                'message' => 'account_activated',
             ]);
         }
         
