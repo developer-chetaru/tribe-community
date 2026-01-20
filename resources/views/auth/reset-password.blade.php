@@ -52,6 +52,7 @@
                     </label>
 
                     <p id="passwordMessage" class="text-sm mt-1"></p>
+                    <p class="text-xs text-gray-400 mt-1">Example format: Password@123</p>
 
                     @error('password')
                         <p class="text-sm text-red-500 mb-2">{{ $message }}</p>
@@ -72,6 +73,7 @@
                     </label>
 
                     <p id="confirmMessage" class="text-sm mt-1"></p>
+                    <p class="text-xs text-gray-400 mt-1">Example format: Password@123</p>
 
                     @error('password_confirmation')
                         <p class="text-sm text-red-500 mb-2">{{ $message }}</p>
