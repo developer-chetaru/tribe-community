@@ -138,8 +138,57 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session')])->get('/acc
     $user = auth()->user();
     $isBasecamp = $user && $user->hasRole('basecamp');
     
-    // Check if both status is inactive AND payment is unpaid
+    // Check if account is active - if active, redirect to dashboard
+    $isActive = false;
+    $isSuspended = false;
     $isInactive = false;
+    
+    if ($isBasecamp) {
+        $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
+            ->where('tier', 'basecamp')
+            ->orderBy('id', 'desc')
+            ->first();
+            
+        if ($subscription) {
+            if ($subscription->status === 'active') {
+                $isActive = true;
+            } elseif ($subscription->status === 'suspended') {
+                $isSuspended = true;
+            } elseif ($subscription->status === 'inactive') {
+                $isInactive = true;
+            }
+        } else {
+            // No subscription found, check user status
+            if (in_array($user->status, ['active_verified', 'active_unverified'])) {
+                $isActive = true;
+            }
+        }
+    } else {
+        $subscriptionService = new \App\Services\SubscriptionService();
+        $subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId ?? 0);
+        
+        if (isset($subscriptionStatus['status'])) {
+            if ($subscriptionStatus['status'] === 'active') {
+                $isActive = true;
+            } elseif ($subscriptionStatus['status'] === 'suspended') {
+                $isSuspended = true;
+            } elseif ($subscriptionStatus['status'] === 'inactive') {
+                $isInactive = true;
+            }
+        } else {
+            // No subscription status found, check user status
+            if (in_array($user->status, ['active_verified', 'active_unverified'])) {
+                $isActive = true;
+            }
+        }
+    }
+    
+    // If account is active, redirect to dashboard
+    if ($isActive && !$isSuspended && !$isInactive) {
+        return redirect()->route('dashboard');
+    }
+    
+    // Check if both status is inactive AND payment is unpaid
     $hasUnpaidInvoice = false;
     $invoiceAmount = null;
     
@@ -151,8 +200,6 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session')])->get('/acc
             ->first();
             
         if ($subscription && $subscription->status === 'inactive') {
-            $isInactive = true;
-            
             // Check for unpaid invoice and get amount
             $unpaidInvoice = \App\Models\Invoice::where('subscription_id', $subscription->id)
                 ->orWhere(function($q) use ($user) {
@@ -172,8 +219,6 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session')])->get('/acc
         $subscriptionStatus = $subscriptionService->getSubscriptionStatus($user->orgId ?? 0);
         
         if (isset($subscriptionStatus['status']) && $subscriptionStatus['status'] === 'inactive') {
-            $isInactive = true;
-            
             // Check for unpaid invoice for organisation
             $unpaidInvoice = \App\Models\Invoice::where('organisation_id', $user->orgId)
                 ->whereIn('status', ['unpaid', 'pending', 'failed'])

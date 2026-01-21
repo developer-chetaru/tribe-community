@@ -25,10 +25,22 @@
         }
     }
     
-    // Get payment status from latest invoice
+    // Check if actually suspended (not just inactive)
+    $isSuspended = false;
+    if ($subscription && $subscription->status === 'suspended') {
+        $isSuspended = true;
+    } elseif ($suspensionDetails && isset($suspensionDetails['status']) && $suspensionDetails['status'] === 'suspended') {
+        $isSuspended = true;
+    }
+    
+    // Get payment status from latest invoice and unpaid invoices
     $paymentStatus = 'Unknown';
     $latestInvoice = null;
+    $unpaidInvoices = collect();
+    $hasUnpaidInvoices = false;
+    
     if ($subscription) {
+        // Get latest invoice
         $latestInvoice = \App\Models\Invoice::where('subscription_id', $subscription->id)
             ->orWhere(function($q) use ($user, $isBasecamp) {
                 if ($isBasecamp) {
@@ -39,6 +51,32 @@
             ->first();
         if ($latestInvoice) {
             $paymentStatus = $latestInvoice->status === 'paid' ? 'Paid' : 'Unpaid';
+        }
+        
+        // Get all unpaid invoices
+        $unpaidInvoices = \App\Models\Invoice::where(function($q) use ($subscription, $user, $isBasecamp) {
+            if ($subscription->id) {
+                $q->where('subscription_id', $subscription->id);
+            }
+            if ($isBasecamp && $user) {
+                $q->orWhere(function($q2) use ($user) {
+                    $q2->where('user_id', $user->id)->where('tier', 'basecamp');
+                });
+            }
+        })
+        ->where('status', '!=', 'paid')
+        ->orderBy('created_at', 'desc')
+        ->get();
+        
+        $hasUnpaidInvoices = $unpaidInvoices->count() > 0;
+    } elseif ($user) {
+        // For organisation users, check organisation invoices
+        if (!$isBasecamp && $user->orgId) {
+            $unpaidInvoices = \App\Models\Invoice::where('organisation_id', $user->orgId)
+                ->where('status', '!=', 'paid')
+                ->orderBy('created_at', 'desc')
+                ->get();
+            $hasUnpaidInvoices = $unpaidInvoices->count() > 0;
         }
     }
 @endphp
@@ -52,6 +90,15 @@
                     <img src="{{ asset('images/logo-tribe.svg') }}" alt="Tribe365 Logo" class="h-10 w-auto">
                 </div>
 
+                {{-- Suspended Badge - Show at top when status is suspended --}}
+                @if($isSuspended)
+                    <div class="mb-6 flex justify-center">
+                        <span class="px-6 py-2 bg-red-500 text-white border-2 border-red-600 rounded-full text-base font-bold uppercase shadow-lg">
+                            ⚠ Suspended
+                        </span>
+                    </div>
+                @endif
+
                 {{-- Suspended Icon --}}
                 <div class="mb-6 flex justify-center">
                     <div class="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center">
@@ -61,17 +108,88 @@
                     </div>
                 </div>
 
-                <h1 class="text-3xl font-bold mb-4 text-gray-900">
-                    {{ $isInactive ? 'Account Inactive' : 'Account Suspended' }}
-                </h1>
+                @if($isSuspended)
+                    
+                    <h1 class="text-3xl font-bold mb-4 text-gray-900">
+                        Account Suspended
+                    </h1>
 
-                <p class="text-gray-600 mb-2">
-                    {{ $isInactive ? 'Your account subscription is currently inactive.' : 'Your account has been suspended due to payment issues.' }}
-                </p>
+                    <p class="text-gray-600 mb-2">
+                        Your account has been suspended due to payment issues.
+                    </p>
 
-                <p class="text-gray-600 mb-6">
-                    {{ $isInactive ? 'To reactivate your account, please contact support.' : 'To reactivate your account, please update your payment method and settle any outstanding invoices.' }}
-                </p>
+                    <p class="text-gray-600 mb-6">
+                        To reactivate your account, please update your payment method and settle any outstanding invoices.
+                    </p>
+                    
+                    @if($hasUnpaidInvoices && $unpaidInvoices->count() > 0)
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-left">
+                            <h3 class="font-semibold text-yellow-800 mb-2">Outstanding Invoices:</h3>
+                            <ul class="text-sm text-yellow-700 space-y-2">
+                                @foreach($unpaidInvoices->take(3) as $invoice)
+                                    <li>
+                                        <strong>Invoice #{{ $invoice->invoice_number }}:</strong> 
+                                        £{{ number_format($invoice->total_amount, 2) }} 
+                                        @if($invoice->tax_amount > 0)
+                                            (incl. VAT: £{{ number_format($invoice->tax_amount, 2) }})
+                                        @endif
+                                        - Due: {{ $invoice->invoice_date ? $invoice->invoice_date->format('M d, Y') : 'N/A' }}
+                                    </li>
+                                @endforeach
+                                @if($unpaidInvoices->count() > 3)
+                                    <li class="text-xs text-yellow-600">... and {{ $unpaidInvoices->count() - 3 }} more invoice(s)</li>
+                                @endif
+                            </ul>
+                        </div>
+                    @endif
+                @elseif($hasUnpaidInvoices)
+                    {{-- Show payment option if unpaid but not suspended --}}
+                    <h1 class="text-3xl font-bold mb-4 text-gray-900">
+                        Payment Required
+                    </h1>
+
+                    <p class="text-gray-600 mb-2">
+                        You have outstanding invoices that need to be paid.
+                    </p>
+
+                    <p class="text-gray-600 mb-6">
+                        Please settle your unpaid invoices to restore full access to your account.
+                    </p>
+                    
+                    @if($unpaidInvoices->count() > 0)
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6 text-left">
+                            <h3 class="font-semibold text-yellow-800 mb-2">Outstanding Invoices:</h3>
+                            <ul class="text-sm text-yellow-700 space-y-2">
+                                @foreach($unpaidInvoices->take(3) as $invoice)
+                                    <li>
+                                        <strong>Invoice #{{ $invoice->invoice_number }}:</strong> 
+                                        £{{ number_format($invoice->total_amount, 2) }} 
+                                        @if($invoice->tax_amount > 0)
+                                            (incl. VAT: £{{ number_format($invoice->tax_amount, 2) }})
+                                        @endif
+                                        - Due: {{ $invoice->invoice_date ? $invoice->invoice_date->format('M d, Y') : 'N/A' }}
+                                    </li>
+                                @endforeach
+                                @if($unpaidInvoices->count() > 3)
+                                    <li class="text-xs text-yellow-600">... and {{ $unpaidInvoices->count() - 3 }} more invoice(s)</li>
+                                @endif
+                            </ul>
+                        </div>
+                    @endif
+                @else
+                    {{-- Show inactive or other status --}}
+                    <h1 class="text-3xl font-bold mb-4 text-gray-900">
+                        {{ $isInactive ? 'Account Inactive' : 'Account Suspended' }}
+                    </h1>
+
+                    <p class="text-gray-600 mb-2">
+                        {{ $isInactive ? 'Your account subscription is currently inactive.' : 'Your account has been suspended due to payment issues.' }}
+                    </p>
+
+                    <p class="text-gray-600 mb-6">
+                        {{ $isInactive ? 'To reactivate your account, please contact support.' : 'To reactivate your account, please update your payment method and settle any outstanding invoices.' }}
+                    </p>
+                @endif
 
                 @if ($subscription || $suspensionDetails)
                     <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-left">
@@ -109,11 +227,20 @@
 
                 {{-- Action Buttons --}}
                 <div class="space-y-3">
-                    <!-- <a href="{{ $isBasecamp ? route('basecamp.billing') : route('billing') }}" 
-                       class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-full transition block text-center">
-                        Update Payment Method
-                    </a>
-                     -->
+                    @if($hasUnpaidInvoices)
+                        {{-- Show Pay button if there are unpaid invoices --}}
+                        <a href="{{ $isBasecamp ? route('basecamp.billing') : route('billing') }}" 
+                           class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-full transition block text-center">
+                            Pay Now (£{{ number_format($unpaidInvoices->sum('total_amount'), 2) }})
+                        </a>
+                    @else
+                        {{-- Show Update Payment Method button if no unpaid invoices but suspended --}}
+                        <a href="{{ $isBasecamp ? route('basecamp.billing') : route('billing') }}" 
+                           class="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-full transition block text-center">
+                            Update Payment Method
+                        </a>
+                    @endif
+                    
                     <form method="POST" action="{{ route('logout') }}" class="inline-block w-full">
                         @csrf
                         <button type="submit" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 rounded-full transition">
