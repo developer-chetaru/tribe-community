@@ -89,6 +89,99 @@ class ManageSubscriptions extends Component
         $this->resetPage();
     }
     
+    public function updatedCurrentPeriodStart($value)
+    {
+        // Clear errors when period start changes
+        $this->resetErrorBag(['current_period_start', 'current_period_end', 'next_billing_date']);
+        
+        // If period end is set and is now invalid, adjust or clear it
+        if ($this->current_period_end && $this->current_period_start) {
+            try {
+                $periodStart = \Carbon\Carbon::parse($this->current_period_start);
+                $periodEnd = \Carbon\Carbon::parse($this->current_period_end);
+                
+                // If period end is before or equal to period start, set it to period start + 1 day
+                if ($periodEnd->lte($periodStart)) {
+                    $this->current_period_end = $periodStart->copy()->addDay()->format('Y-m-d');
+                }
+            } catch (\Exception $e) {
+                // If parsing fails, clear the field
+                $this->current_period_end = null;
+            }
+        }
+        
+        // If next billing date is set and is now invalid, adjust it
+        if ($this->next_billing_date && $this->current_period_start) {
+            try {
+                $periodStart = \Carbon\Carbon::parse($this->current_period_start);
+                $nextBilling = \Carbon\Carbon::parse($this->next_billing_date);
+                
+                // If next billing is before period start, set it to period start
+                if ($nextBilling->lt($periodStart)) {
+                    $this->next_billing_date = $periodStart->format('Y-m-d');
+                }
+            } catch (\Exception $e) {
+                // If parsing fails, set to period start
+                if ($this->current_period_start) {
+                    try {
+                        $periodStart = \Carbon\Carbon::parse($this->current_period_start);
+                        $this->next_billing_date = $periodStart->format('Y-m-d');
+                    } catch (\Exception $e2) {
+                        $this->next_billing_date = null;
+                    }
+                }
+            }
+        }
+    }
+    
+    public function updatedCurrentPeriodEnd($value)
+    {
+        // Clear errors first
+        $this->resetErrorBag('current_period_end');
+        
+        // Validate period end when it changes
+        if ($this->current_period_start && $this->current_period_end) {
+            try {
+                $periodStart = \Carbon\Carbon::parse($this->current_period_start);
+                $periodEnd = \Carbon\Carbon::parse($this->current_period_end);
+                
+                if ($periodEnd->lte($periodStart)) {
+                    $this->addError('current_period_end', 'Period End must be after Period Start.');
+                } else {
+                    // Auto-fill Next Billing Date with Period End date
+                    // User can still change it if needed
+                    $this->next_billing_date = $this->current_period_end;
+                    $this->resetErrorBag('next_billing_date');
+                }
+            } catch (\Exception $e) {
+                $this->addError('current_period_end', 'Invalid date format.');
+            }
+        } elseif ($this->current_period_end) {
+            // If Period End is set but Period Start is not, still auto-fill Next Billing Date
+            $this->next_billing_date = $this->current_period_end;
+        }
+    }
+    
+    public function updatedNextBillingDate($value)
+    {
+        // Clear errors first
+        $this->resetErrorBag('next_billing_date');
+        
+        // Validate next billing date when it changes
+        if ($this->current_period_start && $this->next_billing_date) {
+            try {
+                $periodStart = \Carbon\Carbon::parse($this->current_period_start);
+                $nextBilling = \Carbon\Carbon::parse($this->next_billing_date);
+                
+                if ($nextBilling->lt($periodStart)) {
+                    $this->addError('next_billing_date', 'Next Billing Date must be on or after Period Start.');
+                }
+            } catch (\Exception $e) {
+                $this->addError('next_billing_date', 'Invalid date format.');
+            }
+        }
+    }
+    
     public function clearFilters()
     {
         $this->accountStatusFilter = '';
@@ -168,9 +261,9 @@ class ManageSubscriptions extends Component
         $this->tier = $subscription->tier;
         $this->user_count = $subscription->user_count;
         $this->status = $subscription->status;
-        $this->current_period_start = $subscription->current_period_start?->toDateString();
-        $this->current_period_end = $subscription->current_period_end?->toDateString();
-        $this->next_billing_date = $subscription->next_billing_date?->toDateString();
+        $this->current_period_start = $subscription->current_period_start?->format('Y-m-d');
+        $this->current_period_end = $subscription->current_period_end?->format('Y-m-d');
+        $this->next_billing_date = $subscription->next_billing_date?->format('Y-m-d');
         
         // Get payment status from latest invoice
         $latestInvoice = Invoice::where(function($q) use ($subscription) {
@@ -260,17 +353,42 @@ class ManageSubscriptions extends Component
         // For basecamp tier, organisation_id is not required
         $rules = [
             'tier' => 'required|in:spark,momentum,vision,basecamp',
-            'user_count' => 'required|integer|min:1',
             'current_period_start' => 'required|date',
-            'current_period_end' => 'required|date|after:current_period_start',
-            'next_billing_date' => 'required|date|after:current_period_start',
+            'current_period_end' => 'required|date',
+            'next_billing_date' => 'required|date',
         ];
         
+        // User count is only required for non-basecamp subscriptions
         if ($this->tier !== 'basecamp') {
             $rules['organisation_id'] = 'required|exists:organisations,id';
+            $rules['user_count'] = 'required|integer|min:1';
         }
         
+        // First validate basic rules
         $this->validate($rules);
+        
+        // Custom date validation with proper error messages
+        $periodStart = \Carbon\Carbon::parse($this->current_period_start);
+        $periodEnd = \Carbon\Carbon::parse($this->current_period_end);
+        $nextBilling = \Carbon\Carbon::parse($this->next_billing_date);
+        
+        // Validate Period End must be after Period Start
+        if ($periodEnd->lte($periodStart)) {
+            $this->addError('current_period_end', 'Period End must be after Period Start.');
+            return;
+        }
+        
+        // Validate Next Billing Date must be on or after Period Start
+        if ($nextBilling->lt($periodStart)) {
+            $this->addError('next_billing_date', 'Next Billing Date must be on or after Period Start.');
+            return;
+        }
+        
+        // Optional: Validate Next Billing Date should not be too far in the future (e.g., not more than 1 year)
+        if ($nextBilling->gt($periodStart->copy()->addYear())) {
+            $this->addError('next_billing_date', 'Next Billing Date should not be more than 1 year from Period Start.');
+            return;
+        }
 
         // For basecamp, user_count is always 1
         $finalUserCount = $this->tier === 'basecamp' ? 1 : $this->user_count;

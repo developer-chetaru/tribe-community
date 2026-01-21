@@ -459,93 +459,194 @@
 </div>
 
 <!-- Edit Modal -->
-<div x-data="{ show: @entangle('showEditModal') }" x-show="show" x-cloak style="display: none;" class="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center">
-    <div class="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl m-4">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-bold">Edit Subscription</h2>
-            <button wire:click="closeModal" type="button" class="text-gray-400 hover:text-gray-600 text-2xl font-bold">&times;</button>
+<div x-data="{ show: @entangle('showEditModal') }" x-show="show" x-cloak style="display: none;" class="fixed inset-0 bg-black bg-opacity-60 z-[9999] flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <!-- Modal Header -->
+        <div class="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+            <h2 class="text-2xl font-bold text-gray-900">Edit Subscription</h2>
+            <button wire:click="closeModal" type="button" class="text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-full p-2 transition-colors duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
         </div>
         
-        <form wire:submit.prevent="updateSubscription">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Organisation</label>
-                    @if($selectedSubscription && $selectedSubscription->tier === 'basecamp')
-                        <input type="text" value="Basecamp User (Individual)" disabled class="mt-1 block w-full border-gray-300 rounded-md bg-gray-100">
-                        <p class="mt-1 text-xs text-gray-500">This is a basecamp user subscription (individual user, not organisation).</p>
-                    @else
-                        <select wire:model="organisation_id" class="mt-1 block w-full border-gray-300 rounded-md">
-                            <option value="">Select Organisation</option>
-                            @foreach($organisations as $org)
-                                <option value="{{ $org->id }}">{{ $org->name }}</option>
-                            @endforeach
+        <!-- Modal Body -->
+        <div class="flex-1 overflow-y-auto px-6 py-5">
+            <form wire:submit.prevent="updateSubscription">
+                <div class="space-y-5">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Organisation</label>
+                        @if($selectedSubscription && $selectedSubscription->tier === 'basecamp')
+                            <input type="text" value="Basecamp User (Individual)" disabled class="block w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed">
+                            <p class="mt-2 text-xs text-gray-500 flex items-center">
+                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                This is a basecamp user subscription (individual user, not organisation).
+                            </p>
+                        @else
+                            <select wire:model="organisation_id" class="block w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200">
+                                <option value="">Select Organisation</option>
+                                @foreach($organisations as $org)
+                                    <option value="{{ $org->id }}">{{ $org->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('organisation_id') 
+                                <span class="text-red-500 text-xs mt-1 block flex items-center">
+                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    {{ $message }}
+                                </span> 
+                            @enderror
+                        @endif
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Tier</label>
+                        <select wire:model="tier" class="block w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200">
+                            <option value="spark">Spark</option>
+                            <option value="momentum">Momentum</option>
+                            <option value="vision">Vision</option>
+                            <option value="basecamp">Basecamp</option>
                         </select>
-                        @error('organisation_id') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                        @error('tier') 
+                            <span class="text-red-500 text-xs mt-1 block flex items-center">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                </svg>
+                                {{ $message }}
+                            </span> 
+                        @enderror
+                    </div>
+
+                    @if(!$selectedSubscription || $selectedSubscription->tier !== 'basecamp')
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">User Count</label>
+                            <input type="number" wire:model.live="user_count" min="1" class="block w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200">
+                            @error('user_count') 
+                                <span class="text-red-500 text-xs mt-1 block flex items-center">
+                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    {{ $message }}
+                                </span> 
+                            @enderror
+                        </div>
                     @endif
-                </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Tier</label>
-                    <select wire:model="tier" class="mt-1 block w-full border-gray-300 rounded-md">
-                        <option value="spark">Spark</option>
-                        <option value="momentum">Momentum</option>
-                        <option value="vision">Vision</option>
-                        <option value="basecamp">Basecamp</option>
-                    </select>
-                    @error('tier') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                Period Start <span class="text-red-500">*</span>
+                            </label>
+                            <input type="date" 
+                                   wire:model.live.debounce.300ms="current_period_start"
+                                   min="{{ date('Y-m-d') }}"
+                                   class="block w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200 @error('current_period_start') border-red-500 @enderror">
+                            @error('current_period_start') 
+                                <span class="text-red-500 text-xs mt-1 block flex items-center">
+                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    {{ $message }}
+                                </span> 
+                            @enderror
+                        </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">User Count</label>
-                    <input type="number" wire:model.live="user_count" min="1" class="mt-1 block w-full border-gray-300 rounded-md">
-                    @error('user_count') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Period Start</label>
-                        <input type="date" wire:model="current_period_start" class="mt-1 block w-full border-gray-300 rounded-md">
-                        @error('current_period_start') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                Period End <span class="text-red-500">*</span>
+                            </label>
+                            <input type="date" 
+                                   wire:model.live.debounce.300ms="current_period_end"
+                                   @if($current_period_start) 
+                                       min="{{ date('Y-m-d', strtotime($current_period_start . ' +1 day')) }}" 
+                                   @else
+                                       min="{{ date('Y-m-d', strtotime('+1 day')) }}"
+                                   @endif
+                                   class="block w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200 @error('current_period_end') border-red-500 @enderror">
+                            @error('current_period_end') 
+                                <span class="text-red-500 text-xs mt-1 block flex items-center">
+                                    <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    {{ $message }}
+                                </span> 
+                            @enderror
+                            <p class="text-xs text-gray-500 mt-1.5 flex items-center">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                Must be after Period Start
+                            </p>
+                        </div>
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Period End</label>
-                        <input type="date" wire:model="current_period_end" class="mt-1 block w-full border-gray-300 rounded-md">
-                        @error('current_period_end') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            Next Billing Date <span class="text-red-500">*</span>
+                        </label>
+                        <input type="date" 
+                               wire:model="next_billing_date"
+                               disabled
+                               readonly
+                               @if($current_period_start) 
+                                   min="{{ $current_period_start }}" 
+                               @else
+                                   min="{{ date('Y-m-d') }}"
+                               @endif
+                               class="block w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm bg-gray-50 cursor-not-allowed text-gray-600 @error('next_billing_date') border-red-500 @enderror">
+                        @error('next_billing_date') 
+                            <span class="text-red-500 text-xs mt-1 block flex items-center">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                </svg>
+                                {{ $message }}
+                            </span> 
+                        @enderror
+                        <p class="text-xs text-gray-500 mt-1.5 flex items-center">
+                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Auto-filled from Period End (cannot be changed)
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Status</label>
+                            <select wire:model="status" class="block w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200">
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="past_due">Past Due</option>
+                                <option value="suspended">Suspended</option>
+                                <option value="canceled">Canceled</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Payment Status</label>
+                            <select wire:model="payment_status" class="block w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200">
+                                <option value="paid">Paid</option>
+                                <option value="unpaid">Unpaid</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Next Billing Date</label>
-                    <input type="date" wire:model="next_billing_date" class="mt-1 block w-full border-gray-300 rounded-md">
-                    @error('next_billing_date') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                <!-- Modal Footer -->
+                <div class="mt-6 pt-5 border-t border-gray-200 flex justify-end space-x-3">
+                    <button type="button" wire:click="closeModal" class="px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors duration-200">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-6 py-2.5 bg-[#EB1C24] text-white rounded-lg font-semibold hover:bg-[#d11820] shadow-sm transition-all duration-200">
+                        Save Changes
+                    </button>
                 </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Status</label>
-                    <select wire:model="status" class="mt-1 block w-full border-gray-300 rounded-md">
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="past_due">Past Due</option>
-                        <option value="suspended">Suspended</option>
-                        <option value="canceled">Canceled</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Payment Status</label>
-                    <select wire:model="payment_status" class="mt-1 block w-full border-gray-300 rounded-md">
-                        <option value="paid">Paid</option>
-                        <option value="unpaid">Unpaid</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="mt-6 flex justify-end space-x-2">
-                <button type="button" wire:click="closeModal" class="px-4 py-2 border rounded-md">Cancel</button>
-                <button type="submit" class="px-4 py-2 bg-[#EB1C24] text-white rounded-md">Save</button>
-            </div>
-        </form>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -567,6 +668,17 @@ document.addEventListener('DOMContentLoaded', function() {
         // Listen for Livewire events
         Livewire.hook('message.processed', (message, component) => {
             console.log('✅ Livewire message processed:', message);
+            
+            // Re-initialize date inputs after Livewire updates
+            setTimeout(() => {
+                const dateInputs = document.querySelectorAll('input[type="date"]');
+                dateInputs.forEach(input => {
+                    // Force calendar to show properly by triggering focus/blur
+                    if (input.value) {
+                        input.setAttribute('value', input.value);
+                    }
+                });
+            }, 100);
         });
         
         Livewire.hook('message.failed', (message, component) => {
@@ -575,6 +687,16 @@ document.addEventListener('DOMContentLoaded', function() {
         
         Livewire.hook('morph.updated', ({ el, component }) => {
             console.log('✅ Livewire DOM updated');
+            
+            // Ensure date inputs are properly initialized after DOM update
+            setTimeout(() => {
+                const dateInputs = el.querySelectorAll ? el.querySelectorAll('input[type="date"]') : [];
+                dateInputs.forEach(input => {
+                    if (input.value) {
+                        input.setAttribute('value', input.value);
+                    }
+                });
+            }, 50);
         });
     }
     
@@ -586,6 +708,22 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         return originalFetch.apply(this, args);
     };
+    
+    // Fix date input calendar on modal open
+    document.addEventListener('livewire:init', () => {
+        Livewire.on('modal-opened', (data) => {
+            setTimeout(() => {
+                const dateInputs = document.querySelectorAll('input[type="date"]');
+                dateInputs.forEach(input => {
+                    if (input.value) {
+                        input.setAttribute('value', input.value);
+                        // Trigger a small change to refresh the calendar
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                });
+            }, 200);
+        });
+    });
 });
 </script>
 </div>
