@@ -282,20 +282,20 @@ class SubscriptionService
 
         // Update or create subscription with ACTIVE status
         if ($subscription) {
-            // If subscription is expired or doesn't have valid end date, extend it from today
-            // If subscription is still active, extend from current end date
-            $endDate = $subscription->current_period_end ? Carbon::parse($subscription->current_period_end) : null;
-            $startDate = ($endDate && $endDate->isFuture()) 
-                ? $endDate 
-                : $today;
+            // For renewal payments, always start from today (payment date)
+            // This ensures the subscription period starts from when payment was made
+            $startDate = $today;
+            
+            // Calculate end date: start date + 1 month
+            $endDate = $startDate->copy()->addMonth();
             
             // Update existing subscription to ACTIVE and extend period
             // Remove cancellation status when renewing
             $subscription->update([
                 'status' => 'active',
                 'current_period_start' => $startDate,
-                'current_period_end' => $startDate->copy()->addMonth(), // Extend by 1 month
-                'next_billing_date' => $startDate->copy()->addMonth(),
+                'current_period_end' => $endDate,
+                'next_billing_date' => $endDate,
                 'user_count' => $invoice->user_count, // Update user count from invoice
                 'last_payment_date' => $today,
                 'canceled_at' => null, // Remove cancellation timestamp when renewing
@@ -304,11 +304,12 @@ class SubscriptionService
             Log::info("Subscription renewed via activateSubscription", [
                 'subscription_id' => $subscription->id,
                 'start_date' => $startDate->format('Y-m-d'),
-                'end_date' => $startDate->copy()->addMonth()->format('Y-m-d'),
-                'status' => 'active'
+                'end_date' => $endDate->format('Y-m-d'),
+                'status' => 'active',
+                'payment_date' => $today->format('Y-m-d')
             ]);
             
-            Log::info("Subscription {$subscription->id} renewed - Period: {$startDate->format('Y-m-d')} to {$startDate->copy()->addMonth()->format('Y-m-d')}, Status: active, Cancellation removed");
+            Log::info("Subscription {$subscription->id} renewed - Period: {$startDate->format('Y-m-d')} to {$endDate->format('Y-m-d')}, Status: active, Cancellation removed");
         } else {
             // Get tier from organisation or default to spark
             $org = Organisation::find($invoice->organisation_id);

@@ -965,7 +965,7 @@ function initTelInput(input, livewire, phoneField, countryField, initialPhone = 
             console.log('Error modifying country data:', e);
         }
     }
-    
+
     let iti = window.intlTelInput(input, {
         initialCountry: initialIsoCode, // Always use UK (gb) as default
         separateDialCode: true,
@@ -1248,7 +1248,7 @@ function initTelInput(input, livewire, phoneField, countryField, initialPhone = 
         setTimeout(() => {
             iti.setCountry('gb');
             livewire.set(countryField, '+44');
-            updateValues();
+        updateValues();
         }, 200);
     }
 

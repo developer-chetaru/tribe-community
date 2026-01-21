@@ -1258,6 +1258,7 @@
                 <div class="flex justify-center">
                     <button wire:click="renewSubscription" 
                             type="button" 
+                            onclick="console.log('Pay Now button clicked');"
                             class="px-8 py-3 bg-[#EB1C24] text-white rounded-md hover:bg-red-700 font-semibold text-lg shadow-lg transition-colors w-full">
                         <span wire:loading.remove wire:target="renewSubscription">Pay Now</span>
                         <span wire:loading wire:target="renewSubscription">Processing...</span>
@@ -2112,16 +2113,76 @@
             }
         });
         
-        // Handle direct Stripe checkout redirect
-        Livewire.on('redirect-to-stripe-checkout', (event) => {
-            const url = event.url || event[0]?.url || event.detail?.url;
-            console.log('Redirecting to Stripe checkout:', url);
+        // Handle direct Stripe checkout redirect - Multiple listeners for compatibility
+        function redirectToStripe(url) {
+            console.log('redirectToStripe function called with URL:', url);
             if (url) {
-                // Use replace to avoid adding to browser history
+                console.log('Redirecting to Stripe checkout:', url);
+                // Use replace to avoid back button issues
                 window.location.replace(url);
             } else {
                 console.error('No URL provided for Stripe redirect');
+                // Fallback: try to get from session
+                console.log('Attempting to fetch checkout URL from session...');
+                fetch('/billing/get-checkout-url')
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Fetched checkout URL from session:', data);
+                        if (data.url) {
+                            window.location.replace(data.url);
+                        } else {
+                            console.error('No URL in session response');
+                            alert('Failed to get payment URL. Please try again.');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching checkout URL:', error);
+                        alert('Failed to initialize payment. Please try again.');
+                    });
             }
+        }
+        
+        // Listener 1: Inside livewire:init
+        document.addEventListener('livewire:init', () => {
+            console.log('Setting up redirect-to-stripe-checkout listener inside livewire:init');
+            Livewire.on('redirect-to-stripe-checkout', (event) => {
+                console.log('redirect-to-stripe-checkout event received (init):', event);
+                let url = null;
+                
+                // Try multiple formats
+                if (Array.isArray(event) && event.length > 0) {
+                    url = event[0]?.url || event[0];
+                    console.log('URL extracted from array format:', url);
+                } else if (event && typeof event === 'object') {
+                    url = event.url || event.detail?.url || event[0]?.url;
+                    console.log('URL extracted from object format:', url);
+                } else if (typeof event === 'string') {
+                    url = event;
+                    console.log('URL extracted from string format:', url);
+                }
+                
+                redirectToStripe(url);
+            });
+        });
+        
+        // Listener 2: Direct (for Livewire v2 or if init already fired)
+        console.log('Setting up redirect-to-stripe-checkout listener (direct)');
+        Livewire.on('redirect-to-stripe-checkout', (event) => {
+            console.log('redirect-to-stripe-checkout event received (direct):', event);
+            let url = null;
+            
+            if (Array.isArray(event) && event.length > 0) {
+                url = event[0]?.url || event[0];
+                console.log('URL extracted from array format (direct):', url);
+            } else if (event && typeof event === 'object') {
+                url = event.url || event.detail?.url || event[0]?.url;
+                console.log('URL extracted from object format (direct):', url);
+            } else if (typeof event === 'string') {
+                url = event;
+                console.log('URL extracted from string format (direct):', url);
+            }
+            
+            redirectToStripe(url);
         });
         
         // Handle copy to clipboard

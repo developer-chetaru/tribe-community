@@ -552,37 +552,27 @@ class StripeCheckoutController extends Controller
                                 'status' => 'active', // Always set to active after successful payment
                             ];
                             
-                            // Only update timestamps if they exist and are not null
-                            if (isset($stripeSubscription->current_period_start) && $stripeSubscription->current_period_start !== null) {
-                                $updateData['current_period_start'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_start);
-                            }
-                            if (isset($stripeSubscription->current_period_end) && $stripeSubscription->current_period_end !== null) {
-                                $updateData['current_period_end'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
-                                $updateData['next_billing_date'] = \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
-                            }
+                            // For renewal payments, always use today (payment date) as start date
+                            // Don't use Stripe's period dates as they might be from previous subscription
+                            $paymentDate = Carbon::today();
+                            $updateData['current_period_start'] = $paymentDate;
+                            $updateData['current_period_end'] = $paymentDate->copy()->addMonth();
+                            $updateData['next_billing_date'] = $paymentDate->copy()->addMonth();
                             
                             // Remove cancellation status - clear any cancellation-related fields
                             $updateData['canceled_at'] = null;
                             
                             $invoice->subscription->update($updateData);
                             
-                            // Ensure end date is set if not provided
-                            if (!isset($updateData['current_period_end']) || $updateData['current_period_end'] === null) {
-                                $startDate = $updateData['current_period_start'] ?? Carbon::today();
-                                $updateData['current_period_end'] = Carbon::parse($startDate)->addMonth();
-                                $updateData['next_billing_date'] = Carbon::parse($startDate)->addMonth();
-                                $invoice->subscription->update([
-                                    'current_period_end' => $updateData['current_period_end'],
-                                    'next_billing_date' => $updateData['next_billing_date'],
-                                ]);
-                            }
-                            
-                            Log::info("Updated subscription with Stripe subscription ID and removed cancellation", [
+                            Log::info("Updated subscription with Stripe subscription ID - dates from payment date", [
                                 'subscription_id' => $invoice->subscription->id,
                                 'stripe_subscription_id' => $stripeSubscriptionId,
                                 'status' => 'active',
-                                'current_period_start' => $updateData['current_period_start'] ? Carbon::parse($updateData['current_period_start'])->format('Y-m-d') : null,
-                                'current_period_end' => $updateData['current_period_end'] ? Carbon::parse($updateData['current_period_end'])->format('Y-m-d') : null
+                                'current_period_start' => $updateData['current_period_start']->format('Y-m-d'),
+                                'current_period_end' => $updateData['current_period_end']->format('Y-m-d'),
+                                'payment_date' => $paymentDate->format('Y-m-d'),
+                                'stripe_period_start' => isset($stripeSubscription->current_period_start) ? Carbon::createFromTimestamp($stripeSubscription->current_period_start)->format('Y-m-d') : 'N/A',
+                                'stripe_period_end' => isset($stripeSubscription->current_period_end) ? Carbon::createFromTimestamp($stripeSubscription->current_period_end)->format('Y-m-d') : 'N/A'
                             ]);
                         }
                     } catch (\Exception $e) {
@@ -639,6 +629,7 @@ class StripeCheckoutController extends Controller
                     
                     // Always call activateSubscription to properly update subscription
                     // It handles both expired and active subscriptions correctly
+                    // activateSubscription will set dates from today (payment date)
                     $subscriptionService = new SubscriptionService();
                     $activationResult = $subscriptionService->activateSubscription($payment->id);
                     
@@ -648,30 +639,13 @@ class StripeCheckoutController extends Controller
                         Log::info("Subscription activated successfully for payment {$payment->id}");
                     }
                     
-                    // If mode is 'payment' and subscription wasn't updated by Stripe, ensure dates are set
-                    if ($session->mode === 'payment') {
-                        $invoice->subscription->refresh();
-                        $endDate = $invoice->subscription->current_period_end ? Carbon::parse($invoice->subscription->current_period_end) : null;
-                        
-                        // If end date is not in future, update it
-                        if (!$endDate || !$endDate->isFuture()) {
-                            $startDate = Carbon::today();
-                            $invoice->subscription->update([
-                                'current_period_start' => $startDate,
-                                'current_period_end' => $startDate->copy()->addMonth(),
-                                'next_billing_date' => $startDate->copy()->addMonth(),
-                            ]);
-                            Log::info("Updated subscription dates for one-time payment", [
-                                'subscription_id' => $invoice->subscription->id,
-                                'end_date' => $startDate->copy()->addMonth()->format('Y-m-d')
-                            ]);
-                        }
-                    }
-                    
-                    // Final safety check - ensure subscription is active and has future end date
+                    // Refresh subscription after activation
                     $invoice->subscription->refresh();
+                    
+                    // Final safety check - ensure subscription is active and has correct dates
                     $finalEndDate = $invoice->subscription->current_period_end ? Carbon::parse($invoice->subscription->current_period_end)->startOfDay() : null;
                     $finalStartDate = $invoice->subscription->current_period_start ? Carbon::parse($invoice->subscription->current_period_start)->startOfDay() : null;
+                    $today = Carbon::today()->startOfDay();
                     
                     // Check if subscription needs fixing
                     $needsFix = false;
@@ -683,10 +657,14 @@ class StripeCheckoutController extends Controller
                     } elseif ($finalStartDate && $finalEndDate && $finalEndDate->equalTo($finalStartDate)) {
                         // End date same as start date - broken record
                         $needsFix = true;
+                    } elseif ($finalStartDate && $finalStartDate->greaterThan($today)) {
+                        // Start date should be today (payment date), not in future
+                        $needsFix = true;
                     }
                     
                     if ($needsFix) {
-                        $startDate = Carbon::today()->startOfDay();
+                        // Always start from today (payment date) for renewal
+                        $startDate = $today;
                         $endDate = $startDate->copy()->addMonth();
                         
                         $invoice->subscription->update([
@@ -698,10 +676,11 @@ class StripeCheckoutController extends Controller
                         ]);
                         
                         $invoice->subscription->refresh();
-                        Log::info("Force updated subscription to ensure active status and future end date", [
+                        Log::info("Force updated subscription to ensure correct dates from payment date", [
                             'subscription_id' => $invoice->subscription->id,
                             'start_date' => $startDate->format('Y-m-d'),
                             'end_date' => $endDate->format('Y-m-d'),
+                            'payment_date' => $today->format('Y-m-d'),
                             'actual_end_date' => $invoice->subscription->current_period_end ? Carbon::parse($invoice->subscription->current_period_end)->format('Y-m-d') : null
                         ]);
                     }
@@ -762,9 +741,8 @@ class StripeCheckoutController extends Controller
                 session()->put('refresh_billing', true);
                 session()->put('payment_completed', true);
                 
-                // Redirect to dashboard instead of billing to show success message
-                // Dashboard will check subscription status fresh and won't show popup
-                return redirect()->route('dashboard', ['payment_completed' => time()])->with('payment_completed', true);
+                // Redirect to billing page to show updated subscription status
+                return redirect()->route('billing', ['payment_completed' => time()])->with('payment_completed', true);
                 
             } catch (\Exception $e) {
                 DB::rollBack();

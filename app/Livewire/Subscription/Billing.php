@@ -75,6 +75,16 @@ class Billing extends Component
             abort(403, 'You must be associated with an organisation.');
         }
         
+        // Check if payment was just completed and refresh subscription status
+        if (session()->has('payment_completed') || request()->has('payment_completed')) {
+            \Log::info('Payment completed detected in mount, refreshing subscription status');
+            session()->forget('payment_completed');
+            session()->forget('subscription_expired');
+            session()->forget('subscription_status');
+            // Force refresh by clearing any cached data
+            $this->subscriptionStatus = [];
+        }
+        
         // For basecamp users, check if they have completed payment
         if ($user->hasRole('basecamp')) {
             // Check if user has active subscription or paid invoice
@@ -574,7 +584,9 @@ class Billing extends Component
 
     public function renewSubscription()
     {
+        \Log::info('=== renewSubscription method called ===');
         $user = auth()->user();
+        \Log::info('User info', ['user_id' => $user->id, 'is_basecamp' => $user->hasRole('basecamp')]);
         
         // Auto-calculate renewal data if not set
         if ($user->hasRole('basecamp')) {
@@ -623,15 +635,19 @@ class Billing extends Component
                     }
 
                     // Check if invoice already exists for this renewal period to prevent duplicates
+                    // Check for pending OR unpaid invoices for today
                     $existingInvoice = Invoice::where('subscription_id', $subscription->id)
                         ->where('user_id', $user->id)
                         ->where('tier', 'basecamp')
-                        ->where('status', 'pending')
-                        ->where('invoice_date', '>=', now()->startOfMonth())
-                        ->where('invoice_date', '<=', now()->endOfMonth())
+                        ->whereIn('status', ['pending', 'unpaid'])
+                        ->whereDate('invoice_date', now()->toDateString())
                         ->first();
                     
                     if ($existingInvoice) {
+                        \Log::info('Using existing invoice for today', [
+                            'invoice_id' => $existingInvoice->id,
+                            'status' => $existingInvoice->status
+                        ]);
                         $invoice = $existingInvoice;
                     } else {
                         // Calculate VAT (20% of subtotal) for basecamp renewal
@@ -718,14 +734,47 @@ class Billing extends Component
             return $this->openPaymentModal($this->renewalInvoice->id);
             
         } catch (\Exception $e) {
-            \Log::error('Error creating renewal invoice: ' . $e->getMessage());
+            \Log::error('Error creating renewal invoice: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            // If it's a duplicate entry error, try to find existing invoice and use it
+            if (str_contains($e->getMessage(), 'Duplicate entry')) {
+                \Log::info('Duplicate invoice detected, attempting to find existing invoice');
+                try {
+                    $user = auth()->user();
+                    $subscription = \App\Models\SubscriptionRecord::where('user_id', $user->id)
+                        ->where('tier', 'basecamp')
+                        ->orderBy('created_at', 'desc')
+                        ->first();
+                    
+                    if ($subscription) {
+                        $existingInvoice = Invoice::where('subscription_id', $subscription->id)
+                            ->where('user_id', $user->id)
+                            ->where('tier', 'basecamp')
+                            ->whereIn('status', ['pending', 'unpaid'])
+                            ->whereDate('invoice_date', now()->toDateString())
+                            ->first();
+                        
+                        if ($existingInvoice) {
+                            \Log::info('Found existing invoice, redirecting to payment', [
+                                'invoice_id' => $existingInvoice->id
+                            ]);
+                            return $this->openPaymentModal($existingInvoice->id);
+                        }
+                    }
+                } catch (\Exception $findError) {
+                    \Log::error('Error finding existing invoice: ' . $findError->getMessage());
+                }
+            }
+            
             session()->flash('error', 'Failed to create renewal invoice. Please try again.');
         }
     }
 
     public function openPaymentModal($invoiceId)
     {
-        \Log::info('openPaymentModal called with ID: ' . $invoiceId);
+        \Log::info('=== openPaymentModal called ===', ['invoice_id' => $invoiceId, 'user_id' => auth()->id()]);
         
         try {
             $invoice = Invoice::with('subscription')->findOrFail($invoiceId);
@@ -764,15 +813,31 @@ class Billing extends Component
             $checkoutUrl = $this->createStripeCheckoutSession($invoice);
             
             if ($checkoutUrl) {
-                \Log::info('Stripe checkout URL created, dispatching redirect event', [
+                \Log::info('Stripe checkout URL created, using multiple redirect methods', [
                     'checkout_url' => $checkoutUrl,
                     'invoice_id' => $invoiceId
                 ]);
                 
-                // Dispatch JavaScript event with direct Stripe URL for immediate redirect
-                // This works better with Livewire AJAX requests
+                // Store URL in session as fallback
+                session()->put('stripe_checkout_url', $checkoutUrl);
+                
+                // Method 1: Dispatch event for JavaScript redirect
+                $this->dispatch('redirect-to-stripe', url: $checkoutUrl);
                 $this->dispatch('redirect-to-stripe-checkout', url: $checkoutUrl);
+                
+                // Method 2: Direct JavaScript execution with console logging
+                $this->js("
+                    console.log('Livewire js() method called with URL:', " . json_encode($checkoutUrl) . ");
+                    console.log('Attempting redirect...');
+                    window.location.href = " . json_encode($checkoutUrl) . ";
+                    console.log('Redirect command executed');
+                ");
+                
                 return;
+            } else {
+                \Log::error('Failed to create checkout URL', [
+                    'invoice_id' => $invoiceId
+                ]);
             }
             
         } catch (\Exception $e) {

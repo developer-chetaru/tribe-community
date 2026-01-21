@@ -356,7 +356,7 @@
                             @endphp
                             <span class="px-3 py-1.5 rounded-full text-sm font-semibold {{ $paymentStatusClass }} inline-block">
                                 {{ $paymentStatusText }}
-                            </span>
+                                </span>
                             <p class="text-xs text-gray-500 mt-1">{{ $paymentDescription ?? '' }}</p>
                         </div>
                     </div>
