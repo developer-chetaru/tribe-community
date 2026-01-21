@@ -667,6 +667,49 @@ class OneSignalService
     }
 
     /**
+     * Mark specific emails as has_submitted: true in OneSignal
+     * 
+     * @param array $emails Array of email addresses
+     * @return array Results with success/failure for each email
+     */
+    public function markEmailsAsSubmitted(array $emails): array
+    {
+        $results = [];
+        
+        foreach ($emails as $email) {
+            // Find user by email
+            $user = \App\Models\User::where('email', $email)->first();
+            
+            if (!$user) {
+                $results[$email] = [
+                    'success' => false,
+                    'message' => 'User not found',
+                ];
+                continue;
+            }
+            
+            // Update OneSignal tags
+            $success = $this->updateUserTags($user->id, [
+                'has_submitted_today' => 'true',
+            ]);
+            
+            $results[$email] = [
+                'success' => $success,
+                'user_id' => $user->id,
+                'message' => $success ? 'Tag updated successfully' : 'Failed to update tag',
+            ];
+            
+            Log::info('Marked email as submitted in OneSignal', [
+                'email' => $email,
+                'user_id' => $user->id,
+                'success' => $success,
+            ]);
+        }
+        
+        return $results;
+    }
+
+    /**
      * Reset has_submitted_today tag (for daily reset)
      * Can be called via OneSignal webhook or a simple midnight cron
      *
