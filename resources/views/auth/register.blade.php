@@ -12,7 +12,7 @@
                 </h2>
 
               
-                <form method="POST" action="{{ route('register') }}" class="space-y-4">
+                <form method="POST" action="{{ route('register') }}" class="space-y-4" onsubmit="document.getElementById('email').value = document.getElementById('email').value.trim(); return true;">
                     @csrf
 
                     <!-- First Name -->
@@ -70,6 +70,7 @@
                     placeholder="Email"
                     class="w-full bg-transparent border-none outline-none focus:ring-0 text-gray-500 placeholder-gray-400 text-base"
                     autocomplete="username"
+                    onblur="this.value = this.value.trim()"
                 />
 
                     </label>

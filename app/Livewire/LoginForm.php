@@ -25,6 +25,9 @@ class LoginForm extends Component
     
     public function login()
     {
+        // Trim email before validation
+        $this->email = trim($this->email);
+        
         $this->validate();
 
         // Check if email exists

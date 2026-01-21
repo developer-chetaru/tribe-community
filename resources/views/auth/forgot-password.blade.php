@@ -20,7 +20,7 @@
                     @endif
 
                     <!-- Form -->
-                    <form method="POST" action="{{ route('password.email') }}" class="text-left">
+                    <form method="POST" action="{{ route('password.email') }}" class="text-left" onsubmit="document.getElementById('email').value = document.getElementById('email').value.trim(); return true;">
                         @csrf
 
                         <div class="mb-6">
@@ -35,7 +35,7 @@
                                     value="{{ old('email') }}"
                                     placeholder="E-Mail Address"
                                     class="w-full bg-transparent mt- border-none outline-none focus:ring-0 text-gray-500 placeholder-gray-400 text-base"
-                                    
+                                    onblur="this.value = this.value.trim()"
                                     autofocus
                                 />
                             </div>

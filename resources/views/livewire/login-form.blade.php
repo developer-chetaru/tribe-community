@@ -19,6 +19,7 @@
                     placeholder="E-Mail Address"
                     class="w-full bg-transparent outline-none text-base"
                     autocomplete="username"
+                    onblur="this.value = this.value.trim(); $wire.set('email', this.value.trim())"
                 />
             </label>
             @error('email') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror

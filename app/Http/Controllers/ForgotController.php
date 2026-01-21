@@ -26,11 +26,15 @@ class ForgotController extends Controller
     */
    public function sendResetLink(Request $request)
     {
+        // Trim email to remove leading/trailing spaces
+        $email = trim($request->email);
+        $request->merge(['email' => $email]);
+        
         $request->validate([
             'email' => 'required|email'
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::where('email', $email)->first();
 
         if (!$user) {
             return response()->json([
@@ -100,6 +104,11 @@ class ForgotController extends Controller
         // ----------------------------
         // VALIDATION
         // ----------------------------
+        // Trim email to remove leading/trailing spaces
+        if ($request->has('email')) {
+            $request->merge(['email' => trim($request->email)]);
+        }
+        
         $request->validate([
             'token' => 'required|string',
 

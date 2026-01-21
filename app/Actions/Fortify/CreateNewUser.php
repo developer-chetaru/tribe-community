@@ -24,6 +24,11 @@ class CreateNewUser implements CreatesNewUsers
      */
     public function create(array $input): User
     {
+        // Trim email to remove leading/trailing spaces
+        if (isset($input['email'])) {
+            $input['email'] = trim($input['email']);
+        }
+        
         Validator::make($input, [
             'first_name' => ['required', 'string', 'max:255'],
             'last_name'  => ['required', 'string', 'max:255'],

@@ -29,7 +29,7 @@
     method="POST" 
     action="{{ route('login') }}" 
     x-data="{ loading: false }" 
-    @submit.prevent="loading = true; $el.submit();"
+    @submit.prevent="document.getElementById('email').value = document.getElementById('email').value.trim(); loading = true; $el.submit();"
 >
     @csrf
 
@@ -49,6 +49,7 @@
                 autocomplete="username"
                 autofocus
                 class="w-full bg-transparent border-none outline-none appearance-none focus:ring-0 text-gray-500 placeholder-gray-400 text-base mb-1"
+                onblur="this.value = this.value.trim()"
             />
         </label>
       @error('email')

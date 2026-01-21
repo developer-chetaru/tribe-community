@@ -52,7 +52,9 @@ class FortifyServiceProvider extends ServiceProvider
         );
 
             Fortify::authenticateUsing(function (Request $request) {
-	    $user = User::where('email', $request->email)->first();
+	    // Trim email to remove leading/trailing spaces
+	    $email = trim($request->email);
+	    $user = User::where('email', $email)->first();
 
     	// Check if email exists
     	if (!$user) {
@@ -92,6 +94,11 @@ class FortifyServiceProvider extends ServiceProvider
 
 
 		app('router')->post('/reset-password', function (Request $request) {
+            // Trim email to remove leading/trailing spaces
+            if ($request->has('email')) {
+                $request->merge(['email' => trim($request->email)]);
+            }
+            
             $request->validate([
                 'token' => 'required',
                 'email' => 'required|email',
