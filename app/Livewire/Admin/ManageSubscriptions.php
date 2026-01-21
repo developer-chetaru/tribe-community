@@ -42,6 +42,10 @@ class ManageSubscriptions extends Component
     public $accountStatusFilter = '';
     public $paymentStatusFilter = '';
     public $nextBillingDateFilter = '';
+    
+    // Sorting properties
+    public $sortField = 'created_at'; // Default: latest first
+    public $sortDirection = 'desc'; // 'asc' or 'desc'
 
     public function mount()
     {
@@ -90,6 +94,19 @@ class ManageSubscriptions extends Component
         $this->accountStatusFilter = '';
         $this->paymentStatusFilter = '';
         $this->nextBillingDateFilter = '';
+        $this->resetPage();
+    }
+    
+    public function sortBy($field)
+    {
+        if ($this->sortField === $field) {
+            // Toggle direction if same field
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            // New field, default to desc for dates, asc for names
+            $this->sortField = $field;
+            $this->sortDirection = in_array($field, ['created_at', 'updated_at', 'next_billing_date', 'current_period_end']) ? 'desc' : 'asc';
+        }
         $this->resetPage();
     }
 
@@ -556,7 +573,8 @@ class ManageSubscriptions extends Component
                 $combined->push([
                     'type' => 'basecamp',
                     'id' => $subscription->id,
-                    'name' => $user ? ($user->first_name . ' ' . $user->last_name . ' (' . $user->email . ')') : 'Unknown User',
+                    'name' => $user ? ($user->first_name . ' ' . $user->last_name) : 'Unknown User',
+                    'email' => $user ? $user->email : '',
                     'subscription' => $subscription,
                     'user' => $user,
                     'user_count' => 1, // Basecamp is always single user
@@ -651,8 +669,39 @@ class ManageSubscriptions extends Component
             return true;
         });
         
-        // Sort by name
-        $sorted = $filtered->sortBy('name')->values();
+        // Apply sorting
+        $sorted = $filtered->sortBy(function($item) {
+            switch ($this->sortField) {
+                case 'name':
+                    return strtolower($item['name'] ?? '');
+                case 'created_at':
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription ? $subscription->created_at?->timestamp ?? 0 : 0;
+                case 'updated_at':
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription ? $subscription->updated_at?->timestamp ?? 0 : 0;
+                case 'status':
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription ? $subscription->status ?? '' : '';
+                case 'payment_status':
+                    return $item['payment_status'] ?? 'unpaid';
+                case 'next_billing_date':
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription && $subscription->next_billing_date ? $subscription->next_billing_date->timestamp : 0;
+                case 'current_period_end':
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription && $subscription->current_period_end ? $subscription->current_period_end->timestamp : 0;
+                case 'tier':
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription ? $subscription->tier ?? '' : '';
+                default:
+                    // Default to created_at for latest first
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription ? $subscription->created_at?->timestamp ?? 0 : 0;
+            }
+        }, SORT_REGULAR, $this->sortDirection === 'desc');
+        
+        $sorted = $sorted->values();
         
         // Manual pagination
         $perPage = 15;

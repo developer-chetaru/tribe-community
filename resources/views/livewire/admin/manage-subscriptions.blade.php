@@ -92,179 +92,278 @@
         </div>
 
         <!-- Subscriptions Table -->
-        <div class="bg-white rounded-lg shadow overflow-hidden">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                            {{ $activeTab === 'organisation' ? 'Organisation' : 'User' }}
-                        </th>
-                        @if($activeTab === 'organisation')
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                        @endif
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tier</th>
-                        @if($activeTab === 'organisation')
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User Count</th>
-                        @endif
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Monthly Total</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment Status</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Period End</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Next Billing</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+        <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gradient-to-r from-gray-50 to-gray-100">
+                        <tr>
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                <button wire:click="sortBy('name')" class="flex items-center space-x-2 hover:text-[#EB1C24] transition-colors duration-200 group">
+                                    <span class="font-semibold">{{ $activeTab === 'organisation' ? 'Organisation' : 'User' }}</span>
+                                    @if($sortField === 'name')
+                                        <span class="text-[#EB1C24] font-bold">
+                                            {{ $sortDirection === 'asc' ? '↑' : '↓' }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-400 group-hover:text-gray-600">⇅</span>
+                                    @endif
+                                </button>
+                            </th>
+                            @if($activeTab === 'organisation')
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Type</th>
+                            @endif
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                <button wire:click="sortBy('tier')" class="flex items-center space-x-2 hover:text-[#EB1C24] transition-colors duration-200 group">
+                                    <span class="font-semibold">Tier</span>
+                                    @if($sortField === 'tier')
+                                        <span class="text-[#EB1C24] font-bold">
+                                            {{ $sortDirection === 'asc' ? '↑' : '↓' }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-400 group-hover:text-gray-600">⇅</span>
+                                    @endif
+                                </button>
+                            </th>
+                            @if($activeTab === 'organisation')
+                                <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">User Count</th>
+                            @endif
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Monthly Total</th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                <button wire:click="sortBy('status')" class="flex items-center space-x-2 hover:text-[#EB1C24] transition-colors duration-200 group">
+                                    <span class="font-semibold">Status</span>
+                                    @if($sortField === 'status')
+                                        <span class="text-[#EB1C24] font-bold">
+                                            {{ $sortDirection === 'asc' ? '↑' : '↓' }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-400 group-hover:text-gray-600">⇅</span>
+                                    @endif
+                                </button>
+                            </th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                <button wire:click="sortBy('payment_status')" class="flex items-center space-x-2 hover:text-[#EB1C24] transition-colors duration-200 group">
+                                    <span class="font-semibold">Payment Status</span>
+                                    @if($sortField === 'payment_status')
+                                        <span class="text-[#EB1C24] font-bold">
+                                            {{ $sortDirection === 'asc' ? '↑' : '↓' }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-400 group-hover:text-gray-600">⇅</span>
+                                    @endif
+                                </button>
+                            </th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                <button wire:click="sortBy('current_period_end')" class="flex items-center space-x-2 hover:text-[#EB1C24] transition-colors duration-200 group">
+                                    <span class="font-semibold">Period End</span>
+                                    @if($sortField === 'current_period_end')
+                                        <span class="text-[#EB1C24] font-bold">
+                                            {{ $sortDirection === 'asc' ? '↑' : '↓' }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-400 group-hover:text-gray-600">⇅</span>
+                                    @endif
+                                </button>
+                            </th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                <button wire:click="sortBy('next_billing_date')" class="flex items-center space-x-2 hover:text-[#EB1C24] transition-colors duration-200 group">
+                                    <span class="font-semibold">Next Billing</span>
+                                    @if($sortField === 'next_billing_date')
+                                        <span class="text-[#EB1C24] font-bold">
+                                            {{ $sortDirection === 'asc' ? '↑' : '↓' }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-400 group-hover:text-gray-600">⇅</span>
+                                    @endif
+                                </button>
+                            </th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                    @forelse($subscriptions as $item)
-                        <tr>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div>
-                                    <div class="font-medium text-gray-900">{{ $item['name'] }}</div>
-                                    @if($activeTab === 'organisation' && $item['type'] === 'organisation' && isset($item['user_count']))
-                                        <div class="text-sm text-gray-500">{{ $item['user_count'] }} user(s)</div>
-                                    @endif
-                                </div>
-                            </td>
-                            @if($activeTab === 'organisation')
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">
-                                        Organisation
-                                    </span>
+                    <tbody class="bg-white divide-y divide-gray-100">
+                        @forelse($subscriptions as $item)
+                            <tr class="hover:bg-gray-50 transition-colors duration-150 border-b border-gray-100">
+                                <td class="px-6 py-5 whitespace-nowrap">
+                                    <div class="flex flex-col">
+                                        <div class="font-semibold text-gray-900 text-sm mb-1">{{ $item['name'] }}</div>
+                                        @if($activeTab === 'basecamp' && isset($item['email']))
+                                            <div class="text-xs text-gray-500 font-normal">{{ $item['email'] }}</div>
+                                        @elseif($activeTab === 'organisation' && $item['type'] === 'organisation' && isset($item['user_count']))
+                                            <div class="text-xs text-gray-500 font-normal">{{ $item['user_count'] }} user(s)</div>
+                                        @endif
+                                    </div>
                                 </td>
-                            @endif
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                @if($item['subscription'])
-                                    <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
-                                        {{ ucfirst($item['subscription']->tier) }}
-                                    </span>
-                                @else
-                                    <span class="text-gray-400">-</span>
+                                @if($activeTab === 'organisation')
+                                    <td class="px-6 py-5 whitespace-nowrap">
+                                        <span class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full bg-gray-100 text-gray-700 shadow-sm">
+                                            Organisation
+                                        </span>
+                                    </td>
                                 @endif
-                            </td>
-                            @if($activeTab === 'organisation')
-                                <td class="px-6 py-4 whitespace-nowrap">
+                                <td class="px-6 py-5 whitespace-nowrap">
+                                    @if($item['subscription'])
+                                        <span class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-200 shadow-sm">
+                                            {{ ucfirst($item['subscription']->tier) }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-400 text-sm">-</span>
+                                    @endif
+                                </td>
+                                @if($activeTab === 'organisation')
+                                    <td class="px-6 py-5 whitespace-nowrap">
+                                        @if($item['subscription'])
+                                            @php
+                                                $actualCount = $item['user_count'] ?? 0;
+                                                $storedCount = $item['subscription']->user_count ?? 0;
+                                                $countMismatch = $actualCount != $storedCount;
+                                            @endphp
+                                            <div class="flex items-center gap-2">
+                                                <span class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-full border shadow-sm {{ $countMismatch ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200' }}" 
+                                                      title="{{ $countMismatch ? 'Mismatch: Actual users: ' . $actualCount . ', Stored: ' . $storedCount : 'User count: ' . $actualCount }}">
+                                                    {{ $actualCount }}
+                                                </span>
+                                                @if($countMismatch)
+                                                    <button wire:click="syncUserCount({{ $item['subscription']->id }})" 
+                                                            class="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                                                            title="Sync subscription user count with actual user count">
+                                                        Sync
+                                                    </button>
+                                                @endif
+                                            </div>
+                                        @else
+                                            <span class="text-gray-400 text-sm">-</span>
+                                        @endif
+                                    </td>
+                                @endif
+                                <td class="px-6 py-5 whitespace-nowrap">
                                     @if($item['subscription'])
                                         @php
-                                            $actualCount = $item['user_count'] ?? 0;
-                                            $storedCount = $item['subscription']->user_count ?? 0;
-                                            $countMismatch = $actualCount != $storedCount;
+                                            $prices = ['basecamp' => 10, 'spark' => 10, 'momentum' => 20, 'vision' => 30];
+                                            $pricePerUser = $prices[$item['subscription']->tier] ?? 0;
+                                            // Use actual user count instead of stored subscription user_count
+                                            $userCount = $item['type'] === 'basecamp' ? 1 : ($item['user_count'] ?? $item['subscription']->user_count);
+                                            $total = $pricePerUser * $userCount;
                                         @endphp
-                                        <div class="flex items-center gap-2">
-                                            <span class="px-2 py-1 text-xs font-semibold rounded-full {{ $countMismatch ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800' }}" 
-                                                  title="{{ $countMismatch ? 'Mismatch: Actual users: ' . $actualCount . ', Stored: ' . $storedCount : 'User count: ' . $actualCount }}">
-                                                {{ $actualCount }}
-                                            </span>
-                                            @if($countMismatch)
-                                                <button wire:click="syncUserCount({{ $item['subscription']->id }})" 
-                                                        class="text-xs text-blue-600 hover:text-blue-800 underline"
-                                                        title="Sync subscription user count with actual user count">
-                                                    Sync
-                                                </button>
-                                            @endif
-                                        </div>
+                                        <span class="text-sm font-semibold text-gray-900">£{{ number_format($total, 2) }}</span>
                                     @else
-                                        <span class="text-gray-400">-</span>
+                                        <span class="text-gray-400 text-sm">-</span>
                                     @endif
                                 </td>
-                            @endif
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                @if($item['subscription'])
-                                    @php
-                                        $prices = ['basecamp' => 10, 'spark' => 10, 'momentum' => 20, 'vision' => 30];
-                                        $pricePerUser = $prices[$item['subscription']->tier] ?? 0;
-                                        // Use actual user count instead of stored subscription user_count
-                                        $userCount = $item['type'] === 'basecamp' ? 1 : ($item['user_count'] ?? $item['subscription']->user_count);
-                                        $total = $pricePerUser * $userCount;
-                                    @endphp
-                                    £{{ number_format($total, 2) }}
-                                @else
-                                    <span class="text-gray-400">-</span>
-                                @endif
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                @if($item['subscription'])
-                                    <span class="px-2 py-1 text-xs rounded-full {{ $item['subscription']->status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' }}">
-                                        {{ ucfirst($item['subscription']->status) }}
-                                    </span>
-                                @else
-                                    <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">
-                                        No Subscription
-                                    </span>
-                                @endif
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                @if($item['subscription'] && isset($item['payment_status']))
-                                    <span class="px-2 py-1 text-xs rounded-full {{ $item['payment_status'] === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800' }}">
-                                        {{ $item['payment_status'] === 'paid' ? 'Paid' : 'Unpaid' }}
-                                    </span>
-                                @else
-                                    <span class="text-gray-400">-</span>
-                                @endif
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                @if($item['subscription'] && $item['subscription']->current_period_end)
-                                    <span class="{{ \Carbon\Carbon::parse($item['subscription']->current_period_end)->isPast() ? 'text-red-600 font-semibold' : '' }}">
-                                        {{ $item['subscription']->current_period_end->format('M d, Y') }}
-                                    </span>
-                                @else
-                                    <span class="text-gray-400">-</span>
-                                @endif
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                @if($item['subscription'] && $item['subscription']->next_billing_date)
-                                    {{ $item['subscription']->next_billing_date->format('M d, Y') }}
-                                @else
-                                    <span class="text-gray-400">-</span>
-                                @endif
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="flex items-center gap-2 flex-wrap">
+                                <td class="px-6 py-5 whitespace-nowrap">
                                     @if($item['subscription'])
-                                        <button 
-                                            wire:click="openEditModal({{ $item['subscription']->id }})" 
-                                            type="button" 
-                                            class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded border border-blue-200 transition-all duration-200 cursor-pointer">
-                                            Edit
-                                        </button>
-                                        @if($item['subscription']->status === 'active')
-                                            <button 
-                                                wire:click="pauseSubscription({{ $item['subscription']->id }})" 
-                                                wire:confirm="Are you sure you want to pause this subscription?"
-                                                type="button" 
-                                                class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-yellow-600 hover:text-yellow-800 hover:bg-yellow-50 rounded border border-yellow-200 transition-all duration-200 cursor-pointer">
-                                                Pause
-                                            </button>
-                                        @elseif($item['subscription']->status === 'suspended')
-                                            <button 
-                                                wire:click="resumeSubscription({{ $item['subscription']->id }})" 
-                                                wire:confirm="Are you sure you want to resume this subscription?"
-                                                type="button" 
-                                                class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded border border-green-200 transition-all duration-200 cursor-pointer">
-                                                Resume
-                                            </button>
-                                        @endif
-                                        @if(isset($item['payment_status']) && $item['payment_status'] === 'unpaid')
-                                            <button 
-                                                wire:click="deleteUnpaidSubscription({{ $item['subscription']->id }})" 
-                                                wire:confirm="Are you sure you want to delete this unpaid subscription? This will also delete all unpaid invoices. This action cannot be undone."
-                                                type="button" 
-                                                class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-800 hover:bg-red-50 rounded border border-red-200 transition-all duration-200 cursor-pointer">
-                                                Delete
-                                            </button>
-                                        @endif
+                                        @php
+                                            $statusClass = '';
+                                            $statusText = ucfirst($item['subscription']->status);
+                                            if ($item['subscription']->status === 'active') {
+                                                $statusClass = 'bg-green-50 text-green-700 border-green-200';
+                                            } elseif (in_array($item['subscription']->status, ['suspended', 'inactive', 'canceled'])) {
+                                                $statusClass = 'bg-red-50 text-red-700 border-red-200';
+                                            } else {
+                                                $statusClass = 'bg-gray-50 text-gray-700 border-gray-200';
+                                            }
+                                        @endphp
+                                        <span class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-full border shadow-sm {{ $statusClass }}">
+                                            {{ $statusText }}
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-full bg-gray-50 text-gray-700 border border-gray-200 shadow-sm">
+                                            No Subscription
+                                        </span>
                                     @endif
-                                </div>
-                            </td>
+                                </td>
+                                <td class="px-6 py-5 whitespace-nowrap">
+                                    @if($item['subscription'] && isset($item['payment_status']))
+                                        <span class="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-full border shadow-sm {{ $item['payment_status'] === 'paid' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200' }}">
+                                            {{ $item['payment_status'] === 'paid' ? 'Paid' : 'Unpaid' }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-400 text-sm">-</span>
+                                    @endif
+                                </td>
+                                <td class="px-6 py-5 whitespace-nowrap">
+                                    @if($item['subscription'] && $item['subscription']->current_period_end)
+                                        <span class="text-sm font-medium {{ \Carbon\Carbon::parse($item['subscription']->current_period_end)->isPast() ? 'text-red-600 font-semibold' : 'text-gray-700' }}">
+                                            {{ $item['subscription']->current_period_end->format('M d, Y') }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-400 text-sm">-</span>
+                                    @endif
+                                </td>
+                                <td class="px-6 py-5 whitespace-nowrap">
+                                    @if($item['subscription'] && $item['subscription']->next_billing_date)
+                                        <span class="text-sm font-medium text-gray-700">
+                                            {{ $item['subscription']->next_billing_date->format('M d, Y') }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-400 text-sm">-</span>
+                                    @endif
+                                </td>
+                                <td class="px-6 py-5 whitespace-nowrap">
+                                    <div class="flex items-center gap-1.5">
+                                        @if($item['subscription'])
+                                            <button 
+                                                wire:click="openEditModal({{ $item['subscription']->id }})" 
+                                                type="button" 
+                                                class="inline-flex items-center justify-center w-8 h-8 text-blue-600 hover:text-white hover:bg-blue-600 rounded-md border border-blue-300 bg-blue-50 shadow-sm transition-all duration-200 cursor-pointer group"
+                                                title="Edit Subscription">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                </svg>
+                                            </button>
+                                            @if($item['subscription']->status === 'active')
+                                                <button 
+                                                    wire:click="pauseSubscription({{ $item['subscription']->id }})" 
+                                                    wire:confirm="Are you sure you want to pause this subscription?"
+                                                    type="button" 
+                                                    class="inline-flex items-center justify-center w-8 h-8 text-yellow-600 hover:text-white hover:bg-yellow-600 rounded-md border border-yellow-300 bg-yellow-50 shadow-sm transition-all duration-200 cursor-pointer group"
+                                                    title="Pause Subscription">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                    </svg>
+                                                </button>
+                                            @elseif($item['subscription']->status === 'suspended')
+                                                <button 
+                                                    wire:click="resumeSubscription({{ $item['subscription']->id }})" 
+                                                    wire:confirm="Are you sure you want to resume this subscription?"
+                                                    type="button" 
+                                                    class="inline-flex items-center justify-center w-8 h-8 text-green-600 hover:text-white hover:bg-green-600 rounded-md border border-green-300 bg-green-50 shadow-sm transition-all duration-200 cursor-pointer group"
+                                                    title="Resume Subscription">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                    </svg>
+                                                </button>
+                                            @endif
+                                            @if(isset($item['payment_status']) && $item['payment_status'] === 'unpaid')
+                                                <button 
+                                                    wire:click="deleteUnpaidSubscription({{ $item['subscription']->id }})" 
+                                                    wire:confirm="Are you sure you want to delete this unpaid subscription? This will also delete all unpaid invoices. This action cannot be undone."
+                                                    type="button" 
+                                                    class="inline-flex items-center justify-center w-8 h-8 text-red-600 hover:text-white hover:bg-red-600 rounded-md border border-red-300 bg-red-50 shadow-sm transition-all duration-200 cursor-pointer group"
+                                                    title="Delete Subscription">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                    </svg>
+                                                </button>
+                                            @endif
+                                        @endif
+                                    </div>
+                                </td>
                         </tr>
-                    @empty
-                        <tr>
-                            <td colspan="{{ $activeTab === 'organisation' ? '10' : '9' }}" class="px-6 py-4 text-center text-gray-500">
-                                No {{ $activeTab === 'organisation' ? 'organisations' : 'basecamp users' }} found
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
+                        @empty
+                            <tr>
+                                <td colspan="{{ $activeTab === 'organisation' ? '10' : '9' }}" class="px-6 py-12 text-center">
+                                    <div class="flex flex-col items-center justify-center">
+                                        <svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                                        </svg>
+                                        <p class="text-gray-500 text-sm font-medium">No {{ $activeTab === 'organisation' ? 'organisations' : 'basecamp users' }} found</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <div class="mt-4">
