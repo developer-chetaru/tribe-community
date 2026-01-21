@@ -46,6 +46,9 @@ class ManageSubscriptions extends Component
     // Sorting properties
     public $sortField = 'created_at'; // Default: latest first
     public $sortDirection = 'desc'; // 'asc' or 'desc'
+    
+    // Pagination state
+    public $page = 1;
 
     public function mount()
     {
@@ -821,24 +824,95 @@ class ManageSubscriptions extends Component
         
         $sorted = $sorted->values();
         
-        // Manual pagination
+        // Manual pagination using Livewire's pagination state
         $perPage = 15;
+        
+        // Get current page from Livewire pagination or request
         $currentPage = $this->getPage();
+        if (!$currentPage || $currentPage < 1) {
+            $currentPage = 1;
+        }
+        
         $items = $sorted->slice(($currentPage - 1) * $perPage, $perPage)->values();
         $total = $sorted->count();
         
-        return new \Illuminate\Pagination\LengthAwarePaginator(
+        // Build query parameters for pagination links (preserve filters and search)
+        $queryParams = [];
+        if ($this->search) {
+            $queryParams['search'] = $this->search;
+        }
+        if ($this->accountStatusFilter) {
+            $queryParams['accountStatusFilter'] = $this->accountStatusFilter;
+        }
+        if ($this->paymentStatusFilter) {
+            $queryParams['paymentStatusFilter'] = $this->paymentStatusFilter;
+        }
+        if ($this->nextBillingDateFilter) {
+            $queryParams['nextBillingDateFilter'] = $this->nextBillingDateFilter;
+        }
+        if ($this->sortField) {
+            $queryParams['sortField'] = $this->sortField;
+        }
+        if ($this->sortDirection) {
+            $queryParams['sortDirection'] = $this->sortDirection;
+        }
+        
+        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
             $items,
             $total,
             $perPage,
             $currentPage,
-            ['path' => request()->url(), 'query' => request()->query()]
+            [
+                'path' => request()->url(),
+                'pageName' => 'page',
+                'query' => $queryParams
+            ]
         );
+        
+        // Set the page property for Livewire
+        $this->page = $currentPage;
+        
+        return $paginator;
     }
     
     public function getPage()
     {
-        return request()->get('page', 1);
+        // Get page from request query parameter (Livewire pagination uses this)
+        $page = request()->get('page', $this->page ?? 1);
+        
+        // Ensure page is a valid integer
+        $page = (int) $page;
+        if ($page < 1) {
+            $page = 1;
+        }
+        
+        // Update component's page property
+        $this->page = $page;
+        
+        return $page;
+    }
+    
+    // Livewire pagination methods - required for pagination links to work
+    public function gotoPage($page, $pageName = 'page')
+    {
+        $this->page = (int) $page;
+        if ($this->page < 1) {
+            $this->page = 1;
+        }
+    }
+    
+    public function nextPage($pageName = 'page')
+    {
+        $currentPage = $this->page ?? 1;
+        $this->page = $currentPage + 1;
+    }
+    
+    public function previousPage($pageName = 'page')
+    {
+        $currentPage = $this->page ?? 1;
+        if ($currentPage > 1) {
+            $this->page = $currentPage - 1;
+        }
     }
 
 

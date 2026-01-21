@@ -366,9 +366,18 @@
             </div>
         </div>
 
-        <div class="mt-4">
-            {{ $subscriptions->links() }}
-        </div>
+        @if($subscriptions->hasPages())
+            <div class="mt-6">
+                <div class="flex items-center justify-between">
+                    <div class="text-sm text-gray-700">
+                        Showing {{ $subscriptions->firstItem() ?? 0 }} to {{ $subscriptions->lastItem() ?? 0 }} of {{ $subscriptions->total() }} results
+                    </div>
+                    <div>
+                        {{ $subscriptions->links() }}
+                    </div>
+                </div>
+            </div>
+        @endif
     </div>
 </div>
 
