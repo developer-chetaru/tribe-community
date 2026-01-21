@@ -44,10 +44,12 @@
     <div class="flex items-center mb-5">  
         <ul class="tab-menu flex items-center flex-wrap sm:flex-nowrap">
             @foreach($principleArray['principleData'] ?? [] as $principle)
-                <li wire:click="setActivePrinciple({{ $principle['id'] }})" 
-                    class="tab-btn cursor-pointer flex items-center px-4 py-2 mb-1 font-medium rounded-md text-[13px] sm:text-[16px] mr-4
-                        {{ $activePrincipleId == $principle['id'] ? 'bg-[#EB1C24] text-white border-none' : 'bg-[#F8F9FA] text-[#020202] border border-[#020202]' }}">
-                    {{ $principle['title'] }}
+                <li>
+                    <a href="{{ route('hptm.list', ['activePrincipleId' => $principle['id']]) }}" 
+                       class="tab-btn cursor-pointer flex items-center px-4 py-2 mb-1 font-medium rounded-md text-[13px] sm:text-[16px] mr-4
+                           {{ $activePrincipleId == $principle['id'] ? 'bg-[#EB1C24] text-white border-none' : 'bg-[#F8F9FA] text-[#020202] border border-[#020202]' }}">
+                        {{ $principle['title'] }}
+                    </a>
                 </li> 
             @endforeach
         </ul>

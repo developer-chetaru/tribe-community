@@ -20,9 +20,8 @@ class Userhptm extends Component
   	public $activePrincipleId;
     public $allSelectedByType = [];
     public $learningCheckListsFlat = [];
-    protected $queryString = ['activePrincipleId'];
 
-public function mount()
+public function mount($activePrincipleId = null)
 {
     $user = auth()->user();
     
@@ -179,7 +178,13 @@ public function mount()
     }
 
     $this->principleArray = $principleArray;
-    $this->activePrincipleId = $this->activePrincipleId ?: ($principles->first()->id ?? null);
+    
+    // Set activePrincipleId from route parameter or use first principle
+    if ($activePrincipleId) {
+        $this->activePrincipleId = $activePrincipleId;
+    } elseif (!$this->activePrincipleId) {
+        $this->activePrincipleId = $principles->first()->id ?? null;
+    }
 
     logger()->info('allSelectedByType on mount', $this->allSelectedByType);
 }
@@ -207,6 +212,8 @@ public function mount()
 public function setActivePrinciple($principleId)
 {
     $this->activePrincipleId = $principleId;
+    // Redirect to new URL pattern
+    return $this->redirect(route('hptm.list', ['activePrincipleId' => $principleId]), navigate: true);
 }
 
 

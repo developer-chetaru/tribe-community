@@ -82,13 +82,13 @@
        class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
       :class="[
                $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
-               window.location.pathname === '{{ route('hptm.list', [], false) }}' 
+               window.location.pathname.startsWith('{{ route('hptm.list', [], false) }}') 
                    ? 'bg-red-100 text-red-600 font-semibold' 
                    : 'text-gray-700 hover:bg-gray-100'
            ]"
       >
         <img 
-                :src="window.location.pathname === '{{ route('hptm.list', [], false) }}' 
+                :src="window.location.pathname.startsWith('{{ route('hptm.list', [], false) }}') 
                     ? '{{ asset('images/organisations-active.svg') }}' 
                     : '{{ asset('images/organisations.svg') }}'" 
                 class="h-5 w-5" />

@@ -276,7 +276,7 @@ Route::middleware([
   	Route::get('/weekly-summary', WeeklySummary::class)->name('weekly.summary');
     Route::get('/monthly-summary', MonthlySummary::class)->name('monthly.summary');
     // Routes accessible to all authenticated users (organisation_user, organisation_admin, basecamp)
-    Route::get('/hptm', Userhptm::class)->name('hptm.list');
+    Route::get('/hptm/{activePrincipleId?}', Userhptm::class)->name('hptm.list');
     Route::get('/user/notifications', Notifications::class)->name('user.notifications');
     Route::get('/reflection-list', ReflectionList::class)->name('admin.reflections.index');
     Route::get('/reflections/create', ReflectionCreate::class)->name('reflection.create');
