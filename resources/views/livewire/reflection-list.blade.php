@@ -1,40 +1,43 @@
 <div>
-    <div class="flex-1 overflow-auto bg-[#f6f8fa]">
-        <div class="mx-auto p-3 sm:p-4 lg:p-6">
+    <div class="flex-1 overflow-auto bg-[#f6f8fa]" style="height: calc(100vh - 80px);">
+        <div class="mx-auto p-2 sm:p-3 lg:p-4" style="min-height: 100%;">
             {{-- Filters / Search --}}
-            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 space-y-3 lg:space-y-0 gap-3">
+            <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-2 space-y-2 lg:space-y-0 gap-2">
 
-                {{-- Search by Topic --}}
-                <div class="relative w-full lg:max-w-[320px]">
-                    <span class="absolute top-3.5 left-3 flex items-center text-gray-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
-                            <path fill-rule="evenodd"
-                                d="M10.5 3.75a6.75 6.75 0 1 0 0 13.5 6.75 6.75 0 0 0 0-13.5ZM2.25 10.5a8.25 8.25 0 1 1 14.59 5.28l4.69 4.69a.75.75 0 1 1-1.06 1.06l-4.69-4.69A8.25 8.25 0 0 1 2.25 10.5Z"
-                                clip-rule="evenodd" />
-                        </svg>
-                    </span>
-                    <input
-                        type="text"
-                        wire:model.live="searchTopic"
-                        placeholder="Search by topic"
-                        class="w-full bg-white placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-md pl-9 pr-5 py-3 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                </div>
+                {{-- Filters Group: Search and Status together --}}
+                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                    {{-- Search by Topic --}}
+                    <div class="relative w-full sm:w-auto sm:flex-1 lg:max-w-[320px]">
+                        <span class="absolute top-3.5 left-3 flex items-center text-gray-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
+                                <path fill-rule="evenodd"
+                                    d="M10.5 3.75a6.75 6.75 0 1 0 0 13.5 6.75 6.75 0 0 0 0-13.5ZM2.25 10.5a8.25 8.25 0 1 1 14.59 5.28l4.69 4.69a.75.75 0 1 1-1.06 1.06l-4.69-4.69A8.25 8.25 0 0 1 2.25 10.5Z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                        </span>
+                        <input
+                            type="text"
+                            wire:model.live="searchTopic"
+                            placeholder="Search by topic"
+                            class="w-full bg-white placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-md pl-9 pr-5 py-3 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
 
-                {{-- Status Filter --}}
-                <div class="w-full sm:w-auto flex-1 sm:flex-none">
-                    <select wire:model.live="statusFilter"
-                        class="bg-white text-sm border border-slate-200 rounded-md pl-3 pr-10 py-2.5 sm:py-3 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-auto min-w-[160px]">
-                        <option value="">All Status</option>
-                        <option value="new">New</option>
-                        <option value="inprogress">In Progress</option>
-                        <option value="resolved">Resolved</option>
-                    </select>
+                    {{-- Status Filter --}}
+                    <div class="w-full sm:w-auto flex-shrink-0">
+                        <select wire:model.live="statusFilter"
+                            class="bg-white text-sm border border-slate-200 rounded-md pl-3 pr-10 py-2.5 sm:py-3 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-auto min-w-[160px]">
+                            <option value="">All Status</option>
+                            <option value="new">New</option>
+                            <option value="inprogress">In Progress</option>
+                            <option value="resolved">Resolved</option>
+                        </select>
+                    </div>
                 </div>
 
                 {{-- Organisation & Office Filters --}}
                 @role('super_admin')
-                <div class="w-full lg:w-auto flex flex-col sm:flex-row items-start sm:items-center gap-3 lg:gap-4">
+                <div class="w-full lg:w-auto flex flex-col sm:flex-row items-start sm:items-center gap-2">
                     {{-- Organisation Dropdown --}}
                     <div class="w-full sm:w-auto flex-1 sm:flex-none">
                         <select wire:model.live="orgId"
@@ -76,20 +79,20 @@
             </div>
 
             {{-- Reflection Grid --}}
-            <div class="grid gap-3 sm:gap-4 mt-4 sm:mt-6 grid-cols-1 lg:grid-cols-3">
+            <div class="grid gap-2 mt-2 grid-cols-1 lg:grid-cols-3" style="height: calc(100vh - 200px);">
 
                 {{-- Left Column: List of Reflection Boxes --}}
-                <div class="bg-white p-3 sm:p-4 border-gray-300 rounded-md border shadow-sm overflow-y-auto block" wire:poll.3s="$refresh">
+                <div class="bg-white p-2 sm:p-3 border-gray-300 rounded-md border shadow-sm overflow-y-auto block" style="height: 100%; max-height: 100%;" wire:poll.3s="$refresh">
                     @forelse($reflectionList as $r)
                         <div 
-                            class="reflection-box bg-white border-2 {{ (isset($selectedReflection['id']) && $selectedReflection['id'] == $r['id']) ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300' }} p-4 rounded-lg mb-3 cursor-pointer transition-all hover:shadow-md"
+                            class="reflection-box bg-white border-2 {{ (isset($selectedReflection['id']) && $selectedReflection['id'] == $r['id']) ? 'border-red-500 bg-red-50' : 'border-gray-200 hover:border-gray-300' }} p-2 rounded-lg mb-2 cursor-pointer transition-all hover:shadow-md"
                             wire:click="openChat({{ $r['id'] }})"
                         >
-                            <div class="flex items-start justify-between mb-2">
+                            <div class="flex items-start justify-between mb-1.5">
                                 <div class="flex-1 min-w-0">
-                                    <h3 class="text-gray-800 text-[16px] font-semibold flex-1 line-clamp-2">{{ $r['topic'] }}</h3>
+                                    <h3 class="text-gray-800 text-[15px] font-semibold flex-1 line-clamp-2">{{ $r['topic'] }}</h3>
                                     @if(isset($r['unreadCount']) && $r['unreadCount'] > 0)
-                                        <div class="mt-1">
+                                        <div class="mt-0.5">
                                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                                 <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                                     <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"></path>
@@ -113,15 +116,15 @@
                                 @endrole
                             </div>
                             
-                            <div class="space-y-2">
-                                <div class="flex items-center gap-2 text-xs text-gray-600">
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-1.5 text-xs text-gray-600">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                     </svg>
                                     <span class="font-medium text-gray-700">{{ $r['userName'] ?? auth()->user()->name }}</span>
                                 </div>
                                 
-                                <div class="flex items-center gap-2 text-xs text-gray-600">
+                                <div class="flex items-center gap-1.5 text-xs text-gray-600">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                                     </svg>
@@ -129,7 +132,7 @@
                                 </div>
                                 
                                 @role('super_admin')
-                                <div class="flex items-center gap-2 text-xs text-gray-600">
+                                <div class="flex items-center gap-1.5 text-xs text-gray-600">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                                     </svg>
@@ -137,7 +140,7 @@
                                 </div>
                                 @endrole
                                 
-                                <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+                                <div class="flex items-center justify-between pt-1.5 border-t border-gray-100">
                                     <span class="px-2.5 py-1 rounded-full text-xs font-medium
                                         {{ $r['status'] == 'new' ? 'bg-red-100 text-red-700' : ($r['status'] == 'inprogress' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700') }}">
                                         {{ $r['status'] == 'inprogress' ? 'In Progress' : ucfirst($r['status']) }}
@@ -161,17 +164,17 @@
 
 
                 {{-- Right Column: Chat / Reflection Details --}}
-                <div class="reflection-right bg-white border-gray-300 lg:col-span-2 rounded-md border border-[#E5E5E5] flex flex-col h-full min-h-[400px] sm:min-h-[500px] lg:min-h-0 block">
+                <div class="reflection-right bg-white border-gray-300 lg:col-span-2 rounded-md border border-[#E5E5E5] flex flex-col block" style="height: 100%; max-height: 100%; display: flex; flex-direction: column;">
                     @if($showChatModal)
 
                         {{-- Chat Header --}}
-                        <div class="bg-gradient-to-r from-red-50 to-white border-b border-gray-200 p-4 sm:p-5 rounded-t-md">
-                            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-3">
+                        <div class="bg-gradient-to-r from-red-50 to-white border-b border-gray-200 p-2 sm:p-3 rounded-t-md flex-shrink-0">
+                            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-2">
                                 <div class="flex-1 min-w-0">
-                                    <h3 class="text-[#EB1C24] text-lg sm:text-[22px] font-semibold mb-2 truncate">
+                                    <h3 class="text-[#EB1C24] text-base sm:text-lg font-semibold mb-1 truncate">
                                         {{ $selectedReflection['topic'] ?? 'Team Conflict' }}
                                     </h3>
-                                    <div class="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
+                                    <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600">
                                         <span class="flex items-center gap-1">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
@@ -190,7 +193,7 @@
                                         </span>
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-2 flex-shrink-0">
+                                <div class="flex items-center gap-1.5 flex-shrink-0">
                                     <label class="text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">Status:</label>
                                     <div 
                                         x-data="{ 
@@ -298,19 +301,19 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="mt-3 pt-3 border-t border-gray-200">
-                                <p class="text-xs sm:text-sm text-gray-600 mb-1 font-medium">Message:</p>
-                                <p class="text-sm sm:text-[15px] text-gray-800 leading-relaxed break-words">
+                            <div class="mt-1.5 pt-1.5 border-t border-gray-200 flex-shrink-0">
+                                <p class="text-xs sm:text-sm text-gray-600 mb-0.5 font-medium">Message:</p>
+                                <p class="text-xs sm:text-sm text-gray-800 leading-relaxed break-words">
                                     {{ $selectedReflection['message'] ?? 'No message available' }}
                                 </p>
                             </div>
                         </div>
 
                         {{-- Chat Messages --}}
-                        <div wire:poll.2s="pollChatMessages" class="bg-gray-50 p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 flex-1 overflow-y-auto min-h-[300px] sm:min-h-[400px]" id="chat-box">
+                        <div wire:poll.2s="pollChatMessages" class="bg-gray-50 p-2 sm:p-3 space-y-2 flex-1 overflow-y-auto" style="min-height: 0; overflow-x: hidden;" id="chat-box">
                             @forelse($chatMessages as $msg)
                                 <div class="flex {{ $msg['from'] === auth()->id() ? 'justify-end' : 'justify-start' }} w-full">
-                                    <div class="flex items-start gap-2 sm:gap-3 max-w-[85%] sm:max-w-[75%] {{ $msg['from'] === auth()->id() ? 'flex-row-reverse' : 'flex-row' }}">
+                                    <div class="flex items-start gap-1.5 sm:gap-2 max-w-[85%] sm:max-w-[75%] {{ $msg['from'] === auth()->id() ? 'flex-row-reverse' : 'flex-row' }}">
                                         {{-- User Avatar --}}
                                         <div class="flex-shrink-0">
                                             @if(!empty($msg['user_profile_photo']))
@@ -324,7 +327,7 @@
 
                                         {{-- Message Content --}}
                                         <div class="flex flex-col {{ $msg['from'] === auth()->id() ? 'items-end' : 'items-start' }} min-w-0 flex-1">
-                                            <div class="bg-white rounded-lg shadow-sm px-3 py-2 sm:px-4 sm:py-3 {{ $msg['from'] === auth()->id() ? 'bg-red-50 border border-red-100' : 'border border-gray-200' }} max-w-full">
+                                            <div class="bg-white rounded-lg shadow-sm px-2 py-1.5 sm:px-3 sm:py-2 {{ $msg['from'] === auth()->id() ? 'bg-red-50 border border-red-100' : 'border border-gray-200' }} max-w-full">
                                                 @if(!empty($msg['message']))
                                                     <p class="text-gray-800 text-sm sm:text-[15px] leading-relaxed whitespace-pre-wrap break-words">{{ $msg['message'] }}</p>
                                                 @endif
@@ -383,7 +386,7 @@
                                                     </div>
                                                 @endif
                                             </div>
-                                            <div class="flex items-center gap-1.5 sm:gap-2 mt-1 px-1">
+                                            <div class="flex items-center gap-1 mt-0.5 px-1">
                                                 <span class="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">{{ $msg['time'] }}</span>
                                                 @if($msg['from'] === auth()->id())
                                                     <span class="text-[10px] sm:text-xs text-gray-400">•</span>
@@ -409,7 +412,7 @@
                         </div>
 
                         {{-- Input Row --}}
-                        <div class="border-t border-gray-200 bg-white p-3 sm:p-4 rounded-b-md" 
+                        <div class="border-t border-gray-200 bg-white p-2 sm:p-3 rounded-b-md flex-shrink-0" 
                              x-data="{ 
                                 filesSelected: false,
                                 checkFiles() {
@@ -453,7 +456,7 @@
                             @endif
                             
                             <form wire:submit.prevent="sendChatMessage" 
-                                  class="flex items-end gap-2 sm:gap-3" 
+                                  class="flex items-end gap-1.5 sm:gap-2" 
                                   x-data="{ filePreviews: {} }"
                                   x-on:livewire:message-sent.window="$wire.set('alertMessage', ''); $wire.set('alertType', '');"
                                   x-init="
@@ -547,7 +550,7 @@
                                         wire:model.defer="newChatMessage" 
                                         placeholder="Write your reply..." 
                                         rows="2"
-                                        class="w-full border border-gray-300 rounded-lg px-3 sm:px-4 py-2 sm:py-3 pr-10 sm:pr-12 bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none text-sm"
+                                        class="w-full border border-gray-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 pr-8 sm:pr-10 bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none text-sm"
                                         x-on:keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); $wire.call('sendChatMessage'); }"
                                         x-on:paste="$data.handlePaste($event)"
                                         x-on:input="$wire.set('alertMessage', '')"
@@ -567,10 +570,10 @@
                                     <button 
                                         type="button"
                                         onclick="document.getElementById('chatFileInput').click()" 
-                                        class="absolute right-2 sm:right-3 bottom-2 sm:bottom-3 p-1.5 text-gray-400 hover:text-gray-600 transition-colors rounded hover:bg-gray-100"
+                                        class="absolute right-1.5 sm:right-2 bottom-1.5 sm:bottom-2 p-1 text-gray-400 hover:text-gray-600 transition-colors rounded hover:bg-gray-100"
                                         title="Attach file"
                                     >
-                                        <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
                                         </svg>
                                     </button>
@@ -580,16 +583,16 @@
                                     type="submit"
                                     wire:loading.attr="disabled"
                                     wire:target="sendChatMessage,newChatImages"
-                                    class="bg-[#EB1C24] hover:bg-red-700 text-white px-3 sm:px-5 py-2.5 sm:py-3 rounded-lg flex items-center justify-center gap-1 sm:gap-2 transition-colors shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                                    class="bg-[#EB1C24] hover:bg-red-700 text-white px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg flex items-center justify-center gap-1 sm:gap-2 transition-colors shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                                     title="Send message"
                                 >
                                     <span wire:loading.remove wire:target="sendChatMessage,newChatImages">
-                                        <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
                                         </svg>
                                     </span>
-                                    <span wire:loading wire:target="sendChatMessage,newChatImages" class="flex items-center gap-2">
-                                        <svg class="animate-spin h-4 w-4 sm:h-5 sm:w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <span wire:loading wire:target="sendChatMessage,newChatImages" class="flex items-center gap-1.5">
+                                        <svg class="animate-spin h-3.5 w-3.5 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                         </svg>

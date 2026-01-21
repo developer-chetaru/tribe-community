@@ -1,6 +1,6 @@
 <div class="flex flex-col border border-gray-100 rounded-md summary-info" x-data="{ openFilter: false }">
-    <div class="flex px-3 py-4 justify-between w-full flex-wrap sm:flex-nowrap">
-        <h3 class="text-[14px] sm:text-[20px] text-[#EB1C24] font-semibold mb-2 sm:mb-0">Daily Summary</h3>
+    <div class="flex px-3 py-2 justify-between w-full flex-wrap sm:flex-nowrap">
+        <h3 class="text-[14px] sm:text-[20px] text-[#EB1C24] font-semibold mb-1 sm:mb-0">Daily Summary</h3>
 
         <div x-data="{ open: false }" x-on:summary-saved.window="open = false">
 
@@ -112,39 +112,40 @@
     </div>
 
     <!-- Summary Content -->
-    <div class="flex flex-wrap overflow-auto bg-[#F8F8F8] p-4 w-full h-[539px]">
+    <div class="flex flex-col overflow-auto bg-[#F8F8F8] p-2 w-full h-[539px]">
         @forelse($summary as $item)
-            <div class="flex bg-white p-3 w-full rounded-md mb-3 flex-wrap sm:flex-nowrap">
-                <div class="sentiment-view  sm:px-3 sm:py-3">
-                    <img src="{{ asset('images/' . $item['image']) }}" class="max-w-[26px] max-h-[26px]">
+            <div class="flex bg-white rounded-md mb-2 items-center w-full" style="padding: 4px 6px; height: fit-content;">
+                <div class="sentiment-view flex-shrink-0" style="padding: 0 6px 0 0;">
+                    <img src="{{ asset('images/' . $item['image']) }}" style="width: 26px; height: 26px; display: block;">
                 </div>
-                <div class="summary-content pt-2 sm:pt-0 pl-0 sm:pl-2">
+                <div class="summary-content flex items-center gap-2 flex-wrap" style="line-height: 1.2; flex: 1;">
                     @if($item['status'] === 'Present')
-                        <span class="date-time text-[12px] sm:text-[14px] text-[#01010180]">
+                        <span class="date-time text-[12px] sm:text-[14px] text-[#01010180] whitespace-nowrap">
                             {{ $item['date'] }}
-                            <span class="ml-1 p-1 bg-[#7A9865] rounded-sm px-2 text-white">
-                                {{ $item['status'] }}
-                            </span>
+                        </span>
+                        <span class="bg-[#7A9865] rounded-sm px-2 py-0.5 text-white text-[10px] sm:text-[11px] whitespace-nowrap" style="line-height: 1.3;">
+                            {{ $item['status'] }}
                         </span>
                     @elseif($item['status'] === 'Out of office')
-                        <span class="date-time text-[12px] sm:text-[14px] text-[#01010180]">
+                        <span class="date-time text-[12px] sm:text-[14px] text-[#01010180] whitespace-nowrap">
                             {{ $item['date'] }}
-                            <span class="ml-1 p-1 bg-blue-500 rounded-sm px-2 text-white">
-                                OOO
-                            </span>
+                        </span>
+                        <span class="bg-blue-500 rounded-sm px-2 py-0.5 text-white text-[10px] sm:text-[11px] whitespace-nowrap" style="line-height: 1.3;">
+                            OOO
                         </span>
                     @elseif($item['status'] === 'Missed')
-                        <span class="date-time text-[12px] sm:text-[14px] text-[#01010180]">
+                        <span class="date-time text-[12px] sm:text-[14px] text-[#01010180] whitespace-nowrap">
                             {{ $item['date'] }}
-                            <span class="ml-1 p-1 bg-red-500 rounded-sm px-2 text-white">
-                                Missed
-                            </span>
+                        </span>
+                        <span class="bg-red-500 rounded-sm px-2 py-0.5 text-white text-[10px] sm:text-[11px] whitespace-nowrap" style="line-height: 1.3;">
+                            Missed
                         </span>
                     @endif
-                    <p class="text-[#010101] text-[12px] sm:text-[14px] lg:text-[16px] pl-0  sm:pl-3 sm:border-l leading-[1.3] mt-2 border-gray-200 first-letter:uppercase">
-                        {{ $item['description'] }}
-                  
-                    </p>
+                    @if(!empty($item['description']))
+                        <span class="text-[#010101] text-[12px] sm:text-[14px] lg:text-[16px] first-letter:uppercase" style="line-height: 1.3;">
+                            {{ $item['description'] }}
+                        </span>
+                    @endif
                 </div>
             </div>
         @empty

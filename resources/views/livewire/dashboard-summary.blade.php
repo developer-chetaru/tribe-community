@@ -37,15 +37,15 @@
         </div>
     </div>
 @else
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4" x-data="{ openModal: false, modalData: { day: null, score: null, desc: null } }">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3" x-data="{ openModal: false, modalData: { day: null, score: null, desc: null } }">
     <div class="flex flex-wrap border border-gray-100 rounded-md w-full">
-        <div class="flex px-3 py-4">
+        <div class="flex px-3 py-2">
             <h3 class="text-[14px] sm:text-[20px] text-[#EB1C24] font-semibold">Sentiment Index</h3>
         </div>
 <div
   x-data="{ open: false,  selectedText: '',    selectedImage: '', showDatePicker: false, startDate: '', endDate: '' }"
   x-on:close-leave-modal.window="open = false; showDatePicker = false"
-  class="bg-[#F8F8F8] py-3 px-4 w-full"
+  class="bg-[#F8F8F8] py-2 px-3 w-full"
 >
 @if($onLeaveToday)
     <div x-data="{ confirmModal: false }" x-init="@this.on('openConfirmModal', () => { confirmModal = true })">
@@ -175,7 +175,7 @@
   
   
       <!-- Filters -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
         @hasanyrole('organisation_user')
         @if(auth()->user()->orgId)
         <!-- Offices -->
@@ -221,7 +221,7 @@
             @endforeach
         </select>
     </div>
-  <div class="w-full overflow-x-auto px-4 pb-4">
+  <div class="w-full overflow-x-auto px-3 pb-3">
         @php
             $year = $this->year ?? now()->year;
             $month = $this->month ?? now()->month;
