@@ -527,31 +527,40 @@ class OneSignalService
      */
     public function isWorkingDayToday($user): bool
     {
-        // Default: true
-        $defaultWorkingDay = true;
+        // Ensure organization relationship is loaded
+        if (!$user->relationLoaded('organisation')) {
+            $user->load('organisation');
+        }
 
         // Basecamp users: working every day
         if (!$user->organisation) {
             return true;
         }
 
-        // Org users: check working_days
+        // If organization doesn't have working_days set, all days are working days
         if (!$user->organisation->working_days) {
-            return $defaultWorkingDay;
+            return true;
         }
 
+        // Handle both JSON string and array formats
         $workingDays = is_string($user->organisation->working_days)
             ? json_decode($user->organisation->working_days, true)
             : $user->organisation->working_days;
 
-        if (empty($workingDays)) {
-            return $defaultWorkingDay;
+        // If working_days is empty or invalid, treat all days as working days
+        if (empty($workingDays) || !is_array($workingDays)) {
+            return true;
         }
 
-        // Get today's day name (Mon, Tue, Wed, etc.)
-        $todayName = \App\Helpers\TimezoneHelper::carbon(null, $user->timezone)->format('D');
+        // Get user's timezone safely
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+        
+        // Get today's day name (Mon, Tue, Wed, etc.) in user's timezone
+        $todayName = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone)->format('D');
 
         // Check if today is in working days array
+        // If today is a working day → return true
+        // If today is NOT a working day (working day off) → return false
         return in_array($todayName, $workingDays);
     }
 
