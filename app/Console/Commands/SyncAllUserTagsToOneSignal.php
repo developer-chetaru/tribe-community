@@ -53,6 +53,10 @@ class SyncAllUserTagsToOneSignal extends Command
             'failed' => 0,
             'skipped' => 0,
         ];
+        
+        // Track organization-wise statistics
+        $orgStats = [];
+        $orgWorkingDayStats = [];
 
         $progressBar = $this->output->createProgressBar($users->count());
         $progressBar->start();
@@ -67,26 +71,72 @@ class SyncAllUserTagsToOneSignal extends Command
                     $user->load('organisation');
                 }
                 
+                // Track organization statistics
+                $orgId = $user->orgId ? (string) $user->orgId : 'basecamp';
+                $orgName = $user->organisation?->name ?? 'No Organization';
+                
+                if (!isset($orgStats[$orgId])) {
+                    $orgStats[$orgId] = [
+                        'org_id' => $orgId,
+                        'org_name' => $orgName,
+                        'total_users' => 0,
+                        'synced' => 0,
+                        'failed' => 0,
+                    ];
+                }
+                $orgStats[$orgId]['total_users']++;
+                
                 // Sync all tags to OneSignal
                 // This creates user if doesn't exist and updates all tags
                 $result = $oneSignal->setUserTagsOnLogin($user);
 
                 if ($result) {
                     $stats['synced']++;
+                    $orgStats[$orgId]['synced']++;
+                    
+                    // Check working day status for organization users
+                    $isWorkingDay = $oneSignal->isWorkingDayToday($user);
+                    
+                    // Track working day statistics by organization
+                    if ($user->orgId) {
+                        if (!isset($orgWorkingDayStats[$orgId])) {
+                            $orgWorkingDayStats[$orgId] = [
+                                'org_id' => $orgId,
+                                'org_name' => $orgName,
+                                'working_days' => $user->organisation?->working_days,
+                                'true_count' => 0,
+                                'false_count' => 0,
+                                'users' => [],
+                            ];
+                        }
+                        
+                        if ($isWorkingDay) {
+                            $orgWorkingDayStats[$orgId]['true_count']++;
+                        } else {
+                            $orgWorkingDayStats[$orgId]['false_count']++;
+                        }
+                        
+                        $orgWorkingDayStats[$orgId]['users'][] = [
+                            'user_id' => $user->id,
+                            'email' => $user->email,
+                            'has_working_today' => $isWorkingDay,
+                        ];
+                    }
                     
                     // Log specific users for debugging
                     if (in_array($user->email, ['santosh@chetaru.com', 'mousam@chetaru.com'])) {
-                        $isWorkingDay = $oneSignal->isWorkingDayToday($user);
                         Log::info('OneSignal tag sync - specific user', [
                             'user_id' => $user->id,
                             'email' => $user->email,
                             'org_id' => $user->orgId,
+                            'org_name' => $orgName,
                             'has_working_today' => $isWorkingDay,
                             'working_days' => $user->organisation?->working_days,
                         ]);
                     }
                 } else {
                     $stats['failed']++;
+                    $orgStats[$orgId]['failed']++;
                     Log::warning('OneSignal tag sync failed', [
                         'user_id' => $user->id,
                         'email' => $user->email,
@@ -124,8 +174,69 @@ class SyncAllUserTagsToOneSignal extends Command
                 ['Skipped', $stats['skipped']],
             ]
         );
+        
+        // Display organization-wise statistics
+        $this->newLine();
+        $this->info('📊 Organization-wise User Count:');
+        $orgTableData = [];
+        foreach ($orgStats as $orgStat) {
+            $orgTableData[] = [
+                $orgStat['org_id'],
+                $orgStat['org_name'],
+                $orgStat['total_users'],
+                $orgStat['synced'],
+                $orgStat['failed'],
+            ];
+        }
+        $this->table(
+            ['Org ID', 'Org Name', 'Total Users', 'Synced', 'Failed'],
+            $orgTableData
+        );
+        
+        // Display working day statistics
+        if (!empty($orgWorkingDayStats)) {
+            $this->newLine();
+            $this->info('📅 Organization-wise Working Day Status:');
+            $workingDayTableData = [];
+            foreach ($orgWorkingDayStats as $orgStat) {
+                $workingDaysStr = is_array($orgStat['working_days']) 
+                    ? implode(', ', $orgStat['working_days'])
+                    : ($orgStat['working_days'] ?? 'All days');
+                    
+                $workingDayTableData[] = [
+                    $orgStat['org_id'],
+                    $orgStat['org_name'],
+                    $workingDaysStr,
+                    $orgStat['true_count'],
+                    $orgStat['false_count'],
+                ];
+            }
+            $this->table(
+                ['Org ID', 'Org Name', 'Working Days', 'True Count', 'False Count'],
+                $workingDayTableData
+            );
+            
+            // Log detailed information for organizations with issues
+            foreach ($orgWorkingDayStats as $orgStat) {
+                if ($orgStat['true_count'] > 0 && $orgStat['false_count'] > 0) {
+                    // Organization has mixed results - log details
+                    Log::warning('Organization has mixed has_working_today values', [
+                        'org_id' => $orgStat['org_id'],
+                        'org_name' => $orgStat['org_name'],
+                        'working_days' => $orgStat['working_days'],
+                        'true_count' => $orgStat['true_count'],
+                        'false_count' => $orgStat['false_count'],
+                        'users' => $orgStat['users'],
+                    ]);
+                }
+            }
+        }
 
-        Log::info('Cron: SyncAllUserTagsToOneSignal completed', $stats);
+        Log::info('Cron: SyncAllUserTagsToOneSignal completed', [
+            'stats' => $stats,
+            'org_stats' => $orgStats,
+            'org_working_day_stats' => $orgWorkingDayStats,
+        ]);
 
         return 0;
     }
