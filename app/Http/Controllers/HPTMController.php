@@ -430,7 +430,7 @@ class HPTMController extends Controller
             ]);
         }
 
-        $resultArray['userGivenfeedback'] = $this->userGivenfeedbackOnHIValueORM($userId, $HI_include_saturday, $HI_include_sunday);
+        $resultArray['userGivenfeedback'] = $this->userGivenfeedbackOnHIValueORM($userId, $HI_include_saturday, $HI_include_sunday, $orgId);
 
         $todayStr = date('Y-m-d');
 
@@ -670,22 +670,30 @@ class HPTMController extends Controller
         	$HIFeedback = $isUser;
     } else {
         	$organisation = Organisation::where('id', $orgId)->first();
+        	
+        	// Check if organization has working_days set
         	if ($organisation && $organisation->working_days) {
-            	$workingDays = json_decode($organisation->working_days, true);
-
-            	if (in_array($dayOfWeek, $workingDays)) {
-                	$HIFeedback = $isUser;
+            	// working_days is already cast to array in model, but handle both array and JSON string
+            	$workingDays = is_array($organisation->working_days) 
+                	? $organisation->working_days 
+                	: json_decode($organisation->working_days, true);
+            	
+            	// If organization has working_days, check if today is a working day
+            	if (is_array($workingDays) && !empty($workingDays)) {
+                	if (in_array($dayOfWeek, $workingDays)) {
+                    	// Today is a working day, check if user gave feedback
+                    	$HIFeedback = $isUser;
+                	} else {
+                    	// Today is not a working day, return false
+                    	$HIFeedback = false;
+                	}
             	} else {
-                	$HIFeedback = true;
+                	// Invalid working_days data, treat as all days are working days
+                	$HIFeedback = $isUser;
             	}
         	} else {
-            	if (in_array($dayOfWeek, ["Mon", "Tue", "Wed", "Thu", "Fri"])) {
-               	 $HIFeedback = $isUser;
-            	} elseif ($dayOfWeek == "Sat") {
-                	$HIFeedback = $HI_include_saturday == 1 ? $isUser : true;
-            	} elseif ($dayOfWeek == "Sun") {
-                	$HIFeedback = $HI_include_sunday == 1 ? $isUser : true;
-            	}
+            	// Organization doesn't have working_days set, all days are working days (sare din jay)
+            	$HIFeedback = $isUser;
         	}
     	}
 
