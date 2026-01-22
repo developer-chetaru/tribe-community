@@ -487,6 +487,9 @@ class OneSignalService
      */
     public function setUserTagsOnLogin($user): bool
     {
+        // Refresh user to ensure we have latest data
+        $user->refresh();
+        
         // Determine user type
         $userType = $user->orgId ? 'org' : 'basecamp';
 
@@ -527,41 +530,65 @@ class OneSignalService
      */
     public function isWorkingDayToday($user): bool
     {
-        // Ensure organization relationship is loaded
-        if (!$user->relationLoaded('organisation')) {
-            $user->load('organisation');
-        }
+        try {
+            // Reload organization to ensure fresh data (avoid stale cache)
+            if ($user->orgId) {
+                $organisation = \App\Models\Organisation::find($user->orgId);
+            } else {
+                $organisation = null;
+            }
 
-        // Basecamp users: working every day
-        if (!$user->organisation) {
+            // Basecamp users: working every day
+            if (!$organisation) {
+                return true;
+            }
+
+            // If organization doesn't have working_days set, all days are working days
+            if (!$organisation->working_days) {
+                return true;
+            }
+
+            // Handle both JSON string and array formats
+            $workingDays = is_string($organisation->working_days)
+                ? json_decode($organisation->working_days, true)
+                : $organisation->working_days;
+
+            // If working_days is empty or invalid, treat all days as working days
+            if (empty($workingDays) || !is_array($workingDays)) {
+                return true;
+            }
+
+            // Get user's timezone safely
+            $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+            
+            // Get today's day name (Mon, Tue, Wed, etc.) in user's timezone
+            $todayName = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone)->format('D');
+
+            // Check if today is in working days array
+            // If today is a working day → return true
+            // If today is NOT a working day (working day off) → return false
+            $isWorkingDay = in_array($todayName, $workingDays);
+            
+            // Log for debugging (can be removed later)
+            Log::debug('isWorkingDayToday check', [
+                'user_id' => $user->id,
+                'org_id' => $user->orgId,
+                'working_days' => $workingDays,
+                'today_name' => $todayName,
+                'user_timezone' => $userTimezone,
+                'is_working_day' => $isWorkingDay,
+            ]);
+            
+            return $isWorkingDay;
+        } catch (\Throwable $e) {
+            Log::error('Error in isWorkingDayToday', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            // Return true as default on error to avoid blocking users
             return true;
         }
-
-        // If organization doesn't have working_days set, all days are working days
-        if (!$user->organisation->working_days) {
-            return true;
-        }
-
-        // Handle both JSON string and array formats
-        $workingDays = is_string($user->organisation->working_days)
-            ? json_decode($user->organisation->working_days, true)
-            : $user->organisation->working_days;
-
-        // If working_days is empty or invalid, treat all days as working days
-        if (empty($workingDays) || !is_array($workingDays)) {
-            return true;
-        }
-
-        // Get user's timezone safely
-        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
-        
-        // Get today's day name (Mon, Tue, Wed, etc.) in user's timezone
-        $todayName = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone)->format('D');
-
-        // Check if today is in working days array
-        // If today is a working day → return true
-        // If today is NOT a working day (working day off) → return false
-        return in_array($todayName, $workingDays);
     }
 
     /**
@@ -863,6 +890,9 @@ class OneSignalService
 
         foreach ($users as $user) {
             try {
+                // Refresh user to get latest data (especially orgId)
+                $user->refresh();
+                
                 // Use setUserTagsOnLogin which creates user if doesn't exist and updates all tags
                 // This ensures the user exists in OneSignal with all current tag values
                 $result = $this->setUserTagsOnLogin($user);
@@ -872,19 +902,23 @@ class OneSignalService
                     $isWorkingDay = $this->isWorkingDayToday($user);
                     Log::info('has_working_today updated (user created/updated in OneSignal)', [
                         'user_id' => $user->id,
+                        'org_id' => $user->orgId,
                         'has_working_today' => $isWorkingDay,
                     ]);
                 } else {
                     $stats['failed']++;
                     Log::warning('has_working_today update failed', [
                         'user_id' => $user->id,
+                        'org_id' => $user->orgId,
                     ]);
                 }
             } catch (\Throwable $e) {
                 $stats['failed']++;
                 Log::error('has_working_today update exception', [
                     'user_id' => $user->id,
+                    'org_id' => $user->orgId ?? null,
                     'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
                 ]);
             }
         }

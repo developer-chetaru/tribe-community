@@ -52,22 +52,36 @@ class UpdateWorkingDayStatus extends Command
 
         foreach ($usersToUpdate as $user) {
             try {
+                // Refresh user to get latest data (especially orgId and organization)
+                $user->refresh();
+                
                 // Use setUserTagsOnLogin which creates user if doesn't exist and updates all tags
                 $result = $oneSignal->setUserTagsOnLogin($user);
 
                 if ($result) {
                     $stats['success']++;
                     $isWorkingDay = $oneSignal->isWorkingDayToday($user);
-                    Log::info("has_working_today updated for user {$user->id} (timezone: {$user->timezone})", [
+                    Log::info("has_working_today updated for user {$user->id}", [
+                        'user_id' => $user->id,
+                        'org_id' => $user->orgId,
+                        'timezone' => $user->timezone,
                         'has_working_today' => $isWorkingDay,
                     ]);
                 } else {
                     $stats['failed']++;
-                    Log::warning("has_working_today update failed for user {$user->id}");
+                    Log::warning("has_working_today update failed for user {$user->id}", [
+                        'user_id' => $user->id,
+                        'org_id' => $user->orgId,
+                    ]);
                 }
             } catch (\Exception $e) {
                 $stats['failed']++;
-                Log::error("Failed to update working day status for user {$user->id}: " . $e->getMessage());
+                Log::error("Failed to update working day status for user {$user->id}", [
+                    'user_id' => $user->id,
+                    'org_id' => $user->orgId ?? null,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
             }
         }
 
