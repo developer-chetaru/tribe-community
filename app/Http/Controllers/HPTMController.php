@@ -684,8 +684,8 @@ class HPTMController extends Controller
                     	// Today is a working day, check if user gave feedback
                     	$HIFeedback = $isUser;
                 	} else {
-                    	// Today is not a working day, return false
-                    	$HIFeedback = false;
+                    	// Today is not a working day (working day off), return true
+                    	$HIFeedback = true;
                 	}
             	} else {
                 	// Invalid working_days data, treat as all days are working days
