@@ -487,8 +487,14 @@ class OneSignalService
      */
     public function setUserTagsOnLogin($user): bool
     {
-        // Refresh user to ensure we have latest data
+        // Refresh user to ensure we have latest data, but preserve organization relationship
+        $orgId = $user->orgId;
         $user->refresh();
+        
+        // Reload organization relationship if user has orgId
+        if ($orgId) {
+            $user->load('organisation');
+        }
         
         // Determine user type
         $userType = $user->orgId ? 'org' : 'basecamp';
@@ -569,15 +575,21 @@ class OneSignalService
             // If today is NOT a working day (working day off) → return false
             $isWorkingDay = in_array($todayName, $workingDays);
             
-            // Log for debugging (can be removed later)
-            Log::debug('isWorkingDayToday check', [
-                'user_id' => $user->id,
-                'org_id' => $user->orgId,
-                'working_days' => $workingDays,
-                'today_name' => $todayName,
-                'user_timezone' => $userTimezone,
-                'is_working_day' => $isWorkingDay,
-            ]);
+            // Log for specific users to debug
+            $debugEmails = ['santosh@chetaru.com', 'mousam@chetaru.com'];
+            if (in_array($user->email ?? '', $debugEmails)) {
+                Log::info('isWorkingDayToday check - DEBUG', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'org_id' => $user->orgId,
+                    'organisation_id' => $organisation->id ?? null,
+                    'working_days' => $workingDays,
+                    'today_name' => $todayName,
+                    'user_timezone' => $userTimezone,
+                    'is_working_day' => $isWorkingDay,
+                    'organisation_working_days_raw' => $organisation->working_days ?? null,
+                ]);
+            }
             
             return $isWorkingDay;
         } catch (\Throwable $e) {

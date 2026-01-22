@@ -59,23 +59,38 @@ class SyncAllUserTagsToOneSignal extends Command
 
         foreach ($users as $user) {
             try {
-                // Check if user needs update (only if not forced)
-                if (!$force) {
-                    // Check if any tag values have changed since last sync
-                    // For now, we'll always sync since tags are lightweight
-                    // You can add logic here to track last sync time if needed
+                // Refresh user to get latest data
+                $user->refresh();
+                
+                // Reload organization relationship if user has orgId
+                if ($user->orgId) {
+                    $user->load('organisation');
                 }
-
+                
                 // Sync all tags to OneSignal
                 // This creates user if doesn't exist and updates all tags
                 $result = $oneSignal->setUserTagsOnLogin($user);
 
                 if ($result) {
                     $stats['synced']++;
+                    
+                    // Log specific users for debugging
+                    if (in_array($user->email, ['santosh@chetaru.com', 'mousam@chetaru.com'])) {
+                        $isWorkingDay = $oneSignal->isWorkingDayToday($user);
+                        Log::info('OneSignal tag sync - specific user', [
+                            'user_id' => $user->id,
+                            'email' => $user->email,
+                            'org_id' => $user->orgId,
+                            'has_working_today' => $isWorkingDay,
+                            'working_days' => $user->organisation?->working_days,
+                        ]);
+                    }
                 } else {
                     $stats['failed']++;
                     Log::warning('OneSignal tag sync failed', [
                         'user_id' => $user->id,
+                        'email' => $user->email,
+                        'org_id' => $user->orgId,
                     ]);
                 }
                 
@@ -85,7 +100,10 @@ class SyncAllUserTagsToOneSignal extends Command
                 $stats['failed']++;
                 Log::error('OneSignal tag sync exception', [
                     'user_id' => $user->id,
+                    'email' => $user->email ?? null,
+                    'org_id' => $user->orgId ?? null,
                     'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
                 ]);
             }
 
