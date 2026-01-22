@@ -38,6 +38,48 @@ class SyncAllUserTagsToOneSignal extends Command
         $users = User::whereIn('status', ['active_verified', 'active_unverified', 'pending_payment'])
             ->with('organisation')
             ->get();
+        
+        // Get all users (regardless of status) to check excluded users by organization
+        $allUsers = User::with('organisation')->get();
+        $excludedUsers = $allUsers->whereNotIn('id', $users->pluck('id'));
+        
+        // Group excluded users by organization
+        $excludedByOrg = [];
+        foreach ($excludedUsers as $excludedUser) {
+            $orgId = $excludedUser->orgId ? (string) $excludedUser->orgId : 'basecamp';
+            $orgName = $excludedUser->organisation?->name ?? 'No Organization';
+            
+            if (!isset($excludedByOrg[$orgId])) {
+                $excludedByOrg[$orgId] = [
+                    'org_id' => $orgId,
+                    'org_name' => $orgName,
+                    'users' => [],
+                ];
+            }
+            
+            $excludedByOrg[$orgId]['users'][] = [
+                'id' => $excludedUser->id,
+                'email' => $excludedUser->email,
+                'status' => $excludedUser->status,
+            ];
+        }
+        
+        // Display excluded users by organization
+        if (!empty($excludedByOrg)) {
+            $this->newLine();
+            $this->warn('⚠️  Users excluded due to status (not in active_verified, active_unverified, pending_payment):');
+            foreach ($excludedByOrg as $orgData) {
+                $userCount = count($orgData['users']);
+                $this->line("   Organization: {$orgData['org_name']} (ID: {$orgData['org_id']}) - {$userCount} users excluded");
+                foreach ($orgData['users'] as $excludedUser) {
+                    $this->line("      - {$excludedUser['email']} (ID: {$excludedUser['id']}, Status: {$excludedUser['status']})");
+                }
+            }
+            
+            Log::warning('Users excluded from sync due to status', [
+                'excluded_by_org' => $excludedByOrg,
+            ]);
+        }
 
         if ($users->isEmpty()) {
             $this->warn('No active users found.');
