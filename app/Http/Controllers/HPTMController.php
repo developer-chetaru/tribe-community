@@ -1331,10 +1331,35 @@ class HPTMController extends Controller
      *                 property="data",
      *                 type="array",
      *                 @OA\Items(
-     *                     type="string",
-     *                     example="America/New_York"
+     *                     type="object",
+     *                     @OA\Property(property="value", type="string", example="Asia/Kolkata", description="IANA timezone identifier"),
+     *                     @OA\Property(property="display", type="string", example="IN - Kolkata (UTC+05:30) - Asia/Kolkata", description="Formatted display string"),
+     *                     @OA\Property(property="search", type="string", example="asia/kolkata kolkata in india asia utc+05:30", description="Searchable text"),
+     *                     @OA\Property(property="countryCode", type="string", example="IN", description="ISO country code"),
+     *                     @OA\Property(property="countryName", type="string", example="India", description="Country name"),
+     *                     @OA\Property(property="continent", type="string", example="Asia", description="Continent name"),
+     *                     @OA\Property(property="city", type="string", example="kolkata", description="City name in lowercase"),
+     *                     @OA\Property(property="utcOffset", type="string", example="UTC+05:30", description="UTC offset string")
      *                 ),
-     *                 example={"America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "Europe/London", "Europe/Paris", "Asia/Kolkata", "Asia/Tokyo", "Australia/Sydney"}
+     *                 example={{
+     *                     "value": "Asia/Kolkata",
+     *                     "display": "IN - Kolkata (UTC+05:30) - Asia/Kolkata",
+     *                     "search": "asia/kolkata kolkata in india asia utc+05:30",
+     *                     "countryCode": "IN",
+     *                     "countryName": "India",
+     *                     "continent": "Asia",
+     *                     "city": "kolkata",
+     *                     "utcOffset": "UTC+05:30"
+     *                 }, {
+     *                     "value": "America/New_York",
+     *                     "display": "US - New York (UTC-05:00) - America/New_York",
+     *                     "search": "america/new_york new york us united states america utc-05:00",
+     *                     "countryCode": "US",
+     *                     "countryName": "United States",
+     *                     "continent": "America",
+     *                     "city": "new york",
+     *                     "utcOffset": "UTC-05:00"
+     *                 }}
      *             )
      *         )
      *     ),
@@ -1353,7 +1378,162 @@ class HPTMController extends Controller
     public function getTimezoneList()
     {
         try {
-            $timezones = timezone_identifiers_list();
+            // Country code to country name mapping
+            $countryNames = [
+                'IN' => 'India', 'AE' => 'United Arab Emirates', 'SG' => 'Singapore',
+                'JP' => 'Japan', 'CN' => 'China', 'HK' => 'Hong Kong',
+                'TH' => 'Thailand', 'ID' => 'Indonesia', 'PH' => 'Philippines',
+                'KR' => 'South Korea', 'MY' => 'Malaysia',
+                'GB' => 'United Kingdom', 'FR' => 'France', 'DE' => 'Germany',
+                'IT' => 'Italy', 'ES' => 'Spain', 'NL' => 'Netherlands',
+                'BE' => 'Belgium', 'AT' => 'Austria', 'CH' => 'Switzerland',
+                'SE' => 'Sweden', 'NO' => 'Norway', 'DK' => 'Denmark',
+                'FI' => 'Finland', 'PL' => 'Poland', 'CZ' => 'Czech Republic',
+                'HU' => 'Hungary', 'GR' => 'Greece', 'PT' => 'Portugal',
+                'IE' => 'Ireland',
+                'US' => 'United States', 'CA' => 'Canada',
+                'MX' => 'Mexico', 'BR' => 'Brazil', 'AR' => 'Argentina',
+                'CL' => 'Chile', 'PE' => 'Peru', 'CO' => 'Colombia',
+                'AU' => 'Australia',
+                'NZ' => 'New Zealand',
+                'EG' => 'Egypt', 'ZA' => 'South Africa', 'NG' => 'Nigeria',
+                'KE' => 'Kenya',
+                'PK' => 'Pakistan', 'NP' => 'Nepal', 'BD' => 'Bangladesh',
+                'LK' => 'Sri Lanka', 'VN' => 'Vietnam', 'TW' => 'Taiwan',
+                'IL' => 'Israel', 'SA' => 'Saudi Arabia', 'JO' => 'Jordan',
+                'KW' => 'Kuwait', 'QA' => 'Qatar', 'BH' => 'Bahrain',
+                'OM' => 'Oman', 'YE' => 'Yemen', 'IQ' => 'Iraq',
+                'IR' => 'Iran', 'AF' => 'Afghanistan',
+            ];
+            
+            $tzToCountry = [
+                'Asia/Kolkata' => 'IN', 'Asia/Dubai' => 'AE', 'Asia/Singapore' => 'SG',
+                'Asia/Tokyo' => 'JP', 'Asia/Shanghai' => 'CN', 'Asia/Hong_Kong' => 'HK',
+                'Asia/Bangkok' => 'TH', 'Asia/Jakarta' => 'ID', 'Asia/Manila' => 'PH',
+                'Asia/Seoul' => 'KR', 'Asia/Kuala_Lumpur' => 'MY',
+                'Asia/Karachi' => 'PK', 'Asia/Islamabad' => 'PK',
+                'Asia/Kathmandu' => 'NP',
+                'Europe/London' => 'GB', 'Europe/Paris' => 'FR', 'Europe/Berlin' => 'DE',
+                'Europe/Rome' => 'IT', 'Europe/Madrid' => 'ES', 'Europe/Amsterdam' => 'NL',
+                'Europe/Brussels' => 'BE', 'Europe/Vienna' => 'AT', 'Europe/Zurich' => 'CH',
+                'Europe/Stockholm' => 'SE', 'Europe/Oslo' => 'NO', 'Europe/Copenhagen' => 'DK',
+                'Europe/Helsinki' => 'FI', 'Europe/Warsaw' => 'PL', 'Europe/Prague' => 'CZ',
+                'Europe/Budapest' => 'HU', 'Europe/Athens' => 'GR', 'Europe/Lisbon' => 'PT',
+                'Europe/Dublin' => 'IE',
+                'America/New_York' => 'US', 'America/Chicago' => 'US', 'America/Denver' => 'US',
+                'America/Los_Angeles' => 'US', 'America/Toronto' => 'CA', 'America/Vancouver' => 'CA',
+                'America/Mexico_City' => 'MX', 'America/Sao_Paulo' => 'BR', 'America/Buenos_Aires' => 'AR',
+                'America/Santiago' => 'CL', 'America/Lima' => 'PE', 'America/Bogota' => 'CO',
+                'Australia/Sydney' => 'AU', 'Australia/Melbourne' => 'AU', 'Australia/Brisbane' => 'AU',
+                'Australia/Perth' => 'AU', 'Australia/Adelaide' => 'AU',
+                'Pacific/Auckland' => 'NZ',
+                'Africa/Cairo' => 'EG', 'Africa/Johannesburg' => 'ZA', 'Africa/Lagos' => 'NG',
+                'Africa/Nairobi' => 'KE',
+            ];
+            
+            // Add more timezones for common countries - especially India
+            $allTimezones = timezone_identifiers_list();
+            foreach ($allTimezones as $tz) {
+                $parts = explode('/', $tz);
+                $continent = $parts[0] ?? '';
+                
+                // Auto-detect country for Asia timezones
+                if ($continent === 'Asia' && !isset($tzToCountry[$tz])) {
+                    // India timezones
+                    $indiaCities = ['Kolkata', 'Calcutta', 'Mumbai', 'Bombay', 'Delhi', 'New_Delhi', 
+                                   'Chennai', 'Madras', 'Bangalore', 'Bangalore', 'Hyderabad', 
+                                   'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow', 'Kanpur'];
+                    foreach ($indiaCities as $city) {
+                        if (strpos($tz, $city) !== false) {
+                            $tzToCountry[$tz] = 'IN';
+                            break;
+                        }
+                    }
+                    
+                    // Pakistan timezones
+                    if (!isset($tzToCountry[$tz])) {
+                        $pakistanCities = ['Karachi', 'Islamabad', 'Lahore', 'Rawalpindi', 'Quetta', 'Peshawar'];
+                        foreach ($pakistanCities as $city) {
+                            if (strpos($tz, $city) !== false) {
+                                $tzToCountry[$tz] = 'PK';
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Nepal timezones
+                    if (!isset($tzToCountry[$tz])) {
+                        $nepalCities = ['Kathmandu'];
+                        foreach ($nepalCities as $city) {
+                            if (strpos($tz, $city) !== false) {
+                                $tzToCountry[$tz] = 'NP';
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Bangladesh timezones
+                    if (!isset($tzToCountry[$tz])) {
+                        $bangladeshCities = ['Dhaka', 'Chittagong'];
+                        foreach ($bangladeshCities as $city) {
+                            if (strpos($tz, $city) !== false) {
+                                $tzToCountry[$tz] = 'BD';
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Also check if it's the main India timezone
+                    if ($tz === 'Asia/Kolkata' || $tz === 'Asia/Calcutta') {
+                        $tzToCountry[$tz] = 'IN';
+                    }
+                }
+            }
+            
+            $timezones = collect(timezone_identifiers_list())->map(function($tz) use ($tzToCountry, $countryNames) {
+                try {
+                    $dt = new \DateTime('now', new \DateTimeZone($tz));
+                    $offset = $dt->getOffset();
+                    $hours = intval(abs($offset) / 3600);
+                    $minutes = intval((abs($offset) % 3600) / 60);
+                    $sign = $offset >= 0 ? '+' : '-';
+                    $utcOffset = sprintf('UTC%s%02d:%02d', $sign, $hours, $minutes);
+                } catch (\Exception $e) {
+                    $utcOffset = '';
+                }
+                
+                $countryCode = $tzToCountry[$tz] ?? '';
+                $countryName = $countryNames[$countryCode] ?? '';
+                $parts = explode('/', $tz);
+                $continent = $parts[0] ?? '';
+                $city = str_replace('_', ' ', end($parts));
+                $city = ucwords(strtolower($city));
+                
+                // Standard display format: Country Code - City (UTC Offset) - IANA Identifier
+                if ($countryCode && $utcOffset) {
+                    $display = $countryCode . ' - ' . $city . ' (' . $utcOffset . ') - ' . $tz;
+                } elseif ($countryCode) {
+                    $display = $countryCode . ' - ' . $city . ' (' . $tz . ')';
+                } elseif ($utcOffset) {
+                    $display = $city . ' (' . $utcOffset . ') - ' . $tz;
+                } else {
+                    $display = $tz;
+                }
+                
+                // Enhanced search field includes: timezone, city, country code, country name, continent, UTC offset
+                $searchTerms = strtolower($tz . ' ' . $city . ' ' . ($countryCode ?? '') . ' ' . ($countryName ?? '') . ' ' . ($continent ?? '') . ' ' . ($utcOffset ?? ''));
+                
+                return [
+                    'value' => $tz, 
+                    'display' => $display, 
+                    'search' => $searchTerms,
+                    'countryCode' => $countryCode,
+                    'countryName' => $countryName,
+                    'continent' => $continent,
+                    'city' => strtolower($city),
+                    'utcOffset' => $utcOffset
+                ];
+            })->values()->all();
             
             return response()->json([
                 'status'  => true,
