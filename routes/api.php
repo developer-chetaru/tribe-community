@@ -79,6 +79,7 @@ Route::get('/reflections', [ReflectionApiController::class, 'list']);
 Route::post('/reflections', [ReflectionApiController::class, 'create']);
 Route::get('/reflections/{reflection}/chats', [ReflectionApiController::class, 'chats']);
 Route::post('/reflections/{reflection}/chats', [ReflectionApiController::class, 'sendChat']);
+Route::post('/reflections/{reflection}/mark-read', [ReflectionApiController::class, 'markAsRead']);
 
 Route::get('/view-notification-list', [NotificationController::class, 'viewNotificationList']);
 
