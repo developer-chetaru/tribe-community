@@ -2,8 +2,8 @@
 
     {{-- Header --}}
     @if (isset($header))
-        <header class="text-2xl font-bold text-[#ff2323]">
-            <div>
+        <header class="text-2xl font-bold text-[#ff2323] ml-0 sm:ml-0">
+            <div class="pl-0 sm:pl-0">
                 {!! $header !!}
             </div>
         </header>

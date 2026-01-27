@@ -21,6 +21,11 @@
 
                 <h2 class="text-2xl font-bold mb-4 text-gray-900 text-start">Reset Password</h2>
 
+                @if (session('status'))
+                    <div class="text-center py-8">
+                        <p class="text-lg text-gray-600">Your password has been successfully reset!</p>
+                    </div>
+                @else
                 <form method="POST" action="{{ route('password.update') }}" class="text-left">
                     @csrf
                     <input type="hidden" name="token" value="{{ $request->token }}">
@@ -52,7 +57,6 @@
                     </label>
 
                     <p id="passwordMessage" class="text-sm mt-1"></p>
-                    <p class="text-xs text-gray-400 mt-1">Example format: Password@123</p>
 
                     @error('password')
                         <p class="text-sm text-red-500 mb-2">{{ $message }}</p>
@@ -73,7 +77,6 @@
                     </label>
 
                     <p id="confirmMessage" class="text-sm mt-1"></p>
-                    <p class="text-xs text-gray-400 mt-1">Example format: Password@123</p>
 
                     @error('password_confirmation')
                         <p class="text-sm text-red-500 mb-2">{{ $message }}</p>
@@ -99,6 +102,7 @@
                     </div>
 
                 </form>
+                @endif
             </div>
         </div>
 
@@ -177,26 +181,48 @@
 
         function triggerPasswordCheck() {
             const val = password.value.trim();
+            
+            // Don't show message if field is empty
+            if (val.length === 0) {
+                passwordMessage.textContent = "";
+                passwordMessage.className = "";
+                isStrong = false;
+                triggerConfirmCheck();
+                updateButtonState();
+                return;
+            }
+            
             const strength = checkStrength(val);
             isStrong = strength === "strong";
             passwordMessage.textContent =
-                strength === "weak" ? "Weak password" :
-                strength === "medium" ? "Medium strength password" :
-                "Strong password ✔";
+                strength === "weak" ? "Weak password — add uppercase, numbers & symbols." :
+                strength === "medium" ? "Medium strength — try adding more characters or symbols." :
+                "Strong password";
 
             passwordMessage.className =
-                strength === "weak" ? "text-sm text-red-500" :
-                strength === "medium" ? "text-sm text-yellow-500" :
-                "text-sm text-green-600";
+                strength === "weak" ? "text-sm font-semibold text-red-500" :
+                strength === "medium" ? "text-sm font-semibold text-yellow-600" :
+                "text-sm font-semibold text-green-600";
 
             triggerConfirmCheck();
             updateButtonState();
         }
 
         function triggerConfirmCheck() {
+            const confirmVal = confirmPassword.value.trim();
+            
+            // Don't show message if confirm field is empty
+            if (confirmVal.length === 0) {
+                confirmMessage.textContent = "";
+                confirmMessage.className = "";
+                isMatch = false;
+                updateButtonState();
+                return;
+            }
+            
             isMatch = (password.value === confirmPassword.value);
-            confirmMessage.textContent = isMatch ? "Passwords match ✔" : "Passwords do not match ❌";
-            confirmMessage.className = isMatch ? "text-sm text-green-600" : "text-sm text-red-500";
+            confirmMessage.textContent = isMatch ? "Password matched" : "Password does not match";
+            confirmMessage.className = isMatch ? "text-sm font-semibold text-green-600" : "text-sm font-semibold text-red-500";
             updateButtonState();
         }
 

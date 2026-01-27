@@ -40,7 +40,8 @@ class ReflectionApiController extends Controller
      *                     @OA\Property(property="status", type="string", example="new", enum={"new", "inprogress", "resolved"}),
      *                     @OA\Property(property="image", type="string", nullable=true, example="http://example.com/storage/hptm_files/image1.jpg", description="First image URL (for backward compatibility)"),
      *                     @OA\Property(property="images", type="array", @OA\Items(type="string", example="http://example.com/storage/hptm_files/image1.jpg"), description="Array of all image URLs"),
-     *                     @OA\Property(property="created_at", type="string", example="2026-01-13 10:30 AM")
+     *                     @OA\Property(property="created_at", type="string", example="2026-01-13 10:30 AM"),
+     *                     @OA\Property(property="unread_count", type="integer", example=2, description="Number of unread messages from admin/other users")
      *                 )
      *             )
      *         )
@@ -62,7 +63,7 @@ class ReflectionApiController extends Controller
         $reflections = Reflection::where('userId', $user->id)
             ->orderByDesc('id')
             ->get()
-            ->map(function($r){
+            ->map(function($r) use ($user){
                 // Handle multiple images (JSON array) or single image
                 $images = [];
                 if ($r->image) {
@@ -78,6 +79,22 @@ class ReflectionApiController extends Controller
                     }
                 }
 
+                // Count unread messages (messages from admin/other users created after last_viewed_at)
+                $unreadCount = 0;
+                if ($r->userId === $user->id) {
+                    $unreadQuery = ReflectionMessage::where('reflectionId', $r->id)
+                        ->where('sendFrom', '!=', $r->userId) // Messages not from reflection owner (i.e., from admin)
+                        ->where('status', 'Active');
+                    
+                    // Only count messages created after last_viewed_at
+                    // If last_viewed_at is null, count all admin messages as unread
+                    if ($r->last_viewed_at) {
+                        $unreadQuery->where('created_at', '>', $r->last_viewed_at);
+                    }
+                    
+                    $unreadCount = $unreadQuery->count();
+                }
+
                 return [
                     'id' => $r->id,
                     'topic' => $r->topic,
@@ -86,6 +103,7 @@ class ReflectionApiController extends Controller
                     'image' => !empty($images) ? $images[0] : null, // Keep for backward compatibility
                     'images' => $images, // Array of all image URLs
                     'created_at' => $r->created_at->format('Y-m-d H:i A'),
+                    'unread_count' => $unreadCount, // Unread message count
                 ];
             });
 
@@ -615,5 +633,93 @@ class ReflectionApiController extends Controller
                 'message' => 'Something went wrong. Please try again later.'
             ], 500);
         }
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/reflections/{reflection}/mark-read",
+     *     tags={"Reflections"},
+     *     summary="Mark reflection messages as read",
+     *     description="Mark all messages for a specific reflection as read by updating the last_viewed_at timestamp. Only the reflection owner can mark messages as read.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="reflection",
+     *         in="path",
+     *         required=true,
+     *         description="Reflection ID",
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Messages marked as read successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Messages marked as read successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="reflection_id", type="integer", example=1),
+     *                 @OA\Property(property="last_viewed_at", type="string", format="date-time", example="2026-01-27T16:30:00.000000Z")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthenticated")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Forbidden - User does not have permission to mark messages as read for this reflection",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="You do not have permission to mark messages as read for this reflection.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Reflection not found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Reflection not found")
+     *         )
+     *     )
+     * )
+     */
+    public function markAsRead($reflectionId)
+    {
+        $user = Auth::user();
+
+        $reflection = Reflection::where('id', $reflectionId)
+            ->where('userId', $user->id)
+            ->first();
+
+        if (!$reflection) {
+            return response()->json(['status' => false, 'message' => 'Reflection not found'], 404);
+        }
+
+        // Security check: only reflection owner can mark messages as read
+        if ($reflection->userId !== $user->id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission to mark messages as read for this reflection.'
+            ], 403);
+        }
+
+        // Update last_viewed_at to mark all messages as read
+        $reflection->last_viewed_at = now();
+        $reflection->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Messages marked as read successfully',
+            'data' => [
+                'reflection_id' => $reflection->id,
+                'last_viewed_at' => $reflection->last_viewed_at->toIso8601String(),
+            ]
+        ]);
     }
 }

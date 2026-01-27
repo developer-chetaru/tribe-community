@@ -19,6 +19,13 @@
                             type="text"
                             wire:model.live="searchTopic"
                             placeholder="Search by topic"
+                            data-gramm="false"
+                            data-gramm_editor="false"
+                            data-enable-grammarly="false"
+                            autocomplete="off"
+                            autocorrect="off"
+                            autocapitalize="off"
+                            spellcheck="false"
                             class="w-full bg-white placeholder:text-slate-400 text-slate-700 text-sm border border-slate-200 rounded-md pl-9 pr-5 py-3 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                         />
                     </div>
@@ -455,9 +462,34 @@
                                 </div>
                             @endif
                             
-                            <form wire:submit.prevent="sendChatMessage" 
+                            <form 
                                   class="flex items-end gap-1.5 sm:gap-2" 
-                                  x-data="{ filePreviews: {} }"
+                                  x-data="{ 
+                                    filePreviews: {},
+                                    validateBeforeSubmit(event) {
+                                        const textarea = event.target.querySelector('textarea');
+                                        const fileInput = document.getElementById('chatFileInput');
+                                        const message = textarea ? textarea.value.trim() : '';
+                                        const hasFiles = fileInput && fileInput.files && fileInput.files.length > 0;
+                                        
+                                        if (!message && !hasFiles) {
+                                            event.preventDefault();
+                                            if (window.Livewire) {
+                                                const wireId = event.target.closest('[wire\\:id]')?.getAttribute('wire:id');
+                                                if (wireId) {
+                                                    const component = window.Livewire.find(wireId);
+                                                    if (component) {
+                                                        component.set('alertType', 'error');
+                                                        component.set('alertMessage', 'Please write a message or attach a file and then click on send.');
+                                                    }
+                                                }
+                                            }
+                                            return false;
+                                        }
+                                        return true;
+                                    }
+                                  }"
+                                  x-on:submit.prevent="if ($data.validateBeforeSubmit($event)) { $wire.call('sendChatMessage'); }"
                                   x-on:livewire:message-sent.window="$wire.set('alertMessage', ''); $wire.set('alertType', '');"
                                   x-init="
                                     // Store handlePaste function in Alpine data for access
@@ -547,11 +579,29 @@
                                   ">
                                 <div class="flex-1 relative min-w-0">
                                     <textarea 
-                                        wire:model.defer="newChatMessage" 
+                                        wire:model.live="newChatMessage" 
                                         placeholder="Write your reply..." 
                                         rows="2"
+                                        data-gramm="false"
+                                        data-gramm_editor="false"
+                                        data-enable-grammarly="false"
+                                        autocomplete="off"
+                                        autocorrect="off"
+                                        autocapitalize="off"
+                                        spellcheck="false"
                                         class="w-full border border-gray-300 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 pr-8 sm:pr-10 bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none text-sm"
-                                        x-on:keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); $wire.call('sendChatMessage'); }"
+                                        x-on:keydown.enter="if (!$event.shiftKey) { 
+                                            $event.preventDefault(); 
+                                            const message = $event.target.value.trim();
+                                            const fileInput = document.getElementById('chatFileInput');
+                                            const hasFiles = fileInput && fileInput.files && fileInput.files.length > 0;
+                                            if (!message && !hasFiles) {
+                                                $wire.set('alertType', 'error');
+                                                $wire.set('alertMessage', 'Please write a message or attach a file and then click on send.');
+                                            } else {
+                                                $wire.call('sendChatMessage');
+                                            }
+                                        }"
                                         x-on:paste="$data.handlePaste($event)"
                                         x-on:input="$wire.set('alertMessage', '')"
                                     ></textarea>
@@ -863,6 +913,23 @@
             </div>
         </div>
     @endif
+
+    @push('styles')
+    <style>
+        /* Prevent Grammarly overlays from interfering with typing */
+        .reflection-right textarea + [data-gramm],
+        .reflection-right [data-gramm-id],
+        .reflection-right .grammarly-indicator {
+            pointer-events: none !important;
+        }
+        
+        /* Allow clicks on Grammarly suggestions but not on the indicator overlay */
+        .reflection-right textarea {
+            position: relative;
+            z-index: 1;
+        }
+    </style>
+    @endpush
 
     @push('scripts')
     <script src="//cdn.jsdelivr.net/npm/sweetalert2@11"></script>

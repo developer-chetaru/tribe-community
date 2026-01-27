@@ -36,6 +36,13 @@
                     <input 
                         type="text" 
                         wire:model.defer="topic" 
+                        data-gramm="false"
+                        data-gramm_editor="false"
+                        data-enable-grammarly="false"
+                        autocomplete="off"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        spellcheck="false"
                         class="w-full border border-gray-300 rounded p-3 focus:ring-red-500 focus:border-red-500 placeholder-gray-500" 
                         placeholder="Topic"
                     >
@@ -46,6 +53,13 @@
                 <div>
                     <textarea 
                         wire:model.defer="message" 
+                        data-gramm="false"
+                        data-gramm_editor="false"
+                        data-enable-grammarly="false"
+                        autocomplete="off"
+                        autocorrect="off"
+                        autocapitalize="off"
+                        spellcheck="false"
                         class="w-full border border-gray-300 rounded p-3 focus:ring-red-500 focus:border-red-500 placeholder-gray-500" 
                         rows="8" 
                         placeholder="Details..."
