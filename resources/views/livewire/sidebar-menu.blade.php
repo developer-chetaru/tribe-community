@@ -23,11 +23,10 @@
             </template>
         </button>
     </div>
-<div class="menu-icon">
+<div class="menu-icon" aria-label="Toggle menu">
     <span class="top"></span>
     <span class="middle"></span>
     <span class="bottom"></span>
-    menu
 </div>
     <!-- Sidebar menu: scrollable -->
     <div  class="p-3 space-y-1 flex-1 overflow-y-auto">
@@ -670,21 +669,40 @@ document.querySelector(".menu-icon").addEventListener("click", function () {
 <style type="text/css">
     .menu-icon {display: none;}
     @media (max-width:992px) {
-nav.bg-white {
-    padding-left: 40px;
-}
-            .menu-icon {
-                width: 30px;
-                height: 30px;
-                background-color: #fee2e2;
-                right: -36px;
-                border-radius: 3px;
-                top: 11px;
-                position: absolute;
-                font-size: 10px;
-                display: flex; flex-wrap: wrap;
-                justify-content: center;
-                padding-top: 13px;
+        nav.bg-white {
+            padding-left: 60px !important;
+        }
+        
+        nav.bg-white header {
+            margin-left: 0;
+            padding-left: 0;
+        }
+        
+        .menu-icon {
+            width: 44px;
+            height: 44px;
+            background-color: #EB1C24;
+            left: 12px;
+            border-radius: 8px;
+            top: 12px;
+            position: fixed;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            z-index: 1001;
+        }
+            
+            .menu-icon:hover {
+                background-color: #c71313;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+                transform: scale(1.05);
+            }
+            
+            .menu-icon:active {
+                transform: scale(0.95);
             }
 
             .sidebar-menu img.w-32 {
@@ -705,47 +723,49 @@ nav.bg-white {
             }
 
             .menu-icon span {
-    width: 22px;
-    height: 1px;
-    background-color: #000;
-    position: absolute;
-    left: 4px;
-    top: 5px;
-}
+                width: 24px;
+                height: 2.5px;
+                background-color: #ffffff;
+                position: absolute;
+                left: 50%;
+                transform: translateX(-50%);
+                transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+                border-radius: 2px;
+            }
 
-.menu-icon span.middle {
-    top: 9px;
-}
+            .menu-icon span.top {
+                top: 14px;
+            }
 
-.menu-icon span.bottom {
-    top: 13px;
-}
+            .menu-icon span.middle {
+                top: 21px;
+            }
 
-.menu-icon.active {
-    right: -30px;
-}
+            .menu-icon span.bottom {
+                top: 28px;
+            }
 
-.menu-open .menu-icon span.middle {
-    opacity: 0;
-}
+            .menu-icon.active {
+                left: 12px;
+                background-color: #EB1C24;
+            }
 
-.menu-open span.top {
-    top: 11px;
-    transform: translateY(-50%) rotate(45deg);
-    -webkit-transform: translateY(-50%) rotate(45deg);
-    -moz-transform: translateY(-50%) rotate(45deg);
-    -ms-transform: translateY(-50%) rotate(45deg);
-    width: 20px;
-}
+            .menu-open .menu-icon span.middle {
+                opacity: 0;
+                transform: translateX(-50%) scale(0);
+            }
 
-.menu-open .menu-icon span.bottom {
-    top: 11px;
-    transform: translateY(-50%) rotate(-45deg);
-    -webkit-transform: translateY(-50%) rotate(-45deg);
-    -moz-transform: translateY(-50%) rotate(-45deg);
-    -ms-transform: translateY(-50%) rotate(-45deg);
-    width: 20px;
-}
+            .menu-open .menu-icon span.top {
+                top: 21px;
+                transform: translateX(-50%) translateY(-50%) rotate(45deg);
+                width: 24px;
+            }
+
+            .menu-open .menu-icon span.bottom {
+                top: 21px;
+                transform: translateX(-50%) translateY(-50%) rotate(-45deg);
+                width: 24px;
+            }
 
 .sidebar-menu:after {
     content: "";
