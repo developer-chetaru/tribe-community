@@ -53,6 +53,12 @@ class TrackUserLogin
         
         $saved = $user->save();
         \Log::info("Login save result: " . ($saved ? "success" : "fail"));
+        
+        // Refresh user to ensure we have latest data (especially timezone) before OneSignal update
+        $user->refresh();
+        if ($user->orgId) {
+            $user->load('organisation');
+        }
 
         // ✅ Store active session for single session management
         // This runs after session regeneration in LoginForm
@@ -89,13 +95,32 @@ class TrackUserLogin
 
         // ✅ Set OneSignal tags on login (for automation)
         try {
+            // Fetch fresh user instance from database to ensure latest timezone
+            $freshUser = \App\Models\User::with('organisation')->find($user->id);
+            
+            if (!$freshUser) {
+                Log::warning('User not found for OneSignal update', ['user_id' => $user->id]);
+                return;
+            }
+            
+            Log::info("OneSignal update - User timezone before update", [
+                'user_id' => $freshUser->id,
+                'timezone' => $freshUser->timezone,
+                'org_id' => $freshUser->orgId,
+            ]);
+            
             $oneSignal = new OneSignalService();
-            $oneSignal->setUserTagsOnLogin($user);
-            Log::info("OneSignal tags set for user: " . $user->id);
+            $oneSignal->setUserTagsOnLogin($freshUser);
+            
+            Log::info("OneSignal tags set for user: " . $freshUser->id, [
+                'timezone' => $freshUser->timezone,
+                'timezone_from_helper' => \App\Helpers\TimezoneHelper::getUserTimezone($freshUser),
+            ]);
         } catch (\Throwable $e) {
             Log::warning('OneSignal tag update failed on login', [
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
         }
 

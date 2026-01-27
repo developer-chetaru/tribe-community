@@ -496,6 +496,14 @@ class OneSignalService
             $user->load('organisation');
         }
         
+        // Log timezone before processing
+        \Log::info('OneSignal setUserTagsOnLogin - User data', [
+            'user_id' => $user->id,
+            'timezone_from_db' => $user->timezone,
+            'timezone_from_helper' => \App\Helpers\TimezoneHelper::getUserTimezone($user),
+            'org_id' => $user->orgId,
+        ]);
+        
         // Determine user type
         $userType = $user->orgId ? 'org' : 'basecamp';
 
@@ -510,10 +518,12 @@ class OneSignalService
         // Combine first_name and last_name for full name
         $fullName = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
 
+        $timezoneTag = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+        
         $tags = [
             'user_type' => $userType,
             'has_working_today' => $hasWorkingToday ? 'true' : 'false',
-            'timezone' => \App\Helpers\TimezoneHelper::getUserTimezone($user),
+            'timezone' => $timezoneTag,
             'has_submitted_today' => $hasSubmittedToday ? 'true' : 'false',
             'email_subscribed' => 'true',
             'status' => (string) $user->status,
@@ -522,8 +532,18 @@ class OneSignalService
             'last_name' => $user->last_name ?? '',
         ];
 
+        \Log::info('OneSignal setUserTagsOnLogin - Tags to be set', [
+            'user_id' => $user->id,
+            'tags' => $tags,
+        ]);
+
         // First, ensure user exists in OneSignal with external_id
-        $this->createOrUpdateOneSignalUser($user, $tags);
+        $result = $this->createOrUpdateOneSignalUser($user, $tags);
+        
+        \Log::info('OneSignal setUserTagsOnLogin - Result', [
+            'user_id' => $user->id,
+            'result' => $result,
+        ]);
 
         return true;
     }

@@ -18,6 +18,7 @@ class UpdateBasecampUser extends Component
     public $email;
     public $phone;
     public $country_code;
+    public $timezone;
     public $status;
 
     public $profile_photo;   
@@ -39,6 +40,7 @@ class UpdateBasecampUser extends Component
         $this->email = $user->email;
         $this->phone = $user->phone;
         $this->country_code = $user->country_code ?: '+1';
+        $this->timezone = $user->timezone ?: 'Asia/Kolkata';
         
         // Convert status to legacy format for dropdown (for backward compatibility)
         // Check if user has verified email
@@ -63,13 +65,33 @@ class UpdateBasecampUser extends Component
 
     public function saveUser()
     {
+        \Illuminate\Support\Facades\Log::info('UpdateBasecampUser - saveUser called', [
+            'user_id' => $this->userId,
+            'timezone_before_validation' => $this->timezone,
+            'all_properties' => [
+                'first_name' => $this->first_name,
+                'last_name' => $this->last_name,
+                'email' => $this->email,
+                'phone' => $this->phone,
+                'country_code' => $this->country_code,
+                'timezone' => $this->timezone,
+                'status' => $this->status,
+            ]
+        ]);
+
         $validatedData = $this->validate([
             'first_name' => 'required|string|max:255',
             'last_name'  => 'required|string|max:255',
             'email' => 'required|string|max:255|unique:users,email,' . $this->userId,
             'phone' => 'nullable|string|max:20',
             'country_code' => 'nullable|string|max:10',
+            'timezone' => 'nullable|string|max:50|in:' . implode(',', timezone_identifiers_list()),
             'status' => 'required|in:0,1',
+        ]);
+
+        \Illuminate\Support\Facades\Log::info('UpdateBasecampUser - Validation passed', [
+            'validated_timezone' => $validatedData['timezone'] ?? null,
+            'timezone_property' => $this->timezone,
         ]);
 
         $user = User::findOrFail($this->userId);
@@ -95,15 +117,23 @@ class UpdateBasecampUser extends Component
         ]);
 
         // Update user
-        $user->update([
+        $updateData = [
             'first_name' => $this->first_name,
             'last_name' => $this->last_name,
             'email' => $this->email,
             'phone' => $this->phone,
             'country_code' => $this->country_code,
+            'timezone' => $this->timezone ?: null, // Ensure null if empty
             'status' => $newStatus,
             'email_verified_at' => $emailVerifiedAt,
+        ];
+        
+        \Illuminate\Support\Facades\Log::info('UpdateBasecampUser - Updating user', [
+            'user_id' => $this->userId,
+            'update_data' => $updateData,
         ]);
+        
+        $user->update($updateData);
         
         // Refresh and verify update
         $user->refresh();
@@ -112,6 +142,8 @@ class UpdateBasecampUser extends Component
             'user_id' => $this->userId,
             'updated_status' => $user->status,
             'updated_email_verified_at' => $user->email_verified_at,
+            'updated_timezone' => $user->timezone,
+            'component_timezone' => $this->timezone,
         ]);
 
         // Handle profile photo upload
@@ -142,6 +174,16 @@ class UpdateBasecampUser extends Component
             \Log::warning('Brevo contact update failed: ' . $e->getMessage());
         }
 
+        // Refresh timezone property after update to ensure it's synced
+        $freshUser = $user->fresh();
+        $this->timezone = $freshUser->timezone ?: 'Asia/Kolkata';
+        
+        \Illuminate\Support\Facades\Log::info('UpdateBasecampUser - Timezone synced', [
+            'user_id' => $this->userId,
+            'component_timezone' => $this->timezone,
+            'db_timezone' => $freshUser->timezone,
+        ]);
+        
         session()->flash('message', 'User updated successfully!');
         session()->flash('type', 'success');
     }
@@ -151,6 +193,19 @@ class UpdateBasecampUser extends Component
         $this->mount($this->userId);
         $this->previewPhoto = null;
         $this->profile_photo = null;
+    }
+    
+    public function updatedTimezone($value)
+    {
+        // Log timezone updates for debugging
+        \Illuminate\Support\Facades\Log::info('UpdateBasecampUser - Timezone changed', [
+            'user_id' => $this->userId,
+            'new_timezone' => $value,
+            'current_timezone' => $this->timezone,
+        ]);
+        
+        // Ensure timezone is synced when changed
+        $this->timezone = $value;
     }
 
     public function render()

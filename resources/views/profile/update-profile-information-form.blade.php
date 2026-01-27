@@ -320,11 +320,12 @@
             $currentDisplay = collect($timezones)->firstWhere('value', $currentTz)['display'] ?? $currentTz;
         @endphp
         <script>
-            function timezoneComponent() {
+            function timezoneComponent(livewireTimezone) {
                 return {
                     search: '',
                     showSuggestions: false,
-                    selectedTimezone: @js($currentTz ?? ''),
+                    selectedTimezone: '',
+                    livewireTimezone: livewireTimezone,
                     timezones: @js($timezones ?? []),
             get filteredTimezones() {
                 if (!this.search || this.search.length < 1) return [];
@@ -345,6 +346,66 @@
                     'new zealand': 'NZ', 'netherlands': 'NL', 'belgium': 'BE',
                     'pakistan': 'PK', 'pakistani': 'PK', 'pakis': 'PK', 'paki': 'PK',
                     'nepal': 'NP', 'nepalese': 'NP', 'nepali': 'NP'
+                };
+                
+                // Expanded country name mappings for better search - defined at top level for scope
+                const countryNames = {
+                    'IN': ['india', 'indian'],
+                    'US': ['united states', 'usa', 'america', 'united states of america'],
+                    'GB': ['united kingdom', 'uk', 'britain', 'british', 'england'],
+                    'CN': ['china', 'chinese'],
+                    'JP': ['japan', 'japanese'],
+                    'KR': ['korea', 'korean', 'south korea'],
+                    'AU': ['australia', 'australian'],
+                    'CA': ['canada', 'canadian'],
+                    'DE': ['germany', 'german'],
+                    'FR': ['france', 'french'],
+                    'ES': ['spain', 'spanish'],
+                    'IT': ['italy', 'italian'],
+                    'SG': ['singapore'],
+                    'TH': ['thailand', 'thai'],
+                    'ID': ['indonesia', 'indonesian'],
+                    'PH': ['philippines', 'philippine'],
+                    'MY': ['malaysia', 'malaysian'],
+                    'AE': ['uae', 'united arab emirates', 'dubai', 'emirates'],
+                    'ZA': ['south africa', 'south african'],
+                    'EG': ['egypt', 'egyptian'],
+                    'BR': ['brazil', 'brazilian'],
+                    'MX': ['mexico', 'mexican'],
+                    'AR': ['argentina', 'argentine'],
+                    'NZ': ['new zealand'],
+                    'NL': ['netherlands', 'dutch'],
+                    'BE': ['belgium', 'belgian'],
+                    'CH': ['switzerland', 'swiss'],
+                    'AT': ['austria', 'austrian'],
+                    'SE': ['sweden', 'swedish'],
+                    'NO': ['norway', 'norwegian'],
+                    'DK': ['denmark', 'danish'],
+                    'FI': ['finland', 'finnish'],
+                    'PL': ['poland', 'polish'],
+                    'IE': ['ireland', 'irish'],
+                    'PT': ['portugal', 'portuguese'],
+                    'GR': ['greece', 'greek'],
+                    'TR': ['turkey', 'turkish'],
+                    'RU': ['russia', 'russian'],
+                    'PK': ['pakistan', 'pakistani', 'pakis', 'paki'],
+                    'NP': ['nepal', 'nepalese', 'nepali'],
+                    'BD': ['bangladesh', 'bangladeshi'],
+                    'LK': ['sri lanka', 'sri lankan'],
+                    'VN': ['vietnam', 'vietnamese'],
+                    'TW': ['taiwan', 'taiwanese'],
+                    'HK': ['hong kong'],
+                    'IL': ['israel', 'israeli'],
+                    'SA': ['saudi arabia', 'saudi'],
+                    'JO': ['jordan', 'jordanian'],
+                    'KW': ['kuwait', 'kuwaiti'],
+                    'QA': ['qatar', 'qatari'],
+                    'BH': ['bahrain', 'bahraini'],
+                    'OM': ['oman', 'omani'],
+                    'YE': ['yemen', 'yemeni'],
+                    'IQ': ['iraq', 'iraqi'],
+                    'IR': ['iran', 'iranian'],
+                    'AF': ['afghanistan', 'afghan']
                 };
                 
                 // Check if query is GMT/UTC offset (e.g., "gmt+5", "utc+5:30", "+5", "-8")
@@ -369,67 +430,6 @@
                     
                     // If no exact match, check for partial country name matches
                     if (!matchedCountryCode) {
-                        // Expanded country name mappings for better search
-                        const countryNames = {
-                            'IN': ['india', 'indian'],
-                            'US': ['united states', 'usa', 'america', 'united states of america'],
-                            'GB': ['united kingdom', 'uk', 'britain', 'british', 'england'],
-                            'CN': ['china', 'chinese'],
-                            'JP': ['japan', 'japanese'],
-                            'KR': ['korea', 'korean', 'south korea'],
-                            'AU': ['australia', 'australian'],
-                            'CA': ['canada', 'canadian'],
-                            'DE': ['germany', 'german'],
-                            'FR': ['france', 'french'],
-                            'ES': ['spain', 'spanish'],
-                            'IT': ['italy', 'italian'],
-                            'SG': ['singapore'],
-                            'TH': ['thailand', 'thai'],
-                            'ID': ['indonesia', 'indonesian'],
-                            'PH': ['philippines', 'philippine'],
-                            'MY': ['malaysia', 'malaysian'],
-                            'AE': ['uae', 'united arab emirates', 'dubai', 'emirates'],
-                            'ZA': ['south africa', 'south african'],
-                            'EG': ['egypt', 'egyptian'],
-                            'BR': ['brazil', 'brazilian'],
-                            'MX': ['mexico', 'mexican'],
-                            'AR': ['argentina', 'argentine'],
-                            'NZ': ['new zealand'],
-                            'NL': ['netherlands', 'dutch'],
-                            'BE': ['belgium', 'belgian'],
-                            'CH': ['switzerland', 'swiss'],
-                            'AT': ['austria', 'austrian'],
-                            'SE': ['sweden', 'swedish'],
-                            'NO': ['norway', 'norwegian'],
-                            'DK': ['denmark', 'danish'],
-                            'FI': ['finland', 'finnish'],
-                            'PL': ['poland', 'polish'],
-                            'IE': ['ireland', 'irish'],
-                            'PT': ['portugal', 'portuguese'],
-                            'GR': ['greece', 'greek'],
-                            'TR': ['turkey', 'turkish'],
-                            'RU': ['russia', 'russian'],
-                            'PK': ['pakistan', 'pakistani', 'pakis', 'paki'],
-                            'NP': ['nepal', 'nepalese', 'nepali'],
-                            'BD': ['bangladesh', 'bangladeshi'],
-                            'LK': ['sri lanka', 'sri lankan'],
-                            'VN': ['vietnam', 'vietnamese'],
-                            'TW': ['taiwan', 'taiwanese'],
-                            'HK': ['hong kong'],
-                            'IL': ['israel', 'israeli'],
-                            'SA': ['saudi arabia', 'saudi'],
-                            'AE': ['uae', 'united arab emirates', 'dubai', 'emirates'],
-                            'JO': ['jordan', 'jordanian'],
-                            'KW': ['kuwait', 'kuwaiti'],
-                            'QA': ['qatar', 'qatari'],
-                            'BH': ['bahrain', 'bahraini'],
-                            'OM': ['oman', 'omani'],
-                            'YE': ['yemen', 'yemeni'],
-                            'IQ': ['iraq', 'iraqi'],
-                            'IR': ['iran', 'iranian'],
-                            'AF': ['afghanistan', 'afghan']
-                        };
-                        
                         for (const [code, names] of Object.entries(countryNames)) {
                             for (const name of names) {
                                 // Check if query matches the start of country name or country name contains query
@@ -712,33 +712,39 @@
                 this.selectedTimezone = tz.value;
                 this.search = '';
                 this.showSuggestions = false;
-                $wire.set('state.timezone', tz.value);
             },
             clearTimezone() {
                 this.selectedTimezone = '';
                 this.search = '';
                 this.showSuggestions = false;
-                $wire.set('state.timezone', '');
             },
-                    init() {
-                        // Update Livewire when timezone changes
-                        this.$watch('selectedTimezone', value => {
-                            $wire.set('state.timezone', value);
-                        });
-                        
-                        // Listen for timezone updates from Livewire
-                        $wire.on('timezone-updated', (timezone) => {
-                            if (timezone) {
-                                this.selectedTimezone = timezone;
-                                $wire.set('state.timezone', timezone);
-                            }
-                        });
+            init() {
+                // Initialize selectedTimezone from Livewire on mount
+                const initialTz = this.livewireTimezone || @js($currentTz ?? '');
+                if (initialTz) {
+                    this.selectedTimezone = initialTz;
+                }
+                
+                // Sync selectedTimezone changes to Livewire (Alpine -> Livewire)
+                this.$watch('selectedTimezone', (newValue, oldValue) => {
+                    if (newValue !== oldValue) {
+                        this.livewireTimezone = newValue || '';
                     }
+                });
+                
+                // Sync Livewire changes to selectedTimezone (Livewire -> Alpine)
+                this.$watch('livewireTimezone', (newValue, oldValue) => {
+                    if (newValue !== oldValue && newValue !== this.selectedTimezone) {
+                        this.selectedTimezone = newValue || '';
+                        this.search = '';
+                    }
+                });
+            }
                 };
             }
         </script>
         <div class="col-span-6 sm:col-span-3" 
-             x-data="timezoneComponent()">
+             x-data="timezoneComponent(@entangle('state.timezone'))">
             <label for="timezone" class="block text-sm font-medium text-gray-700">Timezone</label>
             <div class="relative mt-1">
                 <div class="relative">
@@ -764,7 +770,7 @@
                         </svg>
                     </button>
                 </div>
-                <input type="hidden" wire:model.defer="state.timezone" x-model="selectedTimezone">
+                <input type="hidden" wire:model.defer="state.timezone" :value="selectedTimezone">
                 
                 <div x-show="showSuggestions && filteredTimezones.length > 0" 
                      x-cloak

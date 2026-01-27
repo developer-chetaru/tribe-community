@@ -48,6 +48,19 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
                 'timezone'   => $input['timezone'] ?? null,
             ])->save();
         }
+        
+        // Update OneSignal tags after profile update (especially for timezone)
+        try {
+            $oneSignal = new \App\Services\OneSignalService();
+            $user->refresh(); // Ensure we have latest data
+            $oneSignal->setUserTagsOnLogin($user);
+            \Illuminate\Support\Facades\Log::info("OneSignal tags updated after profile update for user: " . $user->id);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('OneSignal tag update failed after profile update', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
