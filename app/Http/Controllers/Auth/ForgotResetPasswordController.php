@@ -89,9 +89,15 @@ class ForgotResetPasswordController extends Controller
             }
         );
 
-        return $status === Password::PASSWORD_RESET
-            ? redirect()->route('login')->with('status', 'Password updated successfully!')
-            : back()->withErrors(['email' => [__($status)]]);
+        if ($status === Password::PASSWORD_RESET) {
+            // Redirect back to reset password page with success message, then auto-redirect to login
+            return redirect()->route('custom.password.reset', [
+                'token' => $request->token,
+                'email' => $request->email,
+            ])->with('status', 'Password updated successfully!');
+        }
+        
+        return back()->withErrors(['email' => [__($status)]]);
     }
 
 	public function showResetForm(Request $request)
