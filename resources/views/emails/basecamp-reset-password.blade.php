@@ -2,38 +2,60 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Invitation</title>
+    <title>Basecamp Reset Password</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Lexend', Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+        @media only screen and (max-width: 600px) {
+            .container { width: 100% !important; padding: 10px !important; }
+        }
+    </style>
 </head>
-<body style="font-family: Arial, sans-serif; background:#f9f9f9; padding:20px; margin:0;">
-    <div style="max-width:600px; margin:0 auto; background:#fff; padding:30px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.1); line-height:1.6;">
-        
-        <div style="text-align:center; margin-bottom:30px;">
-            <img src="{{ asset('images/logo-tribe.png') }}" alt="Tribe365 Logo" style="width:140px;" />
-        </div>
-
-        <h2 style="color:#000000; margin:0 0 15px;">Hello {{ ucfirst($userFullName) }},</h2>
-        
-        <p style="color:#000000; margin:0 0 20px;">
-            You’ve been invited by <strong>{{ ucfirst($inviterName) }}</strong> to join on Tribe365.
-        </p>
-
-     
-        <p style="color:#000000; margin:0 0 25px;">
-            Click on below button to set password. 
-        </p>        
-
-        <div style="margin:30px 0; text-align:center;">
-            <a href="{{ $resetUrl }}"
-               style="background:#e3342f; color:#fff; padding:14px 28px; text-decoration:none; border-radius:6px; font-weight:bold; display:inline-block;">
-               Join 
-            </a>
-        </div>
-
-
-      
-        <p style="color:#000000; margin:0 0 5px;">Thank you,</p>
-        <p style="color:#000000; margin:0;">The Tribe365 Team</p>
-    </div>
+<body style="font-family: 'Lexend', Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f9f9f9;">
+    <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f9f9f9;padding:20px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellspacing="0" cellpadding="0" border="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:600px;">
+                    <tr>
+                        <td style="background:#eb1c24;height:6px;"></td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:30px 20px 20px 20px;">
+                            <img src="{{ asset('images/logo-tribe.png') }}" alt="Tribe365 Logo" width="130" style="display:block;margin:0 auto;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Basecamp Reset Password</h2>
+                            <h3 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 15px 0;font-size:20px;font-weight:600;">Tribe365® Basecamp Password Reset Request</h3>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ $user->first_name ?? $user->name ?? '<Name>' }},</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">We have received a request to reset your Tribe365® Basecamp password</p>
+                            <table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:25px auto;">
+                                <tr>
+                                    <td bgcolor="#eb1c24" style="border-radius:5px;">
+                                        <a href="{{ $url ?? $resetUrl ?? url('/password/reset') }}" style="display:inline-block;padding:12px 30px;color:#ffffff;text-decoration:none;font-weight:600;background-color:#eb1c24;border-radius:5px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Reset Password</a>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you didn't request this you can safely ignore this email - your account is secure</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us</p>
+                            <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:20px;font-size:12px;color:#888;border-top:1px solid #e0e0e0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            © 2026 <span style="color:#eb1c24;font-weight:600;">TRIBE365<sup>®</sup></span> - ALL RIGHTS RESERVED<br>
+                            Contact us: +44 (0) 1325 734 846 | Email: <a href="mailto:team@tribe365.co" style="color:#888;text-decoration:none;">team@tribe365.co</a>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
-

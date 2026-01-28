@@ -2,55 +2,53 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Account Reactivated</title>
+    <title>Basecamp Account Reactivated Mail</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        body {
+            font-family: 'Lexend', Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
         @media only screen and (max-width: 600px) {
-            .red-bar { width: 100% !important; }
-            .container { padding: 10px !important; }
+            .container { width: 100% !important; padding: 10px !important; }
         }
     </style>
 </head>
-<body style="font-family: Arial, Helvetica, sans-serif; padding: 0; margin: 0; background: #F9F9F9;">
-    <div class="red-bar" style="height: 6px; width: 62%; background-color: #16a34a; margin: 0 auto; border-radius: 4px;"></div>
-    <div style="max-width: 500px; margin: auto; background: #FFFFFF; padding: 20px; border-radius: 0 0 8px 8px; color: black;">
-        <img src="{{ asset('images/logo-tribe.png') }}" alt="Tribe365 Logo" style="width:120px; max-width:160px; margin: 0 auto 15px auto; display:block;" />
-        
-        <h2 style="margin-bottom: 20px; color: #16a34a;">🎉 Welcome Back! Your Account Has Been Reactivated</h2>
-        
-        <p style="margin: 0 0 15px 0; color: black;">Hi {{ $user->first_name ?? 'there' }},</p>
-        <p style="margin: 0 0 15px 0; color: black;">Great news! Your Tribe365 account has been successfully reactivated. You now have full access to all features and services.</p>
-        
-        <div style="background: #f0fdf4; border-left: 4px solid #16a34a; border-radius: 5px; padding: 15px; margin: 20px 0;">
-            <p style="margin: 0 0 10px 0; color: #16a34a; font-weight: bold;">Account Status: Active</p>
-            <table width="100%" cellspacing="0" cellpadding="5" border="0">
-                <tr>
-                    <td style="color: #666; font-size: 14px;">Next Billing Date:</td>
-                    <td align="right" style="color: #333; font-weight: bold; font-size: 14px;">{{ $nextBillingDate }}</td>
-                </tr>
-                @if($subscription->tier)
-                <tr>
-                    <td style="color: #666; font-size: 14px;">Subscription Tier:</td>
-                    <td align="right" style="color: #333; font-size: 14px;">{{ ucfirst($subscription->tier) }}</td>
-                </tr>
-                @endif
-            </table>
-        </div>
-        
-        <p style="margin: 0 0 15px 0; color: black;">You can now access all Tribe365 features and continue using the platform without any restrictions.</p>
-        
-        <div style="text-align: center; margin: 25px 0;">
-            <a href="{{ $dashboardUrl }}" style="display: inline-block; padding: 12px 30px; background: #EB1C24; color: white; border-radius: 5px; text-decoration: none; font-weight: bold;">Go to Dashboard</a>
-        </div>
-        
-        <p style="margin: 0 0 15px 0; color: black; font-size: 14px;">If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
-        <p style="margin-top: 20px; color: black;">Thank you for being part of Tribe365!<br>The Tribe365 Team</p>
-        
-        <hr style="border: none; border-top: 1px solid #ccc; margin: 20px 0;">
-        <p style="font-size: 12px; color: #888; text-align: center;">
-            © {{ date('Y') }} <span style="color: #EB1C24; font-weight: bold;">Tribe365 <sup>®</sup></span> - ALL RIGHTS RESERVED<br>
-            <a href="mailto:{{ config('app.support_email', 'support@tribe365.co') }}" style="color: #888; text-decoration: none;">{{ config('app.support_email', 'support@tribe365.co') }}</a>
-        </p>
-    </div>
+<body style="font-family: 'Lexend', Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f9f9f9;">
+    <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f9f9f9;padding:20px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellspacing="0" cellpadding="0" border="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:600px;">
+                    <tr>
+                        <td style="background:#eb1c24;height:6px;"></td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:30px 20px 20px 20px;">
+                            <img src="{{ asset('images/logo-tribe.png') }}" alt="Tribe365 Logo" width="130" style="display:block;margin:0 auto;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Basecamp Account Reactivated Mail</h2>
+                            <h3 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 15px 0;font-size:20px;font-weight:600;">Welcome Back! Your Account Has Been Reactivated</h3>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ $user->first_name ?? '<Name>' }},</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Great News! Your Tribe365® Basecamp account has been successfully reactivated</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">You can now access Tribe365® Basecamp and get back to advancing your career, working well with others and getting more out of life</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us</p>
+                            <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:20px;font-size:12px;color:#888;border-top:1px solid #e0e0e0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            © 2026 <span style="color:#eb1c24;font-weight:600;">TRIBE365<sup>®</sup></span> - ALL RIGHTS RESERVED<br>
+                            Contact us: +44 (0) 1325 734 846 | Email: <a href="mailto:team@tribe365.co" style="color:#888;text-decoration:none;">team@tribe365.co</a>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
-

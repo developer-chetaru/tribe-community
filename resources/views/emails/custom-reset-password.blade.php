@@ -2,135 +2,61 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>
-        @if(!empty($inviterName))
-            {{ $orgName }} Invitation
-        @else
-            Reset Your Tribe365 Password
-        @endif
-    </title>
+    <title>Org Custom Reset Password Invitation</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Lexend', Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+        @media only screen and (max-width: 600px) {
+            .container { width: 100% !important; padding: 10px !important; }
+        }
+    </style>
 </head>
-
-<body style="font-family:Arial,Helvetica,sans-serif; background:#f2f2f2; padding:25px; margin:0;">
-    <table width="100%" cellspacing="0" cellpadding="0">
+<body style="font-family: 'Lexend', Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f9f9f9;">
+    <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f9f9f9;padding:20px 0;">
         <tr>
             <td align="center">
-
-                <!-- Outer Container -->
-                <table width="600" cellspacing="0" cellpadding="0"
-                       style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 3px 12px rgba(0,0,0,0.10);">
-
-                    <!-- Top Accent -->
+                <table width="600" cellspacing="0" cellpadding="0" border="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:600px;">
                     <tr>
-                        <td style="background:#EB1C24; height:6px;"></td>
+                        <td style="background:#eb1c24;height:6px;"></td>
                     </tr>
-
-                    <!-- Logo Section -->
                     <tr>
-                        <td align="center" style="padding:30px 20px 10px;">
-                            <img src="{{ asset('images/logo-tribe.png') }}"
-                                 alt="Tribe365 Logo"
-                                 style="width:150px; display:block;">
+                        <td align="center" style="padding:30px 20px 20px 20px;">
+                            <img src="{{ asset('images/logo-tribe.png') }}" alt="Tribe365 Logo" width="130" style="display:block;margin:0 auto;">
                         </td>
                     </tr>
-
-                    <!-- Content Section -->
                     <tr>
-                        <td style="padding:25px 35px; color:#333; font-size:15px; line-height:1.7;">
-
-                            <p style="margin:0 0 20px;">Hello {{ ucfirst($userFullName) }},</p>
-
-                            @if(!empty($inviterName))
-                                <!-- Invitation Email -->
-
-                                <p style="margin:0 0 18px;">
-                                    You’ve been invited by {{ ucfirst($inviterName) }}
-                                    to join {{ ucfirst($orgName) ?? '' }} on Tribe365.
-                                </p>
-
-                                <p style="margin:0 0 18px;">
-                                    Tribe365 helps teams stay connected, aligned, and build a positive work culture together.
-                                    Get started by setting up your password and activating your account:
-                                </p>
-
-                                <!-- Button -->
-                                <div style="text-align:center; margin:35px 0;">
-                                    <a href="{{ $resetUrl }}"
-                                       style="
-                                            background:#EB1C24;
-                                            color:#ffffff;
-                                            padding:10px 30px;
-                                            font-size:14px;
-                                            border-radius:5px;
-                                            text-decoration:none;
-                                            font-weight:bold;
-                                            display:inline-block;">
-                                        Set up your password to Join {{ ucfirst($orgName) ?? '' }}
-                                    </a>
-                                </div>
-
-                                <p style="margin:0 0 18px;">
-                                    Prefer not to join? You can decline this invitation,
-                                    and we’ll let {{ ucfirst($inviterName) }} know.
-                                </p>
-
-                                <p style="margin:0 0 20px;">
-                                    If you have any questions, reply to this email or reach out to
-                                    {{ ucfirst($inviterName) }} directly.
-                                </p>
-
-                            @else
-                                <!-- Password Reset Email -->
-
-                                <p style="margin:0 0 18px;">
-                                    We received a request to reset your Tribe365 password.
-                                </p>
-
-                                <p style="margin:0 0 25px;">
-                                    Click the button below to create a new password for your account:
-                                </p>
-
-                                <!-- Button -->
-                                <div style="text-align:center; margin:35px 0;">
-                                    <a href="{{ $resetUrl }}"
-                                       style="
-                                            background:#EB1C24;
-                                            color:#ffffff;
-                                            padding:10px 30px;
-                                            font-size:14px;
-                                            border-radius:6px;
-                                            text-decoration:none;
-                                            font-weight:bold;
-                                            display:inline-block;">
-                                        Reset Password
-                                    </a>
-                                </div>
-
-                                <p style="margin:0 0 20px;">
-                                    If you didn’t request this, you can safely ignore this email —
-                                    your account is secure.
-                                </p>
-
-                            @endif
-
-                            <p style="margin:0 0 5px;">Thank you,</p>
-                            <p style="margin:0;">The Tribe365 Team</p>
-
+                        <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Org Custom Reset Password Invitation</h2>
+                            <h3 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 15px 0;font-size:20px;font-weight:600;">Tribe365® App Password Setup Request</h3>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ ucfirst($userFullName ?? '<Name>') }},</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">You have been invited by {{ ucfirst($inviterName ?? '<Name>') }} to join {{ ucfirst($orgName ?? '<Organisation>') }} on the Tribe365® behaviour coach app</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Tribe365® helps teams to stay connected, aligned and build a positive work culture together. Get started by following the below link to set your password and activate your account</p>
+                            <table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:25px auto;">
+                                <tr>
+                                    <td bgcolor="#eb1c24" style="border-radius:5px;">
+                                        <a href="{{ $resetUrl }}" style="display:inline-block;padding:12px 30px;color:#ffffff;text-decoration:none;font-weight:600;background-color:#eb1c24;border-radius:5px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Set Password</a>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Prefer not to join? You can decline this invitation and we'll let {{ ucfirst($inviterName ?? '<Name>') }} know</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us or {{ ucfirst($inviterName ?? '<Name>') }} directly</p>
+                            <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
                         </td>
                     </tr>
-
-                    <!-- Footer -->
                     <tr>
-                        <td style="padding:15px 10px; background:#fafafa; text-align:center; color:#777; font-size:12px; border-top:1px solid #e6e6e6;">
-                            © {{ date('Y') }} <strong style="color:#EB1C24;">Tribe365</strong> — All Rights Reserved
+                        <td align="center" style="padding:20px;font-size:12px;color:#888;border-top:1px solid #e0e0e0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            © 2026 <span style="color:#eb1c24;font-weight:600;">TRIBE365<sup>®</sup></span> - ALL RIGHTS RESERVED<br>
+                            Contact us: +44 (0) 1325 734 846 | Email: <a href="mailto:team@tribe365.co" style="color:#888;text-decoration:none;">team@tribe365.co</a>
                         </td>
                     </tr>
-
                 </table>
-
             </td>
         </tr>
     </table>
 </body>
 </html>
-

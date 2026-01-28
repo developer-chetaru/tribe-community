@@ -113,13 +113,28 @@ class GenerateEmailTemplatesPdf extends Command
         // Add CSS for page breaks and styling
         $combinedHtml .= '<style>
             @page {
-                margin: 20mm;
+                margin: 10mm 15mm;
+                size: A4 portrait;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            html, body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 0;
+                width: 100%;
             }
             .email-template {
                 page-break-after: always;
-                margin-bottom: 50px;
-                padding: 20px;
+                page-break-inside: avoid;
+                margin: 0 auto;
+                padding: 10px 15px;
                 border-bottom: 3px solid #EB1C24;
+                width: 100%;
+                max-width: 100%;
+                display: block;
+                text-align: center;
             }
             .email-template:last-child {
                 page-break-after: auto;
@@ -127,14 +142,57 @@ class GenerateEmailTemplatesPdf extends Command
             .template-title {
                 background: #EB1C24;
                 color: white;
-                padding: 15px;
-                margin: -20px -20px 20px -20px;
-                font-size: 18px;
+                padding: 10px 15px;
+                margin: -10px -15px 10px -15px;
+                font-size: 14px;
                 font-weight: bold;
                 text-transform: uppercase;
+                text-align: center;
+                width: calc(100% + 30px);
             }
-            body {
-                font-family: Arial, sans-serif;
+            .email-template > div {
+                width: 100%;
+                text-align: center;
+            }
+            .email-template > div > table {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 auto !important;
+            }
+            .email-template > div > table > tbody > tr > td {
+                text-align: center !important;
+                padding: 0;
+            }
+            .email-template table {
+                margin: 0 auto !important;
+            }
+            .email-template table[width="600"],
+            .email-template table[width="550"],
+            .email-template table[width="500"] {
+                max-width: 100% !important;
+                width: auto !important;
+                margin: 0 auto !important;
+            }
+            .email-template table[style*="max-width:600px"] {
+                max-width: 550px !important;
+                width: auto !important;
+            }
+            .email-template table[style*="max-width:550px"] {
+                max-width: 500px !important;
+                width: auto !important;
+            }
+            .email-template table[style*="max-width:500px"] {
+                max-width: 450px !important;
+                width: auto !important;
+            }
+            .email-template img {
+                max-width: 100% !important;
+                height: auto !important;
+                display: block;
+                margin: 0 auto;
+            }
+            .email-template td[align="center"] {
+                text-align: center !important;
             }
         </style>';
 
@@ -148,6 +206,17 @@ class GenerateEmailTemplatesPdf extends Command
                 // Add template wrapper with title
                 $templateTitle = str_replace(['-', '_'], ' ', $templateName);
                 $templateTitle = ucwords($templateTitle);
+                
+                // Wrap HTML in centered container for PDF using table (better PDF support)
+                // Remove any existing body/html tags from rendered HTML if present
+                $html = preg_replace('/<body[^>]*>/i', '', $html);
+                $html = preg_replace('/<\/body>/i', '', $html);
+                $html = preg_replace('/<html[^>]*>/i', '', $html);
+                $html = preg_replace('/<\/html>/i', '', $html);
+                $html = preg_replace('/<head>.*?<\/head>/is', '', $html);
+                
+                // Wrap in centered table for proper PDF centering
+                $html = '<div style="width:100%;text-align:center;"><table width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto;"><tr><td align="center" style="text-align:center;">' . $html . '</td></tr></table></div>';
                 
                 $combinedHtml .= '<div class="email-template">';
                 $combinedHtml .= '<div class="template-title">' . htmlspecialchars($templateTitle) . '</div>';
@@ -167,6 +236,9 @@ class GenerateEmailTemplatesPdf extends Command
                 $pdf = Pdf::loadHTML($combinedHtml);
                 $pdf->setPaper('a4', 'portrait');
                 $pdf->setOption('enable-local-file-access', true);
+                $pdf->setOption('isHtml5ParserEnabled', true);
+                $pdf->setOption('isRemoteEnabled', true);
+                $pdf->setOption('dpi', 150);
                 
                 // Save combined PDF
                 $filepath = $outputDir . '/all-email-templates-combined.pdf';
@@ -471,7 +543,8 @@ class GenerateEmailTemplatesPdf extends Command
                     'user' => $dummyUser,
                     'userFullName' => 'John Doe',
                     'inviterName' => 'Jane Smith',
-                    'resetUrl' => url('/password/reset?token=example'),
+                    'url' => url('/password/reset?token=example'),
+                    'resetUrl' => url('/password/reset?token=example'), // Also include for compatibility
                 ],
             ],
             'weekly-summary' => [

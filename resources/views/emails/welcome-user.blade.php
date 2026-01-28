@@ -2,57 +2,51 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Daily Sentiment Reminder</title>
+    <title>Welcome Tribe365® Basecamp User</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Lexend', Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+        @media only screen and (max-width: 600px) {
+            .container { width: 100% !important; padding: 10px !important; }
+        }
+    </style>
 </head>
-
-<body style="margin:0; padding:0; background:#f5f5f5; font-family: Arial, Helvetica, sans-serif;">
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5; padding:20px 0;">
+<body style="font-family: 'Lexend', Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f9f9f9;">
+    <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f9f9f9;padding:20px 0;">
         <tr>
             <td align="center">
-
-                <table width="500" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:10px; overflow:hidden;">
-                    
-                    <!-- Header Bar -->
+                <table width="600" cellspacing="0" cellpadding="0" border="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:600px;">
                     <tr>
-                        <td style="background:#EB1C24; height:6px;"></td>
+                        <td style="background:#eb1c24;height:6px;"></td>
                     </tr>
-
-                    <!-- Logo -->
                     <tr>
-                        <td align="center" style="padding:25px 20px 10px;">
-                            <img src="{{ asset('images/logo-tribe.png') }}" width="130" alt="Tribe365 Logo">
+                        <td align="center" style="padding:30px 20px 20px 20px;">
+                            <img src="{{ asset('images/logo-tribe.png') }}" alt="Tribe365 Logo" width="130" style="display:block;margin:0 auto;">
                         </td>
                     </tr>
-
-                    <td style="text-align:center;">
-                            <p style="color:#333; margin-bottom:10px;">Welcome to Tribe365</p>
-                            <p style="font-size:15px; color:#555;">
-                                Hi there! Your account has been created successfully.
-                            </p>
-
-                            <p style="font-size:15px; color:#555; margin-top:25px;">
-                                You can now log in and start using the platform.
-                            </p>
-
-                            <a href="https://community.tribe365.co/login" 
-                               style="display:inline-block; margin-top:25px; padding:12px 25px; 
-                               background:#EB1C24; color:white; text-decoration:none; 
-                               border-radius:6px; font-size:16px;">
-                               Login Now
-                            </a>
-
-                            <p style="margin-top:30px; font-size:13px;"></p>
-                        </td>
-
-                    <!-- Footer -->
                     <tr>
-                        <td style="padding:15px; text-align:center; font-size:12px; color:#888; border-top:1px solid #e0e0e0;">
-                            © {{ date('Y') }} <strong style="color:#EB1C24;">Tribe365</strong> — All Rights Reserved
+                        <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Org/Basecamp Welcome Tribe365® Basecamp User</h2>
+                            <h3 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 15px 0;font-size:20px;font-weight:600;">Welcome to Tribe365® Basecamp</h3>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ $user->first_name ?? '<Name>' }},</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Your account has now been successfully set up and you can log in</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Maximise your engagement to advance your career, work well with others and get more out of life</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us</p>
+                            <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
                         </td>
                     </tr>
-
+                    <tr>
+                        <td align="center" style="padding:20px;font-size:12px;color:#888;border-top:1px solid #e0e0e0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            © 2026 <span style="color:#eb1c24;font-weight:600;">TRIBE365<sup>®</sup></span> - ALL RIGHTS RESERVED<br>
+                            Contact us: +44 (0) 1325 734 846 | Email: <a href="mailto:team@tribe365.co" style="color:#888;text-decoration:none;">team@tribe365.co</a>
+                        </td>
+                    </tr>
                 </table>
-
             </td>
         </tr>
     </table>

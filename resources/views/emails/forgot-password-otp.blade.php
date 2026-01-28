@@ -1,44 +1,60 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Password Reset OTP</title>
-  <style>
-    @media only screen and (max-width: 600px) {
-      .red-bar {
-        width: 100% !important;
-      }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>Basecamp Forgot Password OTP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Lexend', Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+        @media only screen and (max-width: 600px) {
+            .container { width: 100% !important; padding: 10px !important; }
+        }
+    </style>
 </head>
-<body style="font-family: sans-serif; padding: 0; margin: 0; background: #f9f9f9;">
-  <!-- 🔴 Top Red Bar -->
-   <div class="red-bar" style="height: 6px; width: 62%; background-color: #e3342f; margin: 0 auto; border-radius: 4px;"></div>
-
-  <div style="max-width: 500px; margin: auto; background: #ffffff; padding: 20px; border-radius: 0 0 8px 8px;">
-    <!-- 🟥 Logo (optional local image) -->
-    <img src="{{ asset('images/tribe.png') }}" alt="Tribe365 Logo" style="max-width: 150px; margin-bottom: 20px;" />
-
-    <!-- 🔐 OTP Section -->
-    <h2 style="color: #e3342f;">Password Reset OTP</h2>
-    <p>Hello {{ ucfirst($first_name) }},</p>
-    <p>We received a request to reset your Tribe365 account password.</p>
-    <p>Please use the one-time password (OTP) below:</p>
-    <p style="font-size: 24px; font-weight: bold; color: #FF0000;">{{ $otp }}</p>
-    <p style="color: #888;">This code is valid for the next 10 minutes.</p>
-    <p style="color: #888;">If you did not request a password reset, please ignore this message.</p>
-
-    <!-- 🔻 Footer -->
-    <br>
-    <hr style="border: none; border-top: 1px solid #ccc;">
-    <p style="font-size: 12px; color: #888; text-align: center;">
-      © {{ date('Y') }}
-      <span style="color: #e3342f; font-weight: bold;">TRIBE365<sup>®</sup></span> - ALL RIGHTS RESERVED
-    </p>
-    <p style="font-size: 12px; color: #888; text-align: center;">
-      Contact us: +44 (0) 1325 734 846 | Email:
-      <a href="mailto:team@tribe365.co" style="color: #888; text-decoration: none;">team@tribe365.co</a>
-    </p>
-  </div>
+<body style="font-family: 'Lexend', Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f9f9f9;">
+    <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f9f9f9;padding:20px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellspacing="0" cellpadding="0" border="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:600px;">
+                    <tr>
+                        <td style="background:#eb1c24;height:6px;"></td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:30px 20px 20px 20px;">
+                            <img src="{{ asset('images/logo-tribe.png') }}" alt="Tribe365 Logo" width="130" style="display:block;margin:0 auto;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Basecamp Forgot Password OTP</h2>
+                            <h3 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 15px 0;font-size:20px;font-weight:600;">Password Reset OTP</h3>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hello {{ ucfirst($first_name ?? '<Name>') }},</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">We received a request to reset your Tribe365® Basecamp account password</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Please use the one-time password (OTP) below:</p>
+                            <div style="text-align:center;margin:25px 0;">
+                                <div style="display:inline-block;padding:15px 30px;background-color:#f5f5f5;border:2px solid #eb1c24;border-radius:8px;">
+                                    <p style="margin:0;font-size:32px;font-weight:700;color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;letter-spacing:5px;">{{ $otp }}</p>
+                                </div>
+                            </div>
+                            <p style="margin:20px 0 15px 0;color:#666;font-family: 'Lexend', Arial, Helvetica, sans-serif;">This code is valid for the next 10 minutes</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you did not request a password reset please ignore this message</p>
+                            <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:20px;font-size:12px;color:#888;border-top:1px solid #e0e0e0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            © 2026 <span style="color:#eb1c24;font-weight:600;">TRIBE365<sup>®</sup></span> - ALL RIGHTS RESERVED<br>
+                            Contact us: +44 (0) 1325 734 846 | Email: <a href="mailto:team@tribe365.co" style="color:#888;text-decoration:none;">team@tribe365.co</a>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>

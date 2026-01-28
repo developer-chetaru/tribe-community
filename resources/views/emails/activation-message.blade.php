@@ -1,87 +1,58 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Account Activation</title>
+    <meta charset="UTF-8">
+    <title>Basecamp Activation Message</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 80px;
-            background-color: #f9fafb;
+            font-family: 'Lexend', Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
         }
-        .message {
-            background: #ffffff;
-            display: inline-block;
-            padding: 40px 50px;
-            border-radius: 12px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            max-width: 500px;
-        }
-        h2 {
-            margin-bottom: 20px;
-        }
-        p {
-            font-size: 16px;
-            color: #555;
-        }
-        .success {
-            color: #16a34a; /* green */
-        }
-        .already {
-            color: #f97316; /* orange */
-        }
-        .btn {
-            display: inline-block;
-            padding: 12px 24px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 8px;
-            text-decoration: none;
-            transition: all 0.3s ease;
-            margin-top: 20px;
-        }
-        .btn-login {
-            background-color: #dc2626; /* red */
-            color: #fff !important;
-        }
-        .btn-login:hover {
-            background-color: #b91c1c;
-        }
-        .progress {
-            margin: 20px auto;
-            height: 8px;
-            width: 80%;
-            background: #e5e7eb;
-            border-radius: 6px;
-            overflow: hidden;
-            position: relative;
-        }
-        .progress-bar {
-            height: 100%;
-            width: 0;
-            background: linear-gradient(90deg, #ef4444, #b91c1c);
-            animation: progressAnim 2s forwards;
-        }
-        @keyframes progressAnim {
-            from { width: 0; }
-            to { width: 100%; }
+        @media only screen and (max-width: 600px) {
+            .container { width: 100% !important; padding: 10px !important; }
         }
     </style>
 </head>
-<body>
-    <div class="message">
-        @if ($user->status)
-            <h2 class="success">🎉 Your account has been activated successfully!</h2>
-            <p>We’re setting things up for you. Please proceed to login.</p>
-        @else
-            <h2 class="already">⚡ Your account is already active!</h2>
-            <p>You can go ahead and log in directly.</p>
-        @endif
-
-    
-
-        {{-- Login Button --}}
-        <a href="{{ url('/login') }}" class="btn btn-login">Go to Login</a>
-    </div>
+<body style="font-family: 'Lexend', Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f9f9f9;">
+    <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f9f9f9;padding:20px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellspacing="0" cellpadding="0" border="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:600px;">
+                    <tr>
+                        <td style="background:#eb1c24;height:6px;"></td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:30px 20px 20px 20px;">
+                            <img src="{{ asset('images/logo-tribe.png') }}" alt="Tribe365 Logo" width="130" style="display:block;margin:0 auto;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Basecamp Activation Message</h2>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Your Tribe365® Basecamp account has been successfully activated!</p>
+                            <p style="margin:0 0 20px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">We're setting things up for you. Please proceed to login.</p>
+                            <table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:25px auto;">
+                                <tr>
+                                    <td bgcolor="#eb1c24" style="border-radius:5px;">
+                                        <a href="{{ url('/login') }}" style="display:inline-block;padding:12px 30px;color:#ffffff;text-decoration:none;font-weight:600;background-color:#eb1c24;border-radius:5px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Go to Login</a>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:20px;font-size:12px;color:#888;border-top:1px solid #e0e0e0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            © 2026 <span style="color:#eb1c24;font-weight:600;">TRIBE365<sup>®</sup></span> - ALL RIGHTS RESERVED<br>
+                            Contact us: +44 (0) 1325 734 846 | Email: <a href="mailto:team@tribe365.co" style="color:#888;text-decoration:none;">team@tribe365.co</a>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>

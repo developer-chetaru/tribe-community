@@ -2,71 +2,52 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Daily Sentiment Reminder</title>
+    <title>Basecamp Sentiment Summary Mail</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Lexend', Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+        @media only screen and (max-width: 600px) {
+            .container { width: 100% !important; padding: 10px !important; }
+        }
+    </style>
 </head>
-<body style="margin:0; padding:0; background:#f5f5f5; font-family: Arial, Helvetica, sans-serif;">
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5; padding:20px 0;">
+<body style="font-family: 'Lexend', Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f9f9f9;">
+    <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f9f9f9;padding:20px 0;">
         <tr>
             <td align="center">
-                <table width="500" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:10px; overflow:hidden;">
-                    
-                    <!-- Header Bar -->
+                <table width="600" cellspacing="0" cellpadding="0" border="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:600px;">
                     <tr>
-                        <td style="background:#EB1C24; height:6px;"></td>
+                        <td style="background:#eb1c24;height:6px;"></td>
                     </tr>
-
-                    <!-- Logo -->
                     <tr>
-                        <td align="center" style="padding:25px 20px 10px;">
-                            <img src="https://community.tribe365.co/images/logo-tribe.png" width="130" alt="Tribe365 Logo">
+                        <td align="center" style="padding:30px 20px 20px 20px;">
+                            <img src="{{ asset('images/logo-tribe.png') }}" alt="Tribe365 Logo" width="130" style="display:block;margin:0 auto;">
                         </td>
                     </tr>
-
-                    <!-- Email Body -->
                     <tr>
-                        <td style="padding:20px 30px; color:#333; font-size:15px; line-height:1.6;">
-                            <p>Hello {{ name | default: "there" }},</p>
-
-                            <p>We noticed that your sentiment update for today is still pending.</p>
-
-                            <p style="margin-bottom:20px;">
-                                When you have a moment, please share how your day has been.
-                                Your daily input helps keep your emotional journey consistent and valuable.
-                            </p>
-
-                            <!-- BUTTON -->
-                            <div style="text-align:center; margin:25px 0;">
-                                <a href="https://community.tribe365.co/app-redirect"
-                                   style="background:#EB1C24;
-                                          color:#ffffff;
-                                          padding:10px 25px;
-                                          text-decoration:none;
-                                          border-radius:6px;
-                                          font-weight:bold;
-                                          display:inline-block;">
-                                    Update Now
-                                </a>
-                            </div>
-
-                            <p>
-                                Thank you for staying consistent and engaged with
-                                <strong style="color:#EB1C24;">Tribe365</strong>.
-                            </p>
-
-                            <p style="margin-top:25px;">
-                               Thanks,<br>
-                               Tribe365 Team
-                            </p>
+                        <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Basecamp Sentiment Summary Mail</h2>
+                            <h3 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 15px 0;font-size:20px;font-weight:600;">Weekly Tribe365® Basecamp Sentiment Summary</h3>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ $user->first_name ?? $user->name ?? '<Name>' }},</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Below is your weekly sentiment summary for {{ $week ?? '<week>' }}</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Reflecting on how you are regularly is critical to self-growth.</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">How you feel is directly impacted by your HI-PB'S™ relationships. This is your chance to reflect "Are you framing things as needed to work well with everyone?"</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you are having any medium or bad days why not use the Reflections tab in the Tribe365® Basecamp app to connect to our HPTM® coaches? There you can shape how to make every day a good day - or great day!</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us</p>
+                            <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
                         </td>
                     </tr>
-
-                    <!-- Footer -->
                     <tr>
-                        <td style="padding:15px; text-align:center; font-size:12px; color:#888; border-top:1px solid #E0E0E0;">
-                            © {{ "now" | date: "%Y" }} <strong style="color:#EB1C24;">Tribe365</strong> — All Rights Reserved
+                        <td align="center" style="padding:20px;font-size:12px;color:#888;border-top:1px solid #e0e0e0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            © 2026 <span style="color:#eb1c24;font-weight:600;">TRIBE365<sup>®</sup></span> - ALL RIGHTS RESERVED<br>
+                            Contact us: +44 (0) 1325 734 846 | Email: <a href="mailto:team@tribe365.co" style="color:#888;text-decoration:none;">team@tribe365.co</a>
                         </td>
                     </tr>
-
                 </table>
             </td>
         </tr>

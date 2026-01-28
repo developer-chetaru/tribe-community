@@ -2,100 +2,68 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Weekly Sentiment Summary</title>
+    <title>Org Weekly Summary</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Lexend', Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+        @media only screen and (max-width: 600px) {
+            .container { width: 100% !important; padding: 10px !important; }
+        }
+    </style>
 </head>
-
-<body style="margin:0; padding:0; background:#f5f5f5; font-family: Arial, Helvetica, sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5; padding:20px 0;">
-    <tr>
-        <td align="center">
-
-            <table width="550" cellpadding="0" cellspacing="0"
-                   style="background:#ffffff; border-radius:10px; overflow:hidden;">
-
-                <!-- Top Red Bar -->
-                <tr>
-                    <td style="background:#EB1C24; height:6px;"></td>
-                </tr>
-
-                <!-- Logo -->
-                <tr>
-                    <td align="center" style="padding:25px 20px 10px;">
-                        <img src="{{ asset('images/logo-tribe.png') }}" width="140" alt="Tribe365 Logo">
-                    </td>
-                </tr>
-
-                <!-- Body -->
-                <tr>
-                    <td style="padding:25px 35px; color:#333; font-size:15px; line-height:1.7;">
-
-                        <!-- Greeting -->
-                        <p>Hi {{ $user->first_name }},</p>
-
-                        <p>
-                            Hope you had an amazing week ({{ $weekLabel }}).  
-                            Please see your weekly report below:
-                        </p>
-
-                        <!-- PART 1: Engagement -->
-                        <h3 style="color:#EB1C24; margin-top:25px;">Part 1: Engagement Summary</h3>
-
-                        <div style="
-                            background:#fafafa;
-                            border:1px solid #eee;
-                            padding:18px;
-                            border-radius:8px;
-                            font-size:14px;
-                            margin-bottom:20px;">
-
-                            {!! nl2br(e($engagementText)) !!}
-                        </div>
-
-                        <!-- PART 2: Individual AI Summary -->
-                        <h3 style="color:#EB1C24; margin-top:25px;">Part 2: Your Emotional Summary</h3>
-
-                        <div style="
-                            background:#fafafa;
-                            border:1px solid #eee;
-                            padding:18px;
-                            border-radius:8px;
-                            font-size:14px;
-                            margin-bottom:20px;">
-                            {!! nl2br(e($summaryText)) !!}
-                        </div>
-
-                        <!-- PART 3: Organisation Summary -->
-                        <h3 style="color:#EB1C24; margin-top:25px;">Part 3: Organisation Summary</h3>
-
-                        <div style="
-                            background:#fafafa;
-                            border:1px solid #eee;
-                            padding:18px;
-                            border-radius:8px;
-                            font-size:14px;">
-                            {!! nl2br(e($organisationSummary)) !!}
-                        </div>
-
-                        <!-- Footer Message -->
-                        <p style="margin-top:25px;">
-                            Stay consistent. Your wellbeing journey matters.<br>
-                            Tribe365 Team
-                        </p>
-
-                    </td>
-                </tr>
-
-                <!-- Footer -->
-                <tr>
-                    <td style="padding:15px; text-align:center; font-size:12px; color:#888; border-top:1px solid #e0e0e0;">
-                        © {{ date('Y') }} <strong style="color:#EB1C24;">Tribe365</strong> — All Rights Reserved
-                    </td>
-                </tr>
-
-            </table>
-
-        </td>
-    </tr>
-</table>
+<body style="font-family: 'Lexend', Arial, Helvetica, sans-serif; margin: 0; padding: 0; background-color: #f9f9f9;">
+    <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f9f9f9;padding:20px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellspacing="0" cellpadding="0" border="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:600px;">
+                    <tr>
+                        <td style="background:#eb1c24;height:6px;"></td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:30px 20px 20px 20px;">
+                            <img src="{{ asset('images/logo-tribe.png') }}" alt="Tribe365 Logo" width="130" style="display:block;margin:0 auto;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Org Weekly Summary</h2>
+                            <h3 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 15px 0;font-size:20px;font-weight:600;">Tribe365® Weekly Summary</h3>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ $user->first_name ?? $user->name ?? '<Name>' }},</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hope you had an amazing week {{ $weekLabel ?? '<Week>' }}. Please see your weekly report below:</p>
+                            @if(isset($engagementText))
+                            <div style="background:#f5f5f5;border-radius:5px;padding:15px;margin:20px 0;">
+                                {!! nl2br(e($engagementText)) !!}
+                            </div>
+                            @endif
+                            @if(isset($summaryText))
+                            <div style="background:#f5f5f5;border-radius:5px;padding:15px;margin:20px 0;">
+                                {!! nl2br(e($summaryText)) !!}
+                            </div>
+                            @endif
+                            @if(isset($organisationSummary))
+                            <div style="background:#f5f5f5;border-radius:5px;padding:15px;margin:20px 0;">
+                                {!! nl2br(e($organisationSummary)) !!}
+                            </div>
+                            @endif
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Reflecting on how you and your teams are regularly is critical to growth</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us</p>
+                            <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:20px;font-size:12px;color:#888;border-top:1px solid #e0e0e0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
+                            © 2026 <span style="color:#eb1c24;font-weight:600;">TRIBE365<sup>®</sup></span> - ALL RIGHTS RESERVED<br>
+                            Contact us: +44 (0) 1325 734 846 | Email: <a href="mailto:team@tribe365.co" style="color:#888;text-decoration:none;">team@tribe365.co</a>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
