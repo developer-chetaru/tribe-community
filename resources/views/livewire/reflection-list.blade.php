@@ -1,11 +1,11 @@
 <div>
     <div class="flex-1 overflow-auto bg-[#f6f8fa]" style="height: calc(100vh - 80px);">
-        <div class="mx-auto p-2 sm:p-3 lg:p-4" style="min-height: 100%;">
+        <div class="mx-auto p-0 sm:p-3 lg:p-4" style="min-height: 100%;">
             {{-- Filters / Search --}}
             <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-2 space-y-2 lg:space-y-0 gap-2">
 
                 {{-- Filters Group: Search and Status together --}}
-                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                <div class="w-full sm:w-auto flex flex-col sm:flex-row items-start sm:items-center gap-2">
                     {{-- Search by Topic --}}
                     <div class="relative w-full sm:w-auto sm:flex-1 lg:max-w-[320px]">
                         <span class="absolute top-3.5 left-3 flex items-center text-gray-400">
@@ -86,7 +86,7 @@
             </div>
 
             {{-- Reflection Grid --}}
-            <div class="grid gap-2 mt-2 grid-cols-1 lg:grid-cols-3" style="height: calc(100vh - 200px);">
+            <div class="grid gap-2 mt-2 grid-cols-1 lg:grid-cols-3 h-[calc(100vh - 200px)]" >
 
                 {{-- Left Column: List of Reflection Boxes --}}
                 <div class="bg-white p-2 sm:p-3 border-gray-300 rounded-md border shadow-sm overflow-y-auto block" style="height: 100%; max-height: 100%;" wire:poll.3s="$refresh">
@@ -463,7 +463,7 @@
                             @endif
                             
                             <form 
-                                  class="flex items-end gap-1.5 sm:gap-2" 
+                                  class="flex items-center gap-1.5 sm:gap-2" 
                                   x-data="{ 
                                     filePreviews: {},
                                     validateBeforeSubmit(event) {

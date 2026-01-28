@@ -7,7 +7,7 @@
     },
     "servers": [
         {
-            "url": "http://localhost",
+            "url": "https://community.tribe365.co",
             "description": "API Server"
         }
     ],
@@ -2648,7 +2648,7 @@
                     "Basecamp Users"
                 ],
                 "summary": "Register a new basecamp user",
-                "description": "Register a new basecamp user account. Basecamp users are individual users who pay £10/month subscription. The user is automatically assigned the 'basecamp' role and receives a verification email. Returns JWT token for immediate authentication.",
+                "description": "Register a new basecamp user account. Basecamp users are individual users who pay \u00a310/month subscription. The user is automatically assigned the 'basecamp' role and receives a verification email. Returns JWT token for immediate authentication.",
                 "operationId": "8a56853624e025573120a09a4c75d468",
                 "requestBody": {
                     "required": true,
@@ -3020,7 +3020,7 @@
                     "required": false,
                     "content": {
                         "application/json": {
-                            "schema": {}
+                            "schema": []
                         }
                     }
                 },
@@ -3131,14 +3131,14 @@
                     "Basecamp Users"
                 ],
                 "summary": "Renew expired basecamp subscription",
-                "description": "Creates a Stripe Checkout session to renew an expired basecamp subscription. This is an alias endpoint for basecamp users. The user will be redirected to Stripe Checkout to complete payment (£12.00 including VAT). After successful payment, subscription will be activated/renewed for another month. This endpoint works for mobile apps.",
+                "description": "Creates a Stripe Checkout session to renew an expired basecamp subscription. This is an alias endpoint for basecamp users. The user will be redirected to Stripe Checkout to complete payment (\u00a312.00 including VAT). After successful payment, subscription will be activated/renewed for another month. This endpoint works for mobile apps.",
                 "operationId": "f84e8c757daff7cf69c310c0bfa53ae9",
                 "requestBody": {
                     "description": "No request body required. Subscription is identified from authenticated user.",
                     "required": false,
                     "content": {
                         "application/json": {
-                            "schema": {}
+                            "schema": []
                         }
                     }
                 },
@@ -3255,7 +3255,7 @@
                     "required": false,
                     "content": {
                         "application/json": {
-                            "schema": {}
+                            "schema": []
                         }
                     }
                 },
@@ -3415,7 +3415,7 @@
                     "required": false,
                     "content": {
                         "application/json": {
-                            "schema": {}
+                            "schema": []
                         }
                     }
                 },
@@ -5093,7 +5093,7 @@
     "tags": [
         {
             "name": "Basecamp Billing",
-            "description": "Billing API endpoints for basecamp users (£10/month subscription)"
+            "description": "Billing API endpoints for basecamp users (\u00a310/month subscription)"
         },
         {
             "name": "Reflections",
@@ -5137,7 +5137,7 @@
         },
         {
             "name": "Basecamp Users",
-            "description": "API endpoints specifically for basecamp users (individual £10/month subscription users)"
+            "description": "API endpoints specifically for basecamp users (individual \u00a310/month subscription users)"
         },
         {
             "name": "Organisation Billing",

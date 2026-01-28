@@ -2,8 +2,8 @@
 
     {{-- Header --}}
     @if (isset($header))
-        <header class="text-2xl font-bold text-[#ff2323] ml-0 sm:ml-0">
-            <div class="pl-0 sm:pl-0">
+        <header class="text-2xl font-bold text-[#ff2323]">
+            <div>
                 {!! $header !!}
             </div>
         </header>
@@ -161,7 +161,7 @@
                         <circle cx="12" cy="7" r="4"/>
                     </svg>
                 </template>
-                <span class="text-[12px] sm:-text-[14px] font-medium text-gray-800" style="white-space: nowrap;">
+                <span class="text-[12px] sm:-text-[14px] font-medium text-gray-800 hidden sm:block" style="white-space: nowrap;">
                     {{ Auth::check() ? Auth::user()->first_name . ' ' . Auth::user()->last_name : 'Guest' }}
                 </span>
                 <svg class="w-2 h-2 sm:w-4 sm:h-4 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none"

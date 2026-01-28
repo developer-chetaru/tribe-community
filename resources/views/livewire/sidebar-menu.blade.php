@@ -671,6 +671,7 @@ document.querySelector(".menu-icon").addEventListener("click", function () {
     @media (max-width:992px) {
         nav.bg-white {
             padding-left: 60px !important;
+            min-height: 58px;
         }
         
         nav.bg-white header {
@@ -679,11 +680,11 @@ document.querySelector(".menu-icon").addEventListener("click", function () {
         }
         
         .menu-icon {
-            width: 44px;
-            height: 44px;
+            width:34px;
+            height: 34px;
             background-color: #EB1C24;
             left: 12px;
-            border-radius: 8px;
+            border-radius: 3px;
             top: 12px;
             position: fixed;
             display: flex;
@@ -691,13 +692,13 @@ document.querySelector(".menu-icon").addEventListener("click", function () {
             justify-content: center;
             cursor: pointer;
             transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: none;
             z-index: 1001;
         }
             
             .menu-icon:hover {
                 background-color: #c71313;
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+                box-shadow:none;
                 transform: scale(1.05);
             }
             
@@ -734,19 +735,19 @@ document.querySelector(".menu-icon").addEventListener("click", function () {
             }
 
             .menu-icon span.top {
-                top: 14px;
+                top: 9px;
             }
 
             .menu-icon span.middle {
-                top: 21px;
+                top: 16px;
             }
 
             .menu-icon span.bottom {
-                top: 28px;
+                top: 23px;
             }
 
             .menu-icon.active {
-                left: 12px;
+                left: 172px;
                 background-color: #EB1C24;
             }
 
@@ -756,13 +757,13 @@ document.querySelector(".menu-icon").addEventListener("click", function () {
             }
 
             .menu-open .menu-icon span.top {
-                top: 21px;
+                top: 17px;
                 transform: translateX(-50%) translateY(-50%) rotate(45deg);
                 width: 24px;
             }
 
             .menu-open .menu-icon span.bottom {
-                top: 21px;
+                top: 17px;
                 transform: translateX(-50%) translateY(-50%) rotate(-45deg);
                 width: 24px;
             }

@@ -19,8 +19,8 @@
         <!-- When expired, hide all content - only payment modal will show -->
         <div style="display: none;"></div>
     @else
-    <div class="flex-1 overflow-auto">
-        <div class="max-w-8xl mx-auto p-4">
+    <div class="flex-1 overflow-y-auto">
+        <div class="max-w-8xl mx-auto sm:p-4">
             @if($subscription)
                 <!-- Subscription Info -->
                 <div class="bg-white rounded-lg shadow p-6 mb-6">
@@ -353,6 +353,11 @@
                 <div class="p-4 border-b">
                     <h3 class="text-lg font-semibold">Invoices</h3>
                 </div>
+                <div class="overflow-hidden w-full grid">
+                 
+                <div class="overflow-x-auto w-full">
+                    
+                
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
@@ -451,6 +456,8 @@
                         @endforelse
                     </tbody>
                 </table>
+                </div>
+            </div>
             </div>
 
             <div class="mt-4">
