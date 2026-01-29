@@ -1,6 +1,6 @@
 <x-guest-layout>
     <div class="min-h-screen bg-gradient-to-br from-[#FFF7F7] via-white to-gray-50">
-        <div class="container mx-auto px-4 py-8">
+        <div class="container mx-auto  py-8">
             <!-- Header with Logo -->
             <div class="text-center mb-8">
                 <a href="{{ url('/login') }}" class="inline-block mb-6 hover:opacity-80 transition-opacity">
@@ -16,19 +16,19 @@
             </div>
 
             <!-- Content Card -->
-            <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
+            <div class="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden"> 
                 <!-- Top Accent Bar -->
                 <div class="h-2 bg-gradient-to-r from-[#EB1C24] to-red-600"></div>
                 
                 <!-- Content -->
-                <div class="p-8 md:p-12 prose prose-lg max-w-none">
+                <div class="p-8 md:p-12 prose  max-w-[900px] w-full" style="margin: 0 auto; padding: 0 20px 30px; max-width: 900px;">
                     {!! $terms !!}
                 </div>
-            </div>
+            </div> 
 
             <!-- Call to Action Section -->
             <div class="max-w-4xl mx-auto mt-12">
-                <div class="rounded-2xl shadow-xl p-8 md:p-12 text-center" style="background: linear-gradient(to right, #EB1C24, #DC2626);">
+                <div class="rounded-2xl shadow-xl p-8 md:p-12 text-center " style="background: linear-gradient(to right, #EB1C24, #DC2626); padding: 40px 20px;">
                     <h2 class="text-3xl md:text-4xl font-bold mb-4" style="color: #FFFFFF;">Ready to Get Started?</h2>
                     <p class="text-xl mb-8" style="color: #FFFFFF; opacity: 0.95;">Join Tribe365 today and start building better teams together</p>
                     <div class="flex flex-col sm:flex-row gap-4 justify-center">

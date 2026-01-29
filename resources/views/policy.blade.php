@@ -1,6 +1,6 @@
 <x-guest-layout>
     <div class="min-h-screen bg-gradient-to-br from-[#FFF7F7] via-white to-gray-50">
-        <div class="container mx-auto px-4 py-8">
+        <div class="container mx-auto  py-8">
             <!-- Header with Logo -->
             <div class="text-center mb-8">
                 <a href="{{ url('/login') }}" class="inline-block mb-6 hover:opacity-80 transition-opacity">
@@ -21,7 +21,7 @@
                 <div class="h-2 bg-gradient-to-r from-[#EB1C24] to-red-600"></div>
                 
                 <!-- Content -->
-                <div class="p-8 md:p-12 prose prose-lg max-w-none">
+                <div class="p-8 md:p-12 prose prose-lg max-w-none" style="margin: 0 auto; padding: 0 20px 30px; max-width: 900px;">
                     {!! $policy !!}
                 </div>
             </div>

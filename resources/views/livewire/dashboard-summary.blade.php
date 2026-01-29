@@ -37,10 +37,10 @@
         </div>
     </div>
 @else
-<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3" x-data="{ openModal: false, modalData: { day: null, score: null, desc: null } }">
+<div class="grid items-start grid-cols-1 md:grid-cols-2 gap-3 mt-3" x-data="{ openModal: false, modalData: { day: null, score: null, desc: null } }">
     <div class="flex flex-wrap border border-gray-100 rounded-md w-full">
-        <div class="flex px-3 py-2">
-            <h3 class="text-[14px] sm:text-[20px] text-[#EB1C24] font-semibold">Sentiment Index</h3>
+        <div class="flex px-3 py-2 bg-white w-full min-h-[74px]">
+            <h3 class="text-lg sm:text-2xl text-[#EB1C24] font-bold mb-1 sm:mb-0 flex items-center gap-2">Sentiment Index</h3>
         </div>
 <div
   x-data="{ open: false,  selectedText: '',    selectedImage: '', showDatePicker: false, startDate: '', endDate: '' }"

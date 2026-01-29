@@ -1,7 +1,7 @@
-<div x-cloak
+<div 
      x-data="sidebarComponent()"
      :class="sidebarClass"
-     class="flex flex-col h-screen bg-white text-black sidebar-menu"
+     class="flex flex-col h-screen bg-white text-black sidebar-menu w-64"
 >
     <!-- Header: Logo + Toggle Button -->
     <div class="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
