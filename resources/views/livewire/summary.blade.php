@@ -1,21 +1,32 @@
 <div class="flex flex-col border border-gray-100 rounded-md summary-info" x-data="{ openFilter: false }">
     <div class="flex px-4 py-3 sm:px-6 sm:py-4 justify-between items-center w-full flex-wrap sm:flex-nowrap bg-white border-b border-gray-200">
         <h3 class="text-lg sm:text-2xl text-[#EB1C24] font-bold mb-1 sm:mb-0 flex items-center gap-2">
-            <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <!-- <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-            </svg>
+            </svg> -->
             Daily Summary
         </h3>
 
         <div x-data="{ open: false }" x-on:summary-saved.window="open = false">
 
-            <!-- Trigger Button -->
-            <button class="inline-flex items-center gap-2 border border-gray-300 text-sm sm:text-base px-4 py-2 rounded-lg bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors duration-200 shadow-sm hover:shadow" @click="open = true">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
-                </svg>
-                Filter By Date
-            </button>
+            <!-- Trigger Button (hidden when a filter is active) -->
+            @if(empty($filterType) || $filterType === 'all')
+                <button class="inline-flex items-center gap-2 border border-gray-300 text-sm sm:text-base px-4 py-2 rounded-lg bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors duration-200 shadow-sm hover:shadow" @click="open = true">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+                    </svg>
+                    <span>Filter By Date</span>
+                </button>
+            @else
+                <div class="ml-2 inline-flex items-center rounded-md bg-red-50 text-[#EB1C24] text-xs font-medium">
+                    <span class="px-2 py-1">{{ ucwords(str_replace('_', ' ', $filterType)) }}</span>
+                    <button type="button" wire:click="resetFilters" @click.stop class="p-2 text-[#EB1C24] hover:text-red-700" title="Clear filter">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            @endif
 
             <!-- Modal -->
             <div x-show="open" x-cloak
@@ -44,23 +55,25 @@
                             </svg>
                             Filter Options
                         </h3>
-                        <button class="text-sm font-medium text-[#EB1C24] hover:text-red-700 transition-colors duration-200" wire:click="resetFilters">Reset All</button>
+                        <button type="button" @click="open = false" aria-label="Close filter modal" class="text-gray-500 hover:text-gray-700 p-2 rounded-md transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
                     </div>
 
                     <div class="flex min-h-[300px]">
-                        <!-- Left Tabs -->
-                        <div class="w-1/3 border-r border-gray-200 bg-gray-50">
-                            <div class="p-4 text-[#EB1C24] bg-red-50 font-semibold border-b border-red-100">
-                                Date Range
-                            </div>
-                        </div>
-
-                        <!-- Right Content -->
-                        <div class="w-2/3 p-6 space-y-3 overflow-y-auto max-h-[400px]">
-                            <template x-for="option in ['all','today','this_week','last_7_days','previous_week','this_month','previous_month','custom']" :key="option">
-                                <label class="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors duration-200 group">
+                        <!-- Right Content (full width) -->
+                        <div class="w-full p-6 space-y-3 overflow-y-auto max-h-[400px]">
+                            <template x-for="option in ['all','this_week','last_7_days','previous_week','this_month','previous_month','custom']" :key="option">
+                                <label :class="type === option ? 'bg-red-50 border border-red-100' : 'hover:bg-gray-50'" class="flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-colors duration-200 group">
                                     <input type="radio" :value="option" class="w-4 h-4 text-[#EB1C24] focus:ring-[#EB1C24] focus:ring-2 border-gray-300" x-model="type">
-                                    <span class="text-sm font-medium text-gray-700 group-hover:text-gray-900" x-text="option.replace('_',' ').replace(/\b\w/g, l => l.toUpperCase())"></span>
+                                    <span :class="type === option ? 'text-[#EB1C24] font-semibold' : 'text-sm font-medium text-gray-700 group-hover:text-gray-900'" class="flex-1" x-text="option.replace('_',' ').replace(/\b\w/g, l => l.toUpperCase())"></span>
+                                    <span x-show="type === option" class="ml-auto text-[#EB1C24]">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                        </svg>
+                                    </span>
                                 </label>
                             </template>
 
@@ -114,9 +127,6 @@
 
                     <!-- Footer -->
                     <div class="flex justify-end gap-3 border-t border-gray-200 px-6 py-4 bg-gray-50">
-                        <button @click="open = false" class="px-5 py-2.5 rounded-lg bg-white border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors duration-200">
-                            Close
-                        </button>
                         <button 
                             @click="
                                 $wire.filterType = type;
