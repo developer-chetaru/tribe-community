@@ -7,6 +7,9 @@ use Livewire\WithFileUploads;
 use App\Models\HptmLearningChecklist;
 use App\Models\HptmPrinciple;
 use App\Models\HptmLearningType;
+use App\Models\HptmLearningChecklistForUserReadStatus;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class EditLearningChecklist extends Component
 {
@@ -51,23 +54,79 @@ class EditLearningChecklist extends Component
             'documentFile' => 'nullable|file|mimes:pdf|max:10240', // Max 10MB PDF
         ]);
 
-        $checklist = HptmLearningChecklist::findOrFail($this->checklistId);
+        DB::beginTransaction();
+        try {
+            $checklist = HptmLearningChecklist::findOrFail($this->checklistId);
+            $oldOutput = $checklist->output;
+            $newOutput = $this->output;
+            
+            // If output (learning type) changed, recalculate user scores
+            if ($oldOutput != $newOutput) {
+                // Get old and new scores
+                $oldScore = 0;
+                if ($oldOutput) {
+                    $oldScoreModel = HptmLearningType::find($oldOutput);
+                    $oldScore = $oldScoreModel->score ?? 0;
+                }
+                
+                $newScore = 0;
+                if ($newOutput) {
+                    $newScoreModel = HptmLearningType::find($newOutput);
+                    $newScore = $newScoreModel->score ?? 0;
+                }
+                
+                // Find all users who have marked this checklist as read
+                $userReadStatuses = HptmLearningChecklistForUserReadStatus::where('checklistId', $this->checklistId)
+                    ->where('readStatus', 1)
+                    ->get();
+                
+                // Recalculate scores for affected users
+                foreach ($userReadStatuses as $readStatus) {
+                    if ($readStatus->userId) {
+                        $user = User::find($readStatus->userId);
+                        if ($user) {
+                            // Remove old score and add new score
+                            $currentScore = $user->hptmScore ?? 0;
+                            $newHptmScore = max(0, $currentScore - $oldScore + $newScore);
+                            $user->update([
+                                'hptmScore' => $newHptmScore,
+                                'updated_at' => now(),
+                            ]);
+                        }
+                    }
+                }
+            }
 
-        if ($this->documentFile) {
-            $path = $this->documentFile->store('documents', 'public'); // storage/app/public/documents
-            $checklist->document = $path; // save PDF path in DB
+            if ($this->documentFile) {
+                $path = $this->documentFile->store('documents', 'public'); // storage/app/public/documents
+                $checklist->document = $path; // save PDF path in DB
+            }
+
+            $checklist->title = $this->title;
+            $checklist->principleId = $this->principleId;
+            $checklist->output = $this->output;
+            $checklist->description = $this->description;
+            $checklist->link = $this->link;
+            $checklist->readStatus = $this->readStatus;
+            $checklist->save();
+            
+            DB::commit();
+            
+            $message = 'Checklist updated successfully!';
+            if ($oldOutput != $newOutput) {
+                $message .= ' User scores have been recalculated.';
+            }
+            session()->flash('message', $message);
+            return redirect()->route('learningchecklist.list');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            session()->flash('message', 'Error updating checklist: ' . $e->getMessage());
+            \Log::error('Error updating HPTM checklist: ' . $e->getMessage(), [
+                'checklist_id' => $this->checklistId,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return back();
         }
-
-        $checklist->title = $this->title;
-        $checklist->principleId = $this->principleId;
-        $checklist->output = $this->output;
-        $checklist->description = $this->description;
-        $checklist->link = $this->link;
-        $checklist->readStatus = $this->readStatus;
-        $checklist->save();
-
-        session()->flash('message', 'Checklist updated successfully!');
-        return redirect()->route('learningchecklist.list');
     }
 
     public function render()

@@ -4,6 +4,10 @@ namespace App\Livewire;
 
 use Livewire\Component;
 use App\Models\HptmLearningType;
+use App\Models\HptmLearningChecklist;
+use App\Models\HptmLearningChecklistForUserReadStatus;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class LearningTypeList extends Component
 {
@@ -27,13 +31,54 @@ class LearningTypeList extends Component
 
 public function delete($id)
 {
-    HptmLearningType::findOrFail($id)->delete();
-
-    session()->flash('message', 'Value deleted successfully!');
-    session()->flash('type', 'error');
-
-    // Refresh the list
-    $this->fetchLearningTypes();
+    DB::beginTransaction();
+    try {
+        $learningType = HptmLearningType::findOrFail($id);
+        $learningScore = $learningType->score ?? 0;
+        
+        // Find all checklists that use this learning type
+        $checklists = HptmLearningChecklist::where('output', $id)->get();
+        
+        // For each checklist, find users who marked it as read and recalculate scores
+        foreach ($checklists as $checklist) {
+            $userReadStatuses = HptmLearningChecklistForUserReadStatus::where('checklistId', $checklist->id)
+                ->where('readStatus', 1)
+                ->get();
+            
+            foreach ($userReadStatuses as $readStatus) {
+                if ($readStatus->userId) {
+                    $user = User::find($readStatus->userId);
+                    if ($user && $learningScore > 0) {
+                        // Subtract the score that was added when checklist was marked as read
+                        $newHptmScore = max(0, ($user->hptmScore ?? 0) - $learningScore);
+                        $user->update([
+                            'hptmScore' => $newHptmScore,
+                            'updated_at' => now(),
+                        ]);
+                    }
+                }
+            }
+        }
+        
+        // Delete the learning type (soft delete)
+        $learningType->delete();
+        
+        DB::commit();
+        
+        session()->flash('message', 'Learning type deleted successfully! User scores have been recalculated.');
+        session()->flash('type', 'success');
+        
+        // Refresh the list
+        $this->fetchLearningTypes();
+    } catch (\Exception $e) {
+        DB::rollBack();
+        session()->flash('message', 'Error deleting learning type: ' . $e->getMessage());
+        session()->flash('type', 'error');
+        \Log::error('Error deleting HPTM learning type: ' . $e->getMessage(), [
+            'learning_type_id' => $id,
+            'trace' => $e->getTraceAsString()
+        ]);
+    }
 }
 
 
