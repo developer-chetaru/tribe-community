@@ -180,7 +180,16 @@ class ReflectionList extends Component
             'id' => $reflection->id,
             'topic' => $reflection->topic,
             'message' => $reflection->message ?? '',
+            // Normalize status and keep original for UI controls
             'status' => strtolower($reflection->status ?? 'new'),
+            'status_original' => strtolower($reflection->status ?? 'new'),
+            // Include owner display fields so view shows correct name instead of default 'User'
+            'userId' => $reflection->userId,
+            'userName' => $reflection->user?->name ?? ($reflection->userId ? 'User' : '—'),
+            'organisation' => $reflection->user?->organisation?->name ?? '—',
+            'office' => $reflection->user?->office?->name ?? '—',
+            'department' => $reflection->user?->department?->department ?? '—',
+            'created_at' => $reflection->created_at,
         ];
 
         $this->sendTo = $reflection->userId;
@@ -244,7 +253,8 @@ class ReflectionList extends Component
                 'message' => $msg->message,
                 'image' => !empty($files) ? $files[0] : null, // Keep for backward compatibility
                 'images' => $files, // New: array of all files
-                'time' => $dt->format('Y-m-d H:i A'),
+                // UK date/time format (DD-MM-YYYY HH:MM) 24-hour
+                'time' => $dt->format('d-m-Y H:i'),
                 'user_profile_photo' => $msg->user && $msg->user->profile_photo_path
                     ? asset('storage/' . $msg->user->profile_photo_path)
                     : null,

@@ -123,13 +123,17 @@
                                 @endrole
                             </div>
                             
-                            <div class="space-y-1">
-                                <div class="flex items-center gap-1.5 text-xs text-gray-600">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                                    </svg>
-                                    <span class="font-medium text-gray-700">{{ $r['userName'] ?? auth()->user()->name }}</span>
-                                </div>
+                                <div class="space-y-1">
+                                @if(isset($r['userId']) && $r['userId'] === auth()->id())
+                                    {{-- Hide icon & name for current user (owner) --}}
+                                @else
+                                    <div class="flex items-center gap-1.5 text-xs text-gray-600">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                        </svg>
+                                        <span class="font-medium text-gray-700">{{ $r['userName'] ?? '—' }}</span>
+                                    </div>
+                                @endif
                                 
                                 <div class="flex items-center gap-1.5 text-xs text-gray-600">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -182,12 +186,16 @@
                                         {{ $selectedReflection['topic'] ?? 'Team Conflict' }}
                                     </h3>
                                     <div class="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600">
-                                        <span class="flex items-center gap-1">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                                            </svg>
-                                            <span class="font-medium text-gray-800">{{ $selectedReflection['userName'] ?? 'User' }}</span>
-                                        </span>
+                                        @if(isset($selectedReflection['userId']) && $selectedReflection['userId'] === auth()->id())
+                                            {{-- Hide icon & name for current user (owner) --}}
+                                        @else
+                                            <span class="flex items-center gap-1">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                                </svg>
+                                                <span class="font-medium text-gray-800">{{ $selectedReflection['userName'] ?? 'User' }}</span>
+                                            </span>
+                                        @endif
                                         <span class="flex items-center gap-1">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
@@ -321,16 +329,18 @@
                             @forelse($chatMessages as $msg)
                                 <div class="flex {{ $msg['from'] === auth()->id() ? 'justify-end' : 'justify-start' }} w-full">
                                     <div class="flex items-start gap-1.5 sm:gap-2 max-w-[85%] sm:max-w-[75%] {{ $msg['from'] === auth()->id() ? 'flex-row-reverse' : 'flex-row' }}">
-                                        {{-- User Avatar --}}
-                                        <div class="flex-shrink-0">
-                                            @if(!empty($msg['user_profile_photo']))
-                                                <img src="{{ $msg['user_profile_photo'] }}" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-white shadow-sm" alt="User Photo">
-                                            @else
-                                                <div class="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center {{ $msg['from'] === auth()->id() ? 'bg-red-500' : 'bg-blue-500' }} text-white font-semibold rounded-full text-xs shadow-sm">
-                                                    {{ strtoupper(substr($msg['user_name'] ?? 'U', 0, 1)) }}
-                                                </div>
-                                            @endif
-                                        </div>
+                                        {{-- User Avatar (render only for other users to avoid empty space for own messages) --}}
+                                        @if($msg['from'] !== auth()->id())
+                                            <div class="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8">
+                                                @if(!empty($msg['avatar']))
+                                                    <img src="{{ $msg['avatar'] }}" alt="avatar" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-gray-100">
+                                                @else
+                                                    <svg class="w-7 h-7 sm:w-8 sm:h-8 text-gray-300 rounded-full bg-gray-100 p-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" role="img" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                                                    </svg>
+                                                @endif
+                                            </div>
+                                        @endif
 
                                         {{-- Message Content --}}
                                         <div class="flex flex-col {{ $msg['from'] === auth()->id() ? 'items-end' : 'items-start' }} min-w-0 flex-1">
@@ -395,13 +405,6 @@
                                             </div>
                                             <div class="flex items-center gap-1 mt-0.5 px-1">
                                                 <span class="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">{{ $msg['time'] }}</span>
-                                                @if($msg['from'] === auth()->id())
-                                                    <span class="text-[10px] sm:text-xs text-gray-400">•</span>
-                                                    <span class="text-[10px] sm:text-xs font-medium text-gray-600 truncate">{{ $msg['user_name'] ?? 'You' }}</span>
-                                                @else
-                                                    <span class="text-[10px] sm:text-xs text-gray-400">•</span>
-                                                    <span class="text-[10px] sm:text-xs font-medium text-gray-600 truncate">{{ $msg['user_name'] ?? 'User' }}</span>
-                                                @endif
                                             </div>
                                         </div>
                                     </div>
@@ -620,7 +623,7 @@
                                     <button 
                                         type="button"
                                         onclick="document.getElementById('chatFileInput').click()" 
-                                        class="absolute right-1.5 sm:right-2 bottom-1.5 sm:bottom-2 p-1 text-gray-400 hover:text-gray-600 transition-colors rounded hover:bg-gray-100"
+                                        class="absolute right-2 bottom-2 p-2 bg-white border border-gray-200 rounded-md text-gray-600 hover:bg-gray-50 transition flex items-center justify-center"
                                         title="Attach file"
                                     >
                                         <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -863,6 +866,35 @@
                                     </div>
                                 </div>
                             @endif
+                            
+                            {{-- Auto-scroll and UI helpers --}}
+                            <script>
+                                (function(){
+                                    function scrollChatToBottom(smooth = false) {
+                                        const box = document.getElementById('chat-box');
+                                        if (!box) return;
+                                        try {
+                                            if (smooth && 'scrollBehavior' in document.documentElement.style) {
+                                                box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
+                                            } else {
+                                                box.scrollTop = box.scrollHeight;
+                                            }
+                                        } catch (e) {
+                                            box.scrollTop = box.scrollHeight;
+                                        }
+                                    }
+
+                                    // Listen for Livewire-dispatched events
+                                    window.addEventListener('scrollToBottom', function(){ setTimeout(function(){ scrollChatToBottom(true); }, 80); });
+                                    window.addEventListener('message-sent', function(){ setTimeout(function(){ scrollChatToBottom(true); }, 120); });
+
+                                    // Also scroll after Livewire updates (new messages loaded)
+                                    document.addEventListener('livewire:update', function(){ setTimeout(function(){ scrollChatToBottom(false); }, 100); });
+
+                                    // Ensure scroll when chat is opened (element may be mounted after render)
+                                    document.addEventListener('DOMContentLoaded', function(){ setTimeout(scrollChatToBottom, 200); });
+                                })();
+                            </script>
                         </div>
                     @else
                         {{-- Empty State --}}
