@@ -28,7 +28,7 @@
 
             <!-- Call to Action Section -->
             <div class="max-w-4xl mx-auto mt-12">
-                <div class="rounded-2xl shadow-xl p-8 md:p-12 text-center" style="background: linear-gradient(to right, #EB1C24, #DC2626);">
+                <div class="rounded-2xl shadow-xl p-8 md:p-12 text-center" style="background: linear-gradient(to right, #EB1C24, #DC2626);padding: 40px 20px;">
                     <h2 class="text-3xl md:text-4xl font-bold mb-4" style="color: #FFFFFF;">Ready to Get Started?</h2>
                     <p class="text-xl mb-8" style="color: #FFFFFF; opacity: 0.95;">Join Tribe365 today and start building better teams together</p>
                     <div class="flex flex-col sm:flex-row gap-4 justify-center">
