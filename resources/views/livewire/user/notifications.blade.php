@@ -69,13 +69,67 @@
                             @endif
                         >
 
-                            {{-- Icon --}}
-                            <div class="mt-1 bg-red-100 p-2 rounded-full">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-red-500"
-                                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-5-5.917V4a1 1 0 10-2 0v1.083A6.002 6.002 0 006 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                                </svg>
+                            {{-- Icon: choose per notification type --}}
+                            @php
+                                $nType = trim(strtolower($note->notificationType ?? ''));
+                                $nTitle = trim(strtolower($note->title ?? ''));
+                                // default classes
+                                $iconBg = 'bg-red-100';
+                                $iconText = 'text-red-500';
+                                $iconSvg = 'bell';
+                                if (str_contains($nTitle, 'weekly') || $nType === 'weekly-report') {
+                                    $iconBg = 'bg-blue-100';
+                                    $iconText = 'text-blue-600';
+                                    $iconSvg = 'calendar';
+                                } elseif (str_contains($nTitle, 'monthly') || $nType === 'monthly-report') {
+                                    $iconBg = 'bg-green-100';
+                                    $iconText = 'text-green-600';
+                                    $iconSvg = 'calendar';
+                                } elseif ($nType === 'reflectionchat') {
+                                    $iconBg = 'bg-yellow-100';
+                                    $iconText = 'text-yellow-600';
+                                    $iconSvg = 'chat';
+                                } elseif ($nType === 'sentiment-reminder') {
+                                    $iconBg = 'bg-indigo-100';
+                                    $iconText = 'text-indigo-600';
+                                    $iconSvg = 'reminder';
+                                } elseif ($nType === 'custom notification' || str_contains($nTitle, 'feedback')) {
+                                    $iconBg = 'bg-pink-100';
+                                    $iconText = 'text-pink-600';
+                                    $iconSvg = 'feedback';
+                                } elseif (!empty($note->notificationLinks)) {
+                                    $iconBg = 'bg-gray-100';
+                                    $iconText = 'text-gray-700';
+                                    $iconSvg = 'link';
+                                }
+                            @endphp
+                            <div class="mt-1 p-2 rounded-full {{ $iconBg }}">
+                                @if($iconSvg === 'calendar')
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 {{ $iconText }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                @elseif($iconSvg === 'chat')
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 {{ $iconText }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h6m5 2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6l4-2h8a2 2 0 012 2z" />
+                                    </svg>
+                                @elseif($iconSvg === 'reminder')
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 {{ $iconText }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 00-5-5.917V4a1 1 0 10-2 0v1.083A6 6 0 006 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1" />
+                                    </svg>
+                                @elseif($iconSvg === 'feedback')
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 {{ $iconText }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 16V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8l4-2h10l4 2z" />
+                                    </svg>
+                                @elseif($iconSvg === 'link')
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 {{ $iconText }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14a5 5 0 007.07 0l1.41-1.41a5 5 0 00-7.07-7.07L10.9 6.9M14 10a5 5 0 00-7.07 0L5.52 11.41a5 5 0 007.07 7.07L14 17" />
+                                    </svg>
+                                @else
+                                    {{-- default bell --}}
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 {{ $iconText }}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 00-5-5.917V4a1 1 0 10-2 0v1.083A6 6 0 006 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1" />
+                                    </svg>
+                                @endif
                             </div>
 
                             <div class="flex-1">

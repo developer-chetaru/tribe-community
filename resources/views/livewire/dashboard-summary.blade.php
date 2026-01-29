@@ -255,6 +255,24 @@
                 $userTimezone = 'Asia/Kolkata';
             }
             $todayDate = \Carbon\Carbon::today($userTimezone);
+            
+            // Organisation working days (for org users) - used to mark off-days on calendar
+            $isOrgUser = false;
+            $orgWorkingDays = ["Mon","Tue","Wed","Thu","Fri"];
+            $authUser = auth()->user();
+            if ($authUser && $authUser->orgId) {
+                $isOrgUser = true;
+                $organisation = \App\Models\Organisation::find($authUser->orgId);
+                if ($organisation && $organisation->working_days) {
+                    $wdRaw = $organisation->working_days;
+                    if (is_string($wdRaw)) {
+                        $decoded = json_decode($wdRaw, true);
+                        if (is_array($decoded)) $orgWorkingDays = $decoded;
+                    } elseif (is_array($wdRaw)) {
+                        $orgWorkingDays = $wdRaw;
+                    }
+                }
+            }
         @endphp
 
         <table class="table-auto border-collapse w-full text-center">
@@ -292,11 +310,22 @@
                                     $img = null;
 
                                     // Determine emoji based on date and data
+                                    // If org user and this date is a non-working day for the org, show off-day emoji
+                                    $isOrgOffDay = false;
+                                    if ($isOrgUser) {
+                                        $dayShort = $dayDate->format('D'); // Mon, Tue, etc.
+                                        if (!in_array($dayShort, $orgWorkingDays)) {
+                                            $isOrgOffDay = true;
+                                        }
+                                    }
                                     // Using score-based logic similar to app code:
                                     // null or 0-50: red (sad), 51-80: yellow (avarge), 81+: green (happy)
                                     if ($dayDate->lt($todayDate)) {
                                         // Past dates: show mood if data exists, otherwise show red
-                                        if ($dayData && $mood !== null && $score !== null) {
+                                        if ($isOrgOffDay) {
+                                            // Org non-working past day - use off-day marker
+                                            $img = null;
+                                        } elseif ($dayData && $mood !== null && $score !== null) {
                                             // Use score-based logic (matching app code)
                                             if ($score >= 0 && $score <= 50) {
                                                 $img = 'sad.svg';
@@ -313,7 +342,9 @@
                                         }
                                     } elseif ($dayDate->isSameDay($todayDate)) {
                                         // Today: check leave status first, then check if data exists
-                                        if ($onLeaveToday ?? false) {
+                                        if ($isOrgOffDay) {
+                                            $img = null;
+                                        } elseif ($onLeaveToday ?? false) {
                                             $img = 'leave-office.svg';
                                         } elseif ($todayMoodData && isset($todayMoodData['mood_value']) && isset($todayMoodData['score'])) {
                                             // Use today's actual mood data from database
@@ -345,7 +376,11 @@
                                                 }
                                             }
                                         }
-                                        $img = $isFutureLeave ? 'leave-office.svg' : null;
+                                        if ($isOrgOffDay) {
+                                            $img = null;
+                                        } else {
+                                            $img = $isFutureLeave ? 'leave-office.svg' : null;
+                                        }
                                     }
                                 @endphp
                                 <td class="p-1" wire:key="day-{{ $day }}">
@@ -356,10 +391,15 @@
                                         wire:ignore
                                     >
                                         <span class="text-gray-600 text-sm font-medium">{{ $day }}</span>
-                                        @if($img)
-                                            <img src="{{ asset('images/' . $img) }}" class="w-5 h-5 mt-1" alt="mood">
-                                        @else
+                                        @if(isset($isOrgOffDay) && $isOrgOffDay)
+                                            {{-- Organization non-working day - show no emoji (placeholder dash) --}}
                                             <span class="text-gray-400 text-sm mt-1">-</span>
+                                        @else
+                                            @if($img)
+                                                <img src="{{ asset('images/' . $img) }}" class="w-5 h-5 mt-1" alt="mood">
+                                            @else
+                                                <span class="text-gray-400 text-sm mt-1">-</span>
+                                            @endif
                                         @endif
                                     </div>
                                 </td>
