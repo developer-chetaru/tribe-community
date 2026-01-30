@@ -1439,8 +1439,6 @@ private function generateAIText(string $prompt, $userId = null): string
 
     public function generateMonthlySummary($month = null, $year = null, $force = false)
     {
-        $today = now('Asia/Kolkata');
-        
         // If month/year provided, use that; otherwise use current month
         if ($month && $year) {
             $targetDate = Carbon::create($year, $month, 1, 0, 0, 0, \App\Helpers\TimezoneHelper::DEFAULT_TIMEZONE);
@@ -1448,15 +1446,60 @@ private function generateAIText(string $prompt, $userId = null): string
             $endOfMonthIST   = $targetDate->copy()->endOfMonth();
             Log::info("MonthlySummary generation started for {$targetDate->format('F Y')} (manual override)");
         } else {
-            // For automatic cron: only run on last day of month at 22:00
-            // The cron in routes/console.php runs daily but only executes when isLastOfMonth() is true
-            if (!$today->isLastOfMonth()) {
-                Log::info("MonthlySummary: Not last day of month, skipping. Current date: {$today->format('Y-m-d')}");
+            // For automatic cron: process each user based on their timezone
+            // Get all active users and check their timezone for last day of month at 22:00
+            $users = User::whereIn('status', ['active_verified', 'active_unverified'])->get();
+            
+            if ($users->isEmpty()) {
+                Log::info("MonthlySummary: No active users found.");
                 return;
             }
-            $startOfMonthIST = $today->copy()->startOfMonth();
-            $endOfMonthIST   = $today->copy()->endOfMonth();
-            Log::info("MonthlySummary generation started automatically at {$today} (last day of month)");
+            
+            $processedCount = 0;
+            $skippedCount = 0;
+            
+            foreach ($users as $user) {
+                try {
+                    // Get user's timezone or default to Asia/Kolkata
+                    $userTimezone = $user->timezone ?: 'Asia/Kolkata';
+                    
+                    // Validate timezone to prevent errors
+                    if (!in_array($userTimezone, timezone_identifiers_list())) {
+                        Log::warning("Invalid timezone for user {$user->id}: {$userTimezone}, using Asia/Kolkata");
+                        $userTimezone = 'Asia/Kolkata';
+                    }
+                    
+                    // Get current time in user's timezone
+                    $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
+                    
+                    // Check if it's last day of month and 22:00 in user's timezone
+                    $isLastOfMonth = $userNow->isLastOfMonth();
+                    $is2200 = $userNow->format('H:i') === '22:00';
+                    
+                    if (!$isLastOfMonth || !$is2200) {
+                        $skippedCount++;
+                        continue; // Skip if not last day of month at 22:00 in user's timezone
+                    }
+                    
+                    // Use user's timezone for date calculations
+                    $today = $userNow;
+                    $startOfMonthIST = $today->copy()->startOfMonth();
+                    $endOfMonthIST   = $today->copy()->endOfMonth();
+                    
+                    Log::info("MonthlySummary generation started automatically for user {$user->id} at {$today} (last day of month, 22:00 in {$userTimezone})");
+                    
+                    // Process this user's monthly summary
+                    $this->processUserMonthlySummary($user, $startOfMonthIST, $endOfMonthIST, $force, $today);
+                    $processedCount++;
+                    
+                } catch (\Exception $e) {
+                    Log::error("Failed to process monthly summary for user {$user->id}: " . $e->getMessage());
+                    $skippedCount++;
+                }
+            }
+            
+            Log::info("MonthlySummary generation completed. Processed: {$processedCount}, Skipped: {$skippedCount}");
+            return; // Exit early since we processed all users
         }
         $startOfMonthUTC = $startOfMonthIST->clone()->setTimezone('UTC');
         $endOfMonthUTC   = $endOfMonthIST->clone()->setTimezone('UTC');
@@ -1473,13 +1516,26 @@ private function generateAIText(string $prompt, $userId = null): string
         $users = \App\Models\User::whereIn('id', $userIds)->get();
 
         foreach ($users as $user) {
+            $this->processUserMonthlySummary($user, $startOfMonthIST, $endOfMonthIST, $force, $startOfMonthIST);
+        }
+    }
+    
+    /**
+     * Process monthly summary for a single user
+     */
+    private function processUserMonthlySummary($user, $startOfMonthIST, $endOfMonthIST, $force, $today)
+    {
+        try {
+            $startOfMonthUTC = $startOfMonthIST->clone()->setTimezone('UTC');
+            $endOfMonthUTC   = $endOfMonthIST->clone()->setTimezone('UTC');
+            
             $allData = \App\Models\HappyIndex::where('user_id', $user->id)
                 ->whereBetween('created_at', [$startOfMonthUTC, $endOfMonthUTC])
                 ->orderBy('created_at')
                 ->get(['mood_value', 'description', 'created_at']);
 
             if ($allData->isEmpty()) {
-                continue;
+                return;
             }
 
             // ✅ Build mood data summary for prompt
@@ -1672,9 +1728,8 @@ HTML;
             }
 
             \Log::info("MonthlySummary: Generated successfully for user {$user->id} ({$monthName}).");
+        } catch (\Exception $e) {
+            Log::error("Failed to process monthly summary for user {$user->id}: " . $e->getMessage());
         }
-
-        \Log::channel('daily')->info("✅ Monthly summaries generated successfully for " . count($users) . " users.");
-        $this->info("✅ Monthly summaries generated successfully for " . count($users) . " users.");
     }
 }
