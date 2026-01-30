@@ -1625,7 +1625,7 @@ Writing Guidelines:
             // Skip if already sent, unless force flag is set
             if ($emailAlreadySent && $summaryExists && !$force) {
                 Log::warning("⛔ Email NOT sent — monthly summary already sent for {$monthName} for user {$user->id} (use --force to resend)");
-                continue;
+                return; // Return early instead of continue since we're in a method, not a loop
             }
             
             // If summary exists but email wasn't sent, we'll send it now
