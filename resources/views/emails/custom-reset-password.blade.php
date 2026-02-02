@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Org Custom Reset Password Invitation</title>
+    <title>@if($inviterName ?? null)Org Custom Reset Password Invitation@elsePassword Reset Request@endif</title>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -31,20 +31,39 @@
                     </tr>
                     <tr>
                         <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
-                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Org Custom Reset Password Invitation</h2>
-                            <h3 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 15px 0;font-size:20px;font-weight:600;">Tribe365® App Password Setup Request</h3>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ ucfirst($userFullName ?? '<Name>') }},</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">You have been invited by {{ ucfirst($inviterName ?? '<Name>') }} to join {{ ucfirst($orgName ?? '<Organisation>') }} on the Tribe365® behaviour coach app</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Tribe365® helps teams to stay connected, aligned and build a positive work culture together. Get started by following the below link to set your password and activate your account</p>
-                            <table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:25px auto;">
-                                <tr>
-                                    <td bgcolor="#eb1c24" style="border-radius:5px;">
-                                        <a href="{{ $resetUrl }}" style="display:inline-block;padding:12px 30px;color:#ffffff;text-decoration:none;font-weight:600;background-color:#eb1c24;border-radius:5px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Set Password</a>
-                                    </td>
-                                </tr>
-                            </table>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Prefer not to join? You can decline this invitation and we'll let {{ ucfirst($inviterName ?? '<Name>') }} know</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us or {{ ucfirst($inviterName ?? '<Name>') }} directly</p>
+                            @if($inviterName)
+                                {{-- Invitation Email --}}
+                                <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Org Custom Reset Password Invitation</h2>
+                                <h3 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 15px 0;font-size:20px;font-weight:600;">Tribe365® App Password Setup Request</h3>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ ucfirst($userFullName ?? 'User') }},</p>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">You have been invited by {{ ucfirst($inviterName ?? 'an administrator') }} to join {{ ucfirst($orgName ?? 'the organisation') }} on the Tribe365® behaviour coach app.</p>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Tribe365® helps teams to stay connected, aligned, and build a positive work culture together. Get started by following the link below to set your password and activate your account.</p>
+                                <table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:25px auto;">
+                                    <tr>
+                                        <td bgcolor="#eb1c24" style="border-radius:5px;">
+                                            <a href="{{ $resetUrl }}" style="display:inline-block;padding:12px 30px;color:#ffffff;text-decoration:none;font-weight:600;background-color:#eb1c24;border-radius:5px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Set Password</a>
+                                        </td>
+                                    </tr>
+                                </table>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Prefer not to join? You can decline this invitation, and we'll let {{ ucfirst($inviterName ?? 'the administrator') }} know.</p>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions, please contact us or {{ ucfirst($inviterName ?? 'the administrator') }} directly.</p>
+                            @else
+                                {{-- Password Reset Email --}}
+                                <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Password Reset Request</h2>
+                                <h3 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 15px 0;font-size:20px;font-weight:600;">Tribe365® Password Reset</h3>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ ucfirst($userFullName ?? 'User') }},</p>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">We received a request to reset your password for your Tribe365® account{{ $orgName ? ' at ' . ucfirst($orgName) : '' }}.</p>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Click the button below to reset your password. This link will expire in 60 minutes.</p>
+                                <table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:25px auto;">
+                                    <tr>
+                                        <td bgcolor="#eb1c24" style="border-radius:5px;">
+                                            <a href="{{ $resetUrl }}" style="display:inline-block;padding:12px 30px;color:#ffffff;text-decoration:none;font-weight:600;background-color:#eb1c24;border-radius:5px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Reset Password</a>
+                                        </td>
+                                    </tr>
+                                </table>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you did not request a password reset, please ignore this email. Your password will remain unchanged.</p>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions or concerns, please contact us at <a href="mailto:team@tribe365.co" style="color:#eb1c24;text-decoration:none;">team@tribe365.co</a></p>
+                            @endif
                             <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
                         </td>
                     </tr>
