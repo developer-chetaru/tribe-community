@@ -227,9 +227,9 @@
         }
 
         password.addEventListener("blur", () => { passwordFirstBlur = true; triggerPasswordCheck(); });
-        password.addEventListener("input", () => { if (passwordFirstBlur) triggerPasswordCheck(); });
+        password.addEventListener("input", () => { triggerPasswordCheck(); });
         confirmPassword.addEventListener("blur", () => { confirmFirstBlur = true; triggerConfirmCheck(); });
-        confirmPassword.addEventListener("input", () => { if (confirmFirstBlur) triggerConfirmCheck(); });
+        confirmPassword.addEventListener("input", () => { triggerConfirmCheck(); });
 
         if (statusMessage) {
             let remaining = 3;
