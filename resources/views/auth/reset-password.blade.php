@@ -135,24 +135,78 @@
 
     <!-- JS -->
     <script>
-        function togglePassword(id, btn) {
-            const input = document.getElementById(id);
-            const icon = btn.querySelector("i");
-            input.type = input.type === "password" ? "text" : "password";
-            icon.classList.toggle("fa-eye");
-            icon.classList.toggle("fa-eye-slash");
-        }
+        // Check for redirect - run immediately or wait for DOM
+        (function() {
+            const statusMessage = @json(session('status')) || null;
+            const hasStatus = statusMessage && statusMessage.trim() !== '';
+            
+            function startRedirect() {
+                const successAlert = document.getElementById("resetSuccessAlert");
+                const hasSuccessAlert = successAlert !== null;
+                
+                if (hasStatus || hasSuccessAlert) {
+                    const countdownEl = document.getElementById("redirectCountdown");
+                    const submitBtn = document.getElementById("submitBtn");
+                    let remaining = 3;
 
-        /* === Your existing working validation script below === */
-        const password = document.getElementById("password");
-        const confirmPassword = document.getElementById("confirmPassword");
-        const passwordMessage = document.getElementById("passwordMessage");
-        const confirmMessage = document.getElementById("confirmMessage");
-        const submitBtn = document.getElementById("submitBtn");
-        const countdownEl = document.getElementById("redirectCountdown");
-        // Check for status message in session
-        const statusMessage = @json(session('status')) || null;
-        const hasStatus = statusMessage && statusMessage.trim() !== '';
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.textContent = "Redirecting...";
+                        submitBtn.className = "w-full text-white font-semibold py-3 px-4 rounded-full transition-all duration-200 bg-green-500 cursor-wait opacity-100";
+                        submitBtn.style.backgroundColor = "#22c55e";
+                        submitBtn.style.minHeight = "44px";
+                    }
+
+                    // Update countdown immediately
+                    if (countdownEl) {
+                        countdownEl.textContent = remaining;
+                    }
+
+                    const countdownTimer = setInterval(() => {
+                        remaining -= 1;
+                        if (countdownEl && remaining > 0) {
+                            countdownEl.textContent = remaining;
+                        }
+
+                        if (remaining <= 0) {
+                            clearInterval(countdownTimer);
+                        }
+                    }, 1000);
+
+                    // Redirect after 3 seconds
+                    setTimeout(() => {
+                        window.location.href = "{{ url('/login') }}";
+                    }, 3000);
+                }
+            }
+            
+            // Try immediately, then again when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', startRedirect);
+            } else {
+                startRedirect();
+            }
+        })();
+
+        // Wait for DOM to be fully loaded for form validation
+        document.addEventListener('DOMContentLoaded', function() {
+            function togglePassword(id, btn) {
+                const input = document.getElementById(id);
+                const icon = btn.querySelector("i");
+                input.type = input.type === "password" ? "text" : "password";
+                icon.classList.toggle("fa-eye");
+                icon.classList.toggle("fa-eye-slash");
+            }
+
+            // Make togglePassword globally available for onclick
+            window.togglePassword = togglePassword;
+
+            /* === Your existing working validation script below === */
+            const password = document.getElementById("password");
+            const confirmPassword = document.getElementById("confirmPassword");
+            const passwordMessage = document.getElementById("passwordMessage");
+            const confirmMessage = document.getElementById("confirmMessage");
+            const submitBtn = document.getElementById("submitBtn");
         
         let passwordFirstBlur = false;
         let confirmFirstBlur = false;
@@ -228,44 +282,16 @@
             updateButtonState();
         }
 
-        password.addEventListener("blur", () => { passwordFirstBlur = true; triggerPasswordCheck(); });
-        password.addEventListener("input", () => { triggerPasswordCheck(); });
-        confirmPassword.addEventListener("blur", () => { confirmFirstBlur = true; triggerConfirmCheck(); });
-        confirmPassword.addEventListener("input", () => { triggerConfirmCheck(); });
-
-        // Check if status message exists (password reset success)
-        // Also check if the success alert is visible on the page
-        const successAlert = document.getElementById("resetSuccessAlert");
-        const hasSuccessAlert = successAlert && successAlert.offsetParent !== null;
-        
-        if (hasStatus || hasSuccessAlert) {
-            let remaining = 3;
-
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.textContent = "Redirecting...";
-                submitBtn.className = "w-full text-white font-semibold py-3 px-4 rounded-full transition-all duration-200 bg-green-500 cursor-wait opacity-100";
-                submitBtn.style.backgroundColor = "#22c55e";
-                submitBtn.style.minHeight = "44px";
+            if (password) {
+                password.addEventListener("blur", () => { passwordFirstBlur = true; triggerPasswordCheck(); });
+                password.addEventListener("input", () => { triggerPasswordCheck(); });
+            }
+            if (confirmPassword) {
+                confirmPassword.addEventListener("blur", () => { confirmFirstBlur = true; triggerConfirmCheck(); });
+                confirmPassword.addEventListener("input", () => { triggerConfirmCheck(); });
             }
 
-            const countdownTimer = setInterval(() => {
-                remaining -= 1;
-                if (countdownEl && remaining > 0) {
-                    countdownEl.textContent = remaining;
-                }
-
-                if (remaining <= 0) {
-                    clearInterval(countdownTimer);
-                }
-            }, 1000);
-
-            // Redirect after 3 seconds
-            setTimeout(() => {
-                window.location.href = "{{ url('/login') }}";
-            }, 3000);
-        }
-
+        }); // End of DOMContentLoaded
     </script>
 
 </x-guest-layout>
