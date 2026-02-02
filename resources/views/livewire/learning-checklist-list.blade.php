@@ -89,7 +89,7 @@
                 @forelse ($checklists as $item)
                     <tr class="">
                         <td class="px-4 py-5 font-[400] text-[#020202] text-[14px]">{{ $item->title }}</td>
-                        <td class="px-4 py-5 font-[400] text-[#808080] text-[14px]">{{ $item->principle->title ?? 'All' }}</td>
+                        <td class="px-4 py-5 font-[400] text-[#808080] text-[14px]">{{ $item->principles_display ?? ($item->principle->title ?? 'All') }}</td>
   <td class="px-4 py-5 font-[400] text-[#808080] text-[14px] max-w-xs">
   <div class="line-clamp-3 overflow-hidden text-ellipsis">
     {{ $item->description }}
@@ -204,14 +204,14 @@
                         <td class="px-4 py-5 w-[110px] ">
                             <div class="flex gap-1 justify-end">
                                 {{-- Edit --}}
-                            <a href="{{ route('learningchecklist.edit', $item->id) }}"
+                            <a href="{{ route('learningchecklist.edit', $item->primary_id ?? $item->id) }}"
    class="rounded flex items-center justify-center"
    title="Edit">
     <img src="{{ asset('images/edit.svg') }}" alt="Edit" class="h-8 w-24">
 </a>
 
                                 {{-- Delete --}}
-                           <button @click="showConfirm = true; deleteId = {{ $item->id }}"
+                           <button @click="showConfirm = true; deleteId = {{ $item->primary_id ?? $item->id }}"
         class=" rounded flex items-center justify-center"
         title="Delete">
     <img src="{{ asset('images/delete.svg') }}" alt="Delete" class="h-8 w-24">

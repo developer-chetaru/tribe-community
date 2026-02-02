@@ -16,11 +16,12 @@ class EditLearningChecklist extends Component
     use WithFileUploads; // Add this trait
 
     public $checklistId;
-    public $title, $description, $link, $document, $principleId, $output, $readStatus;
+    public $title, $description, $link, $document, $principleId = [], $output, $readStatus;
 
     public $documentFile; // New property for uploaded file
 
     public $principles = [];
+    public $principlesArray = []; // prepared array for Alpine.js
     public $learningTypes = [];
 
     public function mount($id)
@@ -30,7 +31,7 @@ class EditLearningChecklist extends Component
             abort(403, 'Unauthorized access. Admin privileges required.');
         }
 
-        $this->principles = HptmPrinciple::orderBy('title')->get();
+        $this->principles = HptmPrinciple::orderBy('title')->get(['id', 'title']);
         $this->learningTypes = HptmLearningType::orderBy('priority')->get();
 
         $checklist = HptmLearningChecklist::findOrFail($id);
@@ -39,9 +40,27 @@ class EditLearningChecklist extends Component
         $this->description = $checklist->description;
         $this->link = $checklist->link;
         $this->document = $checklist->document;
-        $this->principleId = $checklist->principleId;
         $this->output = $checklist->output;
         $this->readStatus = $checklist->readStatus;
+
+        // Find all related checklist entries (same title, output, description, link, document)
+        $relatedChecklists = HptmLearningChecklist::where('title', $checklist->title)
+            ->where('output', $checklist->output)
+            ->where('description', $checklist->description)
+            ->where('link', $checklist->link)
+            ->where('document', $checklist->document)
+            ->pluck('principleId')
+            ->filter()
+            ->toArray();
+
+        $this->principleId = array_values($relatedChecklists);
+
+        // Prepare principles array for Alpine.js with selected state
+        $this->principlesArray = $this->principles->map(fn($p) => [
+            'id' => $p->id,
+            'title' => $p->title,
+            'selected' => in_array($p->id, $this->principleId),
+        ])->toArray();
     }
 
     public function save()
@@ -52,6 +71,7 @@ class EditLearningChecklist extends Component
             'description' => 'nullable|string',
             'link' => 'nullable|string',
             'documentFile' => 'nullable|file|mimes:pdf|max:10240', // Max 10MB PDF
+            'principleId' => 'required|array|min:1',
         ]);
 
         DB::beginTransaction();
@@ -60,7 +80,24 @@ class EditLearningChecklist extends Component
             $oldOutput = $checklist->output;
             $newOutput = $this->output;
             
-            // If output (learning type) changed, recalculate user scores
+            // Get document path
+            $documentPath = $this->document;
+            if ($this->documentFile) {
+                $documentPath = $this->documentFile->store('documents', 'public');
+            }
+            
+            // Find all related checklist entries (same title, output, description, link, document)
+            $relatedChecklists = HptmLearningChecklist::where('title', $checklist->title)
+                ->where('output', $checklist->output)
+                ->where('description', $checklist->description)
+                ->where('link', $checklist->link)
+                ->where('document', $checklist->document)
+                ->get();
+            
+            $oldPrincipleIds = $relatedChecklists->pluck('principleId')->filter()->toArray();
+            $newPrincipleIds = is_array($this->principleId) ? $this->principleId : [];
+            
+            // If output (learning type) changed, recalculate user scores for all related checklists
             if ($oldOutput != $newOutput) {
                 // Get old and new scores
                 $oldScore = 0;
@@ -75,8 +112,9 @@ class EditLearningChecklist extends Component
                     $newScore = $newScoreModel->score ?? 0;
                 }
                 
-                // Find all users who have marked this checklist as read
-                $userReadStatuses = HptmLearningChecklistForUserReadStatus::where('checklistId', $this->checklistId)
+                // Find all users who have marked any related checklist as read
+                $relatedChecklistIds = $relatedChecklists->pluck('id')->toArray();
+                $userReadStatuses = HptmLearningChecklistForUserReadStatus::whereIn('checklistId', $relatedChecklistIds)
                     ->where('readStatus', 1)
                     ->get();
                 
@@ -97,18 +135,45 @@ class EditLearningChecklist extends Component
                 }
             }
 
-            if ($this->documentFile) {
-                $path = $this->documentFile->store('documents', 'public'); // storage/app/public/documents
-                $checklist->document = $path; // save PDF path in DB
+            // Delete checklists that are no longer needed
+            $principleIdsToDelete = array_diff($oldPrincipleIds, $newPrincipleIds);
+            if (!empty($principleIdsToDelete)) {
+                foreach ($relatedChecklists as $relatedChecklist) {
+                    if (in_array($relatedChecklist->principleId, $principleIdsToDelete)) {
+                        // Delete user read statuses for this checklist
+                        HptmLearningChecklistForUserReadStatus::where('checklistId', $relatedChecklist->id)->delete();
+                        // Delete the checklist
+                        $relatedChecklist->delete();
+                    }
+                }
             }
 
-            $checklist->title = $this->title;
-            $checklist->principleId = $this->principleId;
-            $checklist->output = $this->output;
-            $checklist->description = $this->description;
-            $checklist->link = $this->link;
-            $checklist->readStatus = $this->readStatus;
-            $checklist->save();
+            // Update or create checklists for selected principles
+            foreach ($newPrincipleIds as $principleId) {
+                $existingChecklist = $relatedChecklists->firstWhere('principleId', $principleId);
+                
+                if ($existingChecklist) {
+                    // Update existing checklist
+                    $existingChecklist->title = $this->title;
+                    $existingChecklist->output = $this->output;
+                    $existingChecklist->description = $this->description;
+                    $existingChecklist->link = $this->link;
+                    $existingChecklist->document = $documentPath;
+                    $existingChecklist->readStatus = $this->readStatus;
+                    $existingChecklist->save();
+                } else {
+                    // Create new checklist for this principle
+                    HptmLearningChecklist::create([
+                        'title' => $this->title,
+                        'principleId' => $principleId,
+                        'output' => $this->output,
+                        'description' => $this->description,
+                        'link' => $this->link,
+                        'document' => $documentPath,
+                        'readStatus' => $this->readStatus,
+                    ]);
+                }
+            }
             
             DB::commit();
             
