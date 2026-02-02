@@ -90,7 +90,36 @@ if (!is_null($this->selectedLearningTypeId)) {
             });
         }
 
-        $this->checklists = $q->get();
+        $allChecklists = $q->get();
+        
+        // Group checklists by title, output, description, link, document
+        $grouped = [];
+        foreach ($allChecklists as $checklist) {
+            $key = md5($checklist->title . '|' . $checklist->output . '|' . ($checklist->description ?? '') . '|' . ($checklist->link ?? '') . '|' . ($checklist->document ?? ''));
+            
+            if (!isset($grouped[$key])) {
+                $grouped[$key] = [
+                    'checklist' => $checklist,
+                    'principles' => [],
+                    'primary_id' => $checklist->id
+                ];
+            }
+            
+            if ($checklist->principle) {
+                $grouped[$key]['principles'][] = $checklist->principle->title;
+            } else {
+                $grouped[$key]['principles'][] = 'All';
+            }
+        }
+        
+        // Convert grouped data back to a format the view can use
+        $this->checklists = collect($grouped)->map(function($group) {
+            $checklist = $group['checklist'];
+            $principles = array_unique($group['principles']);
+            $checklist->principles_display = implode(', ', $principles);
+            $checklist->primary_id = $group['primary_id'];
+            return $checklist;
+        })->values();
     }
 
     public function clearFilter()

@@ -41,14 +41,14 @@
                         </div>
 
      <div 
-    x-data="singleSelectDropdown(@entangle('principleId'))" 
-    class="w-1/2 relative"
+    x-data="multiSelectDropdown()" 
+    class="w-1/2 relative select-principle"
 >
-    <!-- Trigger Button -->
+    <!-- Trigger -->
     <button 
         @click="open = !open" 
         type="button"
-        class="w-full border rounded p-2 text-left flex justify-between items-center"
+        class="w-full border rounded p-2 text-left flex justify-between items-center border-[#808080]"
     >
         <span x-text="selectedLabel()"></span>
         <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -64,33 +64,31 @@
     >
         <ul>
             <!-- All option -->
-            <li 
-                class="px-3 py-2 cursor-pointer hover:bg-gray-100 flex items-center"
-                @click="selectItem(null, 'All')"
-            >
+            <li class="flex items-center px-3 py-2 cursor-pointer hover:bg-gray-100">
                 <input 
                     type="checkbox" 
-                    name="principle" 
-                    class="appearance-none w-5 h-5 border border-gray-400 rounded-sm checked:bg-red-500 checked:border-red-500 focus:outline-none mr-2" 
-                    :checked="principleId === null"
+                    class="mr-2 text-red-500 focus:ring-red-500" 
+                    :checked="allSelected"
+                    @change="toggleAll()"
                 >
                 <span>All</span>
             </li>
 
-            <!-- Individual principles -->
-            <template x-for="item in items" :key="item.id">
-                <li 
-                    class="px-3 py-2 cursor-pointer hover:bg-gray-100 flex items-center"
-                    @click="selectItem(item.id, item.title)"
-                >
-                  <input 
-    type="checkbox" 
-    name="principle[]" 
-    class="appearance-none w-5 h-5 border border-gray-400 rounded-sm checked:bg-red-500 checked:border-red-500 focus:outline-none mr-2" 
-    :checked="principleId === item.id"
-/>
-
-                    <span x-text="item.title"></span>
+            <!-- Individual options -->
+            <template x-for="(item, index) in items" :key="item.id">
+                <li class="flex items-center px-3 py-2 cursor-pointer hover:bg-gray-100">
+                    <input 
+                        type="checkbox" 
+                        class="mr-2 text-red-500 focus:ring-red-500" 
+                        :id="'principle-' + item.id"
+                        :checked="item.selected"
+                        @change="toggleItem(index)"
+                    >
+                    <label 
+                        :for="'principle-' + item.id" 
+                        class="cursor-pointer" 
+                        x-text="item.title">
+                    </label>
                 </li>
             </template>
         </ul>
@@ -98,21 +96,48 @@
 </div>
 
 <script>
-function singleSelectDropdown(livewireModel) {
+function multiSelectDropdown() {
     return {
         open: false,
-        items: @json($principles), // Livewire se fetch ki hui principles array
-        principleId: livewireModel, // Livewire property bind
+        items: @json($principlesArray),
+        allSelected: false,
+        principleId: @entangle('principleId').live, 
 
-        selectItem(id, title) {
-            this.principleId = id; // null = All, id = selected principle
-            this.open = false; // dropdown close
+        init() {
+            // Sync initial state from Livewire
+            if (this.principleId && Array.isArray(this.principleId)) {
+                this.items.forEach(item => {
+                    item.selected = this.principleId.includes(item.id);
+                });
+                this.allSelected = this.items.every(i => i.selected);
+            }
+        },
+
+        toggleItem(index) {
+            this.items[index].selected = !this.items[index].selected;
+            this.allSelected = this.items.every(i => i.selected);
+            this.syncWithLivewire();
+        },
+
+        toggleAll() {
+            this.allSelected = !this.allSelected;
+            this.items.forEach(i => i.selected = this.allSelected);
+            this.syncWithLivewire();
         },
 
         selectedLabel() {
-            if (this.principleId === null) return "All";
-            let selected = this.items.find(i => i.id === this.principleId);
-            return selected ? selected.title : "Select Principle";
+            if (this.allSelected) return 'All';
+            let selectedItems = this.items.filter(i => i.selected).map(i => i.title);
+            return selectedItems.length ? selectedItems.join(', ') : 'Select Principle';
+        },
+
+        selectedIds() {
+            return this.items.filter(i => i.selected).map(i => i.id);
+        },
+
+        syncWithLivewire() {
+            this.principleId = this.selectedIds(); 
+            console.log("Synced IDs:", this.principleId);
         }
     }
 }
