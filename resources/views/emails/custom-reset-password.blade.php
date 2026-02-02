@@ -2,7 +2,13 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>@if($inviterName ?? null)Org Custom Reset Password Invitation@elsePassword Reset Request@endif</title>
+    <title>
+        @if($inviterName ?? null)
+            Org Custom Reset Password Invitation
+        @else
+            Password Reset Request
+        @endif
+    </title>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
