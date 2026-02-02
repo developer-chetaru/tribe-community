@@ -150,7 +150,9 @@
         const confirmMessage = document.getElementById("confirmMessage");
         const submitBtn = document.getElementById("submitBtn");
         const countdownEl = document.getElementById("redirectCountdown");
-        const statusMessage = @json(session('status'));
+        // Check for status message in session
+        const statusMessage = @json(session('status')) || null;
+        const hasStatus = statusMessage && statusMessage.trim() !== '';
         
         let passwordFirstBlur = false;
         let confirmFirstBlur = false;
@@ -231,7 +233,12 @@
         confirmPassword.addEventListener("blur", () => { confirmFirstBlur = true; triggerConfirmCheck(); });
         confirmPassword.addEventListener("input", () => { triggerConfirmCheck(); });
 
-        if (statusMessage) {
+        // Check if status message exists (password reset success)
+        // Also check if the success alert is visible on the page
+        const successAlert = document.getElementById("resetSuccessAlert");
+        const hasSuccessAlert = successAlert && successAlert.offsetParent !== null;
+        
+        if (hasStatus || hasSuccessAlert) {
             let remaining = 3;
 
             if (submitBtn) {
@@ -253,8 +260,9 @@
                 }
             }, 1000);
 
+            // Redirect after 3 seconds
             setTimeout(() => {
-                window.location.href = "{{ route('login') }}";
+                window.location.href = "{{ url('/login') }}";
             }, 3000);
         }
 
