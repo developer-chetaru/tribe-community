@@ -14,7 +14,7 @@
 </div>
 
 
-					<div class=" flex bg-[#ffffff] p-4 border border-gray-200 mt-7 rounded-md flex-wrap">
+					<div class="grid sm:flex bg-[#ffffff] p-4 border border-gray-200 mt-7 rounded-md flex-wrap">
 						  @if (session()->has('message'))
         <div x-data="{ show: true }" 
              x-init="setTimeout(() => show = false, 2000)" 
@@ -23,7 +23,7 @@
             <span>{{ session('message') }}</span>
         </div>
     @endif
-						<div class="flex w-full border border-gray-200 rounded-md ">
+						<div class="flex w-full border border-gray-200 rounded-md overflow-x-auto">
 							<table class="w-full">
 								  <thead>
 								    <tr bgcolor="#F8F9FA">

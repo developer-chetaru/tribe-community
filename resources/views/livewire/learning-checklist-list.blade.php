@@ -22,9 +22,9 @@
             <span>{{ session('message') }}</span>
         </div>
     @endif
-<div class="bg-white p-5 rounded-[10px] border border-[#E5E5E5]">
+<div class="bg-white p-5 rounded-[10px] border border-[#E5E5E5] grid overflow-hidden ">
 {{-- Search + Filters Bar --}}
-
+<div class="overflow-x-auto">
 <div class="flex items-center gap-3 mb-4 ">
     {{-- Search --}}
     <div class="flex-1">
@@ -36,7 +36,7 @@
                 </svg>
 
 
-                    </button>  
+                    </button>   
             <input type="text"
                    placeholder="Search by title or principal..."
                    wire:model.live="search"
@@ -73,7 +73,7 @@
 
 
     {{-- Table --}}
-    <div class="overflow-x-auto">
+    
         <table class="w-full border-collapse border border-gray-200 text-sm tr-bg-alternate">
             <thead>
                 <tr class="bg-[#F8F9FA]">
@@ -173,8 +173,7 @@
         <div class="relative w-full h-full flex items-center justify-center">
 
             <!-- Close Button -->
-            <button class="text-[#808080] flex items-center" @click="showModal = false" 
-                class="absolute top-4 right-4 text-white bg-black/50 hover:bg-black rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold">
+            <button class="text-[#fff] flex items-center absolute top-4 right-4 text-white  hover:opacity-75  flex items-center justify-center text-xl font-[500]" @click="showModal = false" >
                 ✕
             </button>
 
