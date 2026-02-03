@@ -128,18 +128,68 @@ public function mount($activePrincipleId = null)
 
             $learningCheckListArr = [];
             $allRead = true; // assume all are read initially
+            $seenChecklists = []; // Track unique checklists to avoid duplicates
 
             foreach ($checklists as $check) {
+                // Create a unique key based on title, output, description, link, and document
+                // This prevents showing the same checklist multiple times
+                $uniqueKey = md5(
+                    ($check->title ?? '') . '|' . 
+                    ($check->output ?? '') . '|' . 
+                    ($check->description ?? '') . '|' . 
+                    ($check->link ?? '') . '|' . 
+                    ($check->document ?? '')
+                );
+
+                // Skip if we've already seen this checklist
+                if (isset($seenChecklists[$uniqueKey])) {
+                    continue;
+                }
+
+                $seenChecklists[$uniqueKey] = true;
+
+                // Get read status - check all related checklists (same title, output, etc.)
+                $relatedChecklistIds = HptmLearningChecklist::where('title', $check->title)
+                    ->where('output', $check->output)
+                    ->where(function($q) use ($check) {
+                        if ($check->description) {
+                            $q->where('description', $check->description);
+                        } else {
+                            $q->whereNull('description');
+                        }
+                    })
+                    ->where(function($q) use ($check) {
+                        if ($check->link) {
+                            $q->where('link', $check->link);
+                        } else {
+                            $q->whereNull('link');
+                        }
+                    })
+                    ->where(function($q) use ($check) {
+                        if ($check->document) {
+                            $q->where('document', $check->document);
+                        } else {
+                            $q->whereNull('document');
+                        }
+                    })
+                    ->pluck('id')
+                    ->toArray();
+
+                // Check if any of the related checklists is read
                 $userReadChecklist = DB::table('hptm_learning_checklist_for_user_read_status')
                     ->where('userId', $userId)
-                    ->where('checklistId', $check->id)
-                    ->value('readStatus');
+                    ->whereIn('checklistId', $relatedChecklistIds)
+                    ->where('readStatus', 1)
+                    ->exists();
 
-                $isRead = $userReadChecklist == 1;
+                $isRead = $userReadChecklist;
                 if (!$isRead) $allRead = false;
 
+                // Use the first checklist ID from related checklists as the primary ID
+                $primaryChecklistId = $relatedChecklistIds[0] ?? $check->id;
+
                 $learningCheckListArr[] = [
-                    'checklistId'       => $check->id,
+                    'checklistId'       => $primaryChecklistId,
                     'principleId'       => $check->principleId,
                     'typeId'            => $check->output,
                     'link'              => $check->link ?? '',
@@ -591,18 +641,68 @@ private function refreshLearningChecklistsForPrinciple($principleId, $userId)
 
         $learningCheckListArr = [];
         $allRead = true;
+        $seenChecklists = []; // Track unique checklists to avoid duplicates
 
         foreach ($checklists as $check) {
+            // Create a unique key based on title, output, description, link, and document
+            // This prevents showing the same checklist multiple times
+            $uniqueKey = md5(
+                ($check->title ?? '') . '|' . 
+                ($check->output ?? '') . '|' . 
+                ($check->description ?? '') . '|' . 
+                ($check->link ?? '') . '|' . 
+                ($check->document ?? '')
+            );
+
+            // Skip if we've already seen this checklist
+            if (isset($seenChecklists[$uniqueKey])) {
+                continue;
+            }
+
+            $seenChecklists[$uniqueKey] = true;
+
+            // Get read status - check all related checklists (same title, output, etc.)
+            $relatedChecklistIds = HptmLearningChecklist::where('title', $check->title)
+                ->where('output', $check->output)
+                ->where(function($q) use ($check) {
+                    if ($check->description) {
+                        $q->where('description', $check->description);
+                    } else {
+                        $q->whereNull('description');
+                    }
+                })
+                ->where(function($q) use ($check) {
+                    if ($check->link) {
+                        $q->where('link', $check->link);
+                    } else {
+                        $q->whereNull('link');
+                    }
+                })
+                ->where(function($q) use ($check) {
+                    if ($check->document) {
+                        $q->where('document', $check->document);
+                    } else {
+                        $q->whereNull('document');
+                    }
+                })
+                ->pluck('id')
+                ->toArray();
+
+            // Check if any of the related checklists is read
             $userReadChecklist = DB::table('hptm_learning_checklist_for_user_read_status')
                 ->where('userId', $userId)
-                ->where('checklistId', $check->id)
-                ->value('readStatus');
+                ->whereIn('checklistId', $relatedChecklistIds)
+                ->where('readStatus', 1)
+                ->exists();
 
-            $isRead = ($userReadChecklist == 1);
+            $isRead = $userReadChecklist;
             if (!$isRead) $allRead = false;
 
+            // Use the first checklist ID from related checklists as the primary ID
+            $primaryChecklistId = $relatedChecklistIds[0] ?? $check->id;
+
             $learningCheckListArr[] = [
-                'checklistId'       => $check->id,
+                'checklistId'       => $primaryChecklistId,
                 'principleId'       => $check->principleId,
                 'typeId'            => $check->output,
                 'link'              => $check->link ?? '',
