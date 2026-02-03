@@ -5,8 +5,8 @@
     </x-slot>
 
 <x-form-section submit="updateProfileInformation">
-    <x-slot name="title">
-        Account Information
+    <x-slot name="title" >
+        <span style="white-space: nowrap;">Account Information</span>
     </x-slot>
 
     <x-slot name="description">

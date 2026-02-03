@@ -4,7 +4,7 @@
 
 <div>
     @hasanyrole('organisation_user|basecamp|organisation_admin|director')
-    <main class="p-6 flex-1">
+    <main class=" flex-1">
         <div class="bg-white shadow-sm rounded-lg p-6 border border-[#E5E5E5]">
 
             {{-- Header --}}
@@ -18,9 +18,9 @@
             <div class="flex items-center justify-between mb-5">
 
                 <div class="flex gap-3">
-                    <button
+                    <button 
                         wire:click="switchTab('active')"
-                        class="px-8 py-2 rounded-md font-medium mr-1
+                        class="px-3 sm:px-8 py-2 rounded-md text-sm sm:font-medium mr-1 
                             {{ $tab === 'active'
                                 ? 'bg-red-500 text-white'
                                 : 'border border-[#020202] bg-[#F8F9FA] text-gray-700 hover:bg-gray-100' }}">
@@ -29,7 +29,7 @@
 
                     <button
                         wire:click="switchTab('archive')"
-                        class="border border-[#020202] bg-[#F8F9FA] flex gap-2 leading-none items-center justify-center px-4 py-3 rounded-md hover:bg-gray-100 font-medium
+                        class="border border-[#020202] bg-[#F8F9FA] flex gap-2 leading-none items-center justify-center px-4 py-3 rounded-md hover:bg-gray-100 text-sm sm:font-medium
                             {{ $tab === 'archive' ? 'ring-1 ring-red-400' : '' }}">
                         <img src="{{ asset('images/unarchive-03.svg') }}" class="w-4 h-4">
                         Archived
@@ -40,8 +40,8 @@
                 @if($tab === 'active' && count($notifications) > 0)
                     <button
                         wire:click="archiveAll"
-                        class="bg-[#FFEFF0] text-red-600 border border-red-300 px-4 py-[6px]
-                            rounded-md text-sm hover:bg-red-500 hover:text-white transition">
+                        class="bg-[#FFEFF0] text-red-600 border border-red-300 px-4 py-2
+                            rounded-md text-sm sm:font-medium hover:bg-red-500 hover:text-white transition">
                         Archive All
                     </button>
                 @endif

@@ -1,5 +1,5 @@
 <x-form-section submit="updatePassword">
-    <x-slot name="title">Change Password</x-slot>
+    <x-slot name="title"><span style="white-space: nowrap;">Change Password</span></x-slot>
     <x-slot name="description"></x-slot>
 
     <x-slot name="form">

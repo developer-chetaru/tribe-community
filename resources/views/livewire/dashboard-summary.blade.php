@@ -221,7 +221,7 @@
             @endforeach
         </select>
     </div>
-  <div class="w-full overflow-x-auto px-3 pb-3">
+  <div class="w-full overflow-x-auto sm:px-3 pb-3">
         @php
             $year = $this->year ?? now()->year;
             $month = $this->month ?? now()->month;
@@ -275,7 +275,7 @@
             }
         @endphp
 
-        <table class="table-auto border-collapse w-full text-center">
+        <table class="table-auto border-collapse w-full text-center calendar-table"> 
             <thead>
                 <tr>
                     <th class="p-2 text-red-600">Sun</th>

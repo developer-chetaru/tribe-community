@@ -36,3 +36,21 @@ input:focus {
 .iti--allow-dropdown {
     width: 100%;
 }
+
+@media (max-width:767px) {
+    header h2 {
+        font-size: 16px !important;
+    }
+
+    .calendar-table td,.calendar-table th {
+         width: 42px;
+        box-sizing: border-box !important;
+    }
+    .calendar-table th {
+        font-size: 12px;
+    }
+    main.p-6 {
+    padding: 15px;
+}
+
+}
