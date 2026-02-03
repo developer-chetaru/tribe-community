@@ -963,7 +963,8 @@ class HPTMController extends Controller
             }
         }
 
-        // Recalculate total score based on all checked checklists (same as web version)
+        // Recalculate total score based on all checked checklists
+        // Score = (Count of unique checked items per learning type) × (Learning type score)
         $readChecklistIds = DB::table('hptm_learning_checklist_for_user_read_status')
             ->where('userId', $userId)
             ->where('readStatus', 1)
@@ -976,10 +977,48 @@ class HPTMController extends Controller
                 ->with('learningType')
                 ->get();
 
-            foreach ($checkedChecklists as $checkedChecklist) {
-                if ($checkedChecklist->learningType && $checkedChecklist->learningType->score) {
-                    $totalScore += $checkedChecklist->learningType->score;
+            // Group by learning type and deduplicate by unique checklist
+            $typeGroups = [];
+            $seenChecklists = [];
+
+            foreach ($checkedChecklists as $checklist) {
+                if (!$checklist->learningType || !$checklist->learningType->score) {
+                    continue;
                 }
+
+                $learningTypeId = $checklist->output;
+
+                // Create unique key for deduplication
+                $uniqueKey = md5(
+                    ($checklist->title ?? '') . '|' . 
+                    ($checklist->output ?? '') . '|' . 
+                    ($checklist->description ?? '') . '|' . 
+                    ($checklist->link ?? '') . '|' . 
+                    ($checklist->document ?? '')
+                );
+
+                // Skip if we've already counted this unique checklist
+                if (isset($seenChecklists[$uniqueKey])) {
+                    continue;
+                }
+
+                $seenChecklists[$uniqueKey] = true;
+
+                // Initialize type group if not exists
+                if (!isset($typeGroups[$learningTypeId])) {
+                    $typeGroups[$learningTypeId] = [
+                        'count' => 0,
+                        'score' => $checklist->learningType->score
+                    ];
+                }
+
+                // Count unique items per type
+                $typeGroups[$learningTypeId]['count']++;
+            }
+
+            // Calculate total score: (Count per type) × (Type score)
+            foreach ($typeGroups as $typeGroup) {
+                $totalScore += $typeGroup['count'] * $typeGroup['score'];
             }
         }
 

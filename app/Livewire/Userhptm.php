@@ -419,6 +419,7 @@ public function updatedLearningCheckLists()
 
 /**
  * Recalculate HPTM score based on all checked checklists
+ * Score = (Count of unique checked items per learning type) × (Learning type score)
  */
 private function recalculateHptmScore($userId)
 {
@@ -438,12 +439,51 @@ private function recalculateHptmScore($userId)
         ->with('learningType')
         ->get();
 
-    // Sum up the scores of all checked checklists
-    $totalScore = 0;
+    // Group by learning type and deduplicate by unique checklist (title, output, description, link, document)
+    $typeGroups = [];
+    $seenChecklists = [];
+
     foreach ($checkedChecklists as $checklist) {
-        if ($checklist->learningType && $checklist->learningType->score) {
-            $totalScore += $checklist->learningType->score;
+        if (!$checklist->learningType || !$checklist->learningType->score) {
+            continue;
         }
+
+        $learningTypeId = $checklist->output;
+        $learningTypeTitle = $checklist->learningType->title ?? '';
+
+        // Create unique key for deduplication
+        $uniqueKey = md5(
+            ($checklist->title ?? '') . '|' . 
+            ($checklist->output ?? '') . '|' . 
+            ($checklist->description ?? '') . '|' . 
+            ($checklist->link ?? '') . '|' . 
+            ($checklist->document ?? '')
+        );
+
+        // Skip if we've already counted this unique checklist
+        if (isset($seenChecklists[$uniqueKey])) {
+            continue;
+        }
+
+        $seenChecklists[$uniqueKey] = true;
+
+        // Initialize type group if not exists
+        if (!isset($typeGroups[$learningTypeId])) {
+            $typeGroups[$learningTypeId] = [
+                'count' => 0,
+                'score' => $checklist->learningType->score,
+                'title' => $learningTypeTitle
+            ];
+        }
+
+        // Count unique items per type
+        $typeGroups[$learningTypeId]['count']++;
+    }
+
+    // Calculate total score: (Count per type) × (Type score)
+    $totalScore = 0;
+    foreach ($typeGroups as $typeGroup) {
+        $totalScore += $typeGroup['count'] * $typeGroup['score'];
     }
 
     return $totalScore;
