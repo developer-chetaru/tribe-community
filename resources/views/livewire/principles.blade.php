@@ -24,7 +24,8 @@
     @endif
 
     <!-- Principles Table -->
-  <div class="overflow-x-auto">
+    <div class="overflow-hidden">
+  <div class="overflow-x-auto grid">
 
         <table class="w-full text-sm border rounded-lg">
 
@@ -79,23 +80,24 @@
                                         </p>
                                         <div class="flex justify-end gap-2">
                                             <button @click="open = false"
-                                                    class="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded text-sm font-semibold">
+                                                    class="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded text-sm font-semibold w-[45px]">
                                                 Cancel
                                             </button>
                                             <button wire:click="deletePrinciple('{{ $item['id'] }}')" @click="open = false"
-                                                    class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-white text-sm font-semibold">
+                                                    class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-white text-sm font-semibold w-[45px]">
                                                 Delete
                                             </button>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            </div> 
 
                         </div>
                     </td>
-                </tr>
+                </tr> 
                 @endforeach
             </tbody>
         </table>
     </div>
+</div>
 </div>
