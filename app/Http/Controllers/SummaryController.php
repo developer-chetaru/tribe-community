@@ -110,11 +110,24 @@ class SummaryController extends Controller
     // Get user's timezone safely using helper
     $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
 
-    // Get user's organisation working days
-    $org = $user->organisation;
-    $workingDays = $org && $org->working_days
-        ? $org->working_days
-        : ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    // Get user's working days
+    $workingDays = ["Mon", "Tue", "Wed", "Thu", "Fri"]; // Default working days
+    
+    if ($user->hasRole('basecamp')) {
+        // For basecamp users, all days are working days
+        $workingDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    } else {
+        // For organization users, use organization's working days
+        $org = $user->organisation;
+        if ($org && $org->working_days) {
+            if (is_array($org->working_days)) {
+                $workingDays = $org->working_days;
+            } else {
+                $decoded = json_decode($org->working_days, true);
+                $workingDays = $decoded ?: $workingDays;
+            }
+        }
+    }
 
     // Determine date range using user's timezone
     $userNow = Carbon::now($userTimezone);
@@ -226,6 +239,7 @@ class SummaryController extends Controller
         ->sortByDesc(fn($d) => $d->timestamp);
 
     $userToday = Carbon::now($userTimezone);
+    $isBasecamp = $user->hasRole('basecamp');
 
     foreach ($period as $date) {
         // Skip future dates (using user's timezone)
@@ -234,8 +248,12 @@ class SummaryController extends Controller
         // Skip dates before user's registration date
         if ($date->lessThan($userRegistrationDate)) continue;
 
-        // Skip non-working days
-        if (!in_array($date->format('D'), $workingDays)) {
+        $dayOfWeek = $date->format('D');
+        $isWorkingDay = in_array($dayOfWeek, $workingDays);
+        
+        // For basecamp users: show all days, but only mark as "Missed" if it's a working day
+        // For organization users: skip non-working days entirely
+        if (!$isBasecamp && !$isWorkingDay) {
             continue;
         }
 
@@ -281,10 +299,12 @@ class SummaryController extends Controller
                 'status'      => 'Present',
             ];
         } else {
-            // Only show missed sentiment notification for past days (using user's timezone)
-            $showMissed = !$date->isSameDay($userToday);
-
-            if ($showMissed) {
+            // Show "Missed" only for past working days
+            // For basecamp users: show all days, but only mark as "Missed" if it's a working day
+            // For organization users: only working days are shown, so mark as "Missed"
+            $shouldShowMissed = !$date->isSameDay($userToday) && $isWorkingDay;
+            
+            if ($shouldShowMissed) {
                 $summary[] = [
                     'date'        => $dateStr,
                     'score'       => null,
@@ -292,6 +312,17 @@ class SummaryController extends Controller
                     'description' => "Oh Dear, you missed to share your sentiment on $dateStr",
                     'image'       => $imageUrl('sentiment-missed-summary.png'),
                     'status'      => 'Missed',
+                ];
+            } elseif ($isBasecamp && !$isWorkingDay && !$date->isSameDay($userToday)) {
+                // For basecamp users on non-working days: show the day but don't mark as "Missed"
+                // This ensures all days are visible in the summary
+                $summary[] = [
+                    'date'        => $dateStr,
+                    'score'       => null,
+                    'mood_value'  => null,
+                    'description' => "No sentiment required for $dateStr (non-working day)",
+                    'image'       => $imageUrl('sentiment-missed-summary.png'),
+                    'status'      => 'Not Required',
                 ];
             }
         }

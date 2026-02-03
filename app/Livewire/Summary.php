@@ -64,10 +64,23 @@ class Summary extends Component
         $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
 
         // Get user's working days
-        $org = $user->organisation;
-        $workingDays = $org && $org->working_days
-            ? $org->working_days
-            : ["Mon", "Tue", "Wed", "Thu", "Fri"];
+        $workingDays = ["Mon", "Tue", "Wed", "Thu", "Fri"]; // Default working days
+        
+        if ($user->hasRole('basecamp')) {
+            // For basecamp users, all days are working days
+            $workingDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        } else {
+            // For organization users, use organization's working days
+            $org = $user->organisation;
+            if ($org && $org->working_days) {
+                if (is_array($org->working_days)) {
+                    $workingDays = $org->working_days;
+                } else {
+                    $decoded = json_decode($org->working_days, true);
+                    $workingDays = $decoded ?: $workingDays;
+                }
+            }
+        }
 
         // Determine date range using user's timezone
         $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
@@ -233,8 +246,23 @@ class Summary extends Component
             // Skip dates before user's registration date
             if ($date->lessThan($userRegistrationDate)) continue;
 
-            // Skip non-working days
-            if (!in_array($date->format('D'), $workingDays)) continue;
+            $dayOfWeek = $date->format('D');
+            $isBasecamp = $user->hasRole('basecamp');
+            $isWorkingDay = in_array($dayOfWeek, $workingDays);
+            
+            // For basecamp users: show all days, but only mark as "Missed" if it's a working day
+            // For organization users: skip non-working days entirely
+            if (!$isBasecamp && !$isWorkingDay) {
+                // Debug logging for skipped dates
+                Log::info('Skipping non-working day', [
+                    'user_id' => $userId,
+                    'date' => $date->toDateString(),
+                    'day_of_week' => $dayOfWeek,
+                    'workingDays' => $workingDays,
+                    'is_basecamp' => $isBasecamp,
+                ]);
+                continue;
+            }
 
             $dateStr = $date->format('M d, Y');
 
@@ -280,9 +308,12 @@ class Summary extends Component
                 ];
 
             } else {
-
-                // 🟢 SHOW MISSED ONLY FOR PAST DAYS (NEVER TODAY) - using user's timezone
-                if ($date->isPast() && !$date->isSameDay($userToday)) {
+                // Show "Missed" only for past working days
+                // For basecamp users: show all days, but only mark as "Missed" if it's a working day
+                // For organization users: only working days are shown, so mark as "Missed"
+                $shouldShowMissed = $date->isPast() && !$date->isSameDay($userToday) && $isWorkingDay;
+                
+                if ($shouldShowMissed) {
                     $entriesWithStatus[] = [
                         'date'        => $dateStr,
                         'score'       => null,
@@ -290,6 +321,17 @@ class Summary extends Component
                         'description' => "Oh Dear, you missed to share your sentiment on $dateStr",
                         'image'       => 'sentiment-missed-summary.svg',
                         'status'      => 'Missed',
+                    ];
+                } elseif ($isBasecamp && !$isWorkingDay && $date->isPast() && !$date->isSameDay($userToday)) {
+                    // For basecamp users on non-working days: show the day but don't mark as "Missed"
+                    // This ensures all days are visible in the summary
+                    $entriesWithStatus[] = [
+                        'date'        => $dateStr,
+                        'score'       => null,
+                        'mood_value'  => null,
+                        'description' => "No sentiment required for $dateStr (non-working day)",
+                        'image'       => 'sentiment-missed-summary.svg',
+                        'status'      => 'Not Required',
                     ];
                 }
             }
