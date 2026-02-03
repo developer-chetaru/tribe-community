@@ -41,7 +41,7 @@
             <!-- Filters -->
             <div class="flex flex-wrap gap-3">
                 <!-- Account Status Filter -->
-                <div class="min-w-[180px]">
+                <div class="min-w-[180px] w-full sm:w-[auto]">
                     <label class="block text-xs font-medium text-gray-700 mb-1">Account Status</label>
                     <select wire:model.live="accountStatusFilter" 
                         class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500">
@@ -53,7 +53,7 @@
                 </div>
                 
                 <!-- Payment Status Filter -->
-                <div class="min-w-[180px]">
+                <div class="min-w-[180px] w-full sm:w-[auto]">
                     <label class="block text-xs font-medium text-gray-700 mb-1">Payment Status</label>
                     <select wire:model.live="paymentStatusFilter" 
                         class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500">
@@ -66,7 +66,7 @@
                 </div>
                 
                 <!-- Next Billing Date Filter -->
-                <div class="min-w-[180px]">
+                <div class="min-w-[180px] w-full sm:w-[auto]">
                     <label class="block text-xs font-medium text-gray-700 mb-1">Next Billing Date</label>
                     <select wire:model.live="nextBillingDateFilter" 
                         class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500">
@@ -88,12 +88,12 @@
                         </button>
                     </div>
                 @endif
-            </div>
+            </div> 
         </div>
 
         <!-- Subscriptions Table -->
         <div class="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto grid">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gradient-to-r from-gray-50 to-gray-100">
                         <tr>
