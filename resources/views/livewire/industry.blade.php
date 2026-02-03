@@ -90,13 +90,13 @@
                         <td class="px-4 py-3 flex gap-2 justify-end">
                             {{-- Edit --}}
                             <a href="{{ route('industries.edit', $val->id) }}"  
-                               class="rounded p-1 flex items-center justify-center hover:bg-red-50"
+                               class="rounded p-1 flex items-center justify-center hover:bg-red-50 w-[45px]"
                                title="Edit">
                                 <img src="{{ asset('images/edit.svg') }}" alt="Edit" class="h-8 w-8">
                             </a>
                             {{-- Delete --}}
                             <button @click="showConfirm = true; valueId = '{{ $val->id }}'" 
-                                    class="p-1 rounded flex items-center justify-center hover:bg-red-50"
+                                    class="p-1 rounded flex items-center justify-center hover:bg-red-50 w-[45px]"
                                     title="Delete">
                                 <img src="{{ asset('images/delete.svg') }}" alt="Delete" class="h-8 w-8">
                             </button>
