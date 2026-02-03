@@ -833,15 +833,65 @@ class HPTMController extends Controller
             ->get();
 
         	$learningCheckListArr = [];
+        	$seenChecklists = []; // Track unique checklists to avoid duplicates
+
         	foreach ($checklists as $checkVal) {
+            	// Create a unique key based on title, output, description, link, and document
+            	// This prevents showing the same checklist multiple times
+            	$uniqueKey = md5(
+                	($checkVal->title ?? '') . '|' . 
+                	($checkVal->output ?? '') . '|' . 
+                	($checkVal->description ?? '') . '|' . 
+                	($checkVal->link ?? '') . '|' . 
+                	($checkVal->document ?? '')
+            	);
+
+            	// Skip if we've already seen this checklist
+            	if (isset($seenChecklists[$uniqueKey])) {
+                	continue;
+            	}
+
+            	$seenChecklists[$uniqueKey] = true;
+
+            	// Get read status - check all related checklists (same title, output, etc.)
+            	$relatedChecklistIds = HptmLearningChecklist::where('title', $checkVal->title)
+                	->where('output', $checkVal->output)
+                	->where(function($q) use ($checkVal) {
+                    	if ($checkVal->description) {
+                        	$q->where('description', $checkVal->description);
+                    	} else {
+                        	$q->whereNull('description');
+                    	}
+                	})
+                	->where(function($q) use ($checkVal) {
+                    	if ($checkVal->link) {
+                        	$q->where('link', $checkVal->link);
+                    	} else {
+                        	$q->whereNull('link');
+                    	}
+                	})
+                	->where(function($q) use ($checkVal) {
+                    	if ($checkVal->document) {
+                        	$q->where('document', $checkVal->document);
+                    	} else {
+                        	$q->whereNull('document');
+                    	}
+                	})
+                	->pluck('id')
+                	->toArray();
+
+            	// Check if any of the related checklists is read
             	$userReadChecklist = DB::table('hptm_learning_checklist_for_user_read_status')
-                	->select('readStatus')
                 	->where('userId', $userId)
-                	->where('checklistId', $checkVal->id)
-                	->first();
+                	->whereIn('checklistId', $relatedChecklistIds)
+                	->where('readStatus', 1)
+                	->exists();
+
+            	// Use the first checklist ID from related checklists as the primary ID
+            	$primaryChecklistId = $relatedChecklistIds[0] ?? $checkVal->id;
 
             	$learningCheckListArr[] = [
-                	'checklistId'       => $checkVal->id,
+                	'checklistId'       => $primaryChecklistId,
                 	'principleId'       => $checkVal->principleId,
                 	'typeId'            => $checkVal->output,
                 	'link'              => $checkVal->link ?? '',
@@ -851,7 +901,7 @@ class HPTMController extends Controller
                 	'checklistTitle'    => $checkVal->title ?? '',
                 	'description'       => $checkVal->description ?? '',
                 	'learningTypeTitle' => $learningType->title ?? '',
-                	'userReadChecklist' => $userReadChecklist && $userReadChecklist->readStatus == 1,
+                	'userReadChecklist' => $userReadChecklist,
             	];
         	}
 
