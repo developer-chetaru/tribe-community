@@ -903,46 +903,93 @@ class HPTMController extends Controller
             ]);
         }
 
-        $learningScore = 0;
-        if ($checklist && $checklist->output) {
-            $scoreModel    = HptmLearningType::find($checklist->output);
-            $learningScore = $scoreModel->score ?? 0;
-        }
-
-        // Use authenticated user instead of querying with status check
+        // Use authenticated user
         $user = auth()->user();
-
-        if ($user && $user->id == $userId) {
-            $newHptmScore = ($readStatus == 1)
-            ? ($user->hptmScore ?? 0) + $learningScore
-            : ($user->hptmScore ?? 0) - $learningScore;
-
-            $user->update([
-                'hptmScore'  => max(0, $newHptmScore),
-                'updated_at' => now(),
+        if (!$user || $user->id != $userId) {
+            return response()->json([
+                'code'    => 401,
+                'status'  => false,
+                'message' => 'Unauthorized.',
             ]);
         }
 
-        $existingStatus = HptmLearningChecklistForUserReadStatus::where('checklistId', $checklistId)
+        // Find all checklist items with the same title, output, description, link, and document
+        // This groups items that were created together with multiple principles
+        $relatedChecklists = HptmLearningChecklist::where('title', $checklist->title)
+            ->where('output', $checklist->output)
+            ->where(function($q) use ($checklist) {
+                if ($checklist->description) {
+                    $q->where('description', $checklist->description);
+                } else {
+                    $q->whereNull('description');
+                }
+            })
+            ->where(function($q) use ($checklist) {
+                if ($checklist->link) {
+                    $q->where('link', $checklist->link);
+                } else {
+                    $q->whereNull('link');
+                }
+            })
+            ->where(function($q) use ($checklist) {
+                if ($checklist->document) {
+                    $q->where('document', $checklist->document);
+                } else {
+                    $q->whereNull('document');
+                }
+            })
+            ->pluck('id')
+            ->toArray();
+
+        // Update read status for all related checklist items
+        foreach ($relatedChecklists as $relatedChecklistId) {
+            $existingStatus = HptmLearningChecklistForUserReadStatus::where('checklistId', $relatedChecklistId)
+                ->where('userId', $userId)
+                ->first();
+
+            if ($existingStatus) {
+                $existingStatus->update([
+                    'readStatus' => $readStatus,
+                    'updated_at' => now(),
+                ]);
+            } else {
+                HptmLearningChecklistForUserReadStatus::create([
+                    'checklistId' => $relatedChecklistId,
+                    'userId'      => $userId,
+                    'readStatus'  => $readStatus,
+                    'created_at'  => now(),
+                    'updated_at'  => now(),
+                ]);
+            }
+        }
+
+        // Recalculate total score based on all checked checklists (same as web version)
+        $readChecklistIds = DB::table('hptm_learning_checklist_for_user_read_status')
             ->where('userId', $userId)
-            ->first();
+            ->where('readStatus', 1)
+            ->pluck('checklistId')
+            ->toArray();
 
-        if ($existingStatus) {
-            $existingStatus->update([
-                'readStatus' => $readStatus,
-                'updated_at' => now(),
-            ]);
-        } else {
-            HptmLearningChecklistForUserReadStatus::create([
-                'checklistId' => $checklistId,
-                'userId'      => $userId,
-                'readStatus'  => $readStatus,
-                'created_at'  => now(),
-                'updated_at'  => now(),
-            ]);
+        $totalScore = 0;
+        if (!empty($readChecklistIds)) {
+            $checkedChecklists = HptmLearningChecklist::whereIn('id', $readChecklistIds)
+                ->with('learningType')
+                ->get();
+
+            foreach ($checkedChecklists as $checkedChecklist) {
+                if ($checkedChecklist->learningType && $checkedChecklist->learningType->score) {
+                    $totalScore += $checkedChecklist->learningType->score;
+                }
+            }
         }
 
-        // Refresh user to get updated hptmScore after the update above
+        // Update user's hptmScore
+        $user->update([
+            'hptmScore'  => $totalScore,
+            'updated_at' => now(),
+        ]);
+
+        // Refresh user to get updated hptmScore
         $user->refresh();
 
         $userScore = 0;

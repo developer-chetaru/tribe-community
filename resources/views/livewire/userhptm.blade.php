@@ -67,34 +67,60 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 @foreach($groupedChecklists as $typeTitle => $checks)
                     @php
-                        // Determine if all items in this group are read
-                        $allChecked = collect($checks)->every(fn($check) => $check['userReadChecklist']);
+                        // Determine if all items in this group are read - ensure we have checks
+                        // Check from actual data, not cached state
+                        $allChecked = false;
+                        if (count($checks) > 0) {
+                            $allChecked = collect($checks)->every(function($check) {
+                                return isset($check['userReadChecklist']) && $check['userReadChecklist'] === true;
+                            });
+                        }
                     @endphp
 
-                    <div class="bg-[#F8F9FA] rounded-md p-4 border border-gray-200">
+                    <div class="bg-[#F8F9FA] rounded-md p-4 border border-gray-200" wire:key="type-{{ $typeTitle }}-{{ $activePrincipleId }}">
                         <!-- Group Title + Select All -->
                         <h3 class="text-[14px] sm:text-[20px] font-semibold text-[#020202] mt-1 flex items-center">
-                            <input 
-                                type="checkbox" 
-                                class="appearance-none w-5 h-5 mr-3 border border-gray-400 rounded-full form-checkbox accent-red-500 text-red-600 focus:ring-red-500 focus:border-red-500 checked:bg-[#EB1C24] checked:border-[#EB1C24]"
-                                wire:click="toggleAllChecks('{{ $typeTitle }}')"  
-                                @checked($allChecked)
-                            />
+                            <div class="relative">
+                                <input 
+                                    type="checkbox" 
+                                    class="appearance-none w-5 h-5 mr-3 border border-gray-400 rounded-full form-checkbox accent-red-500 text-red-600 focus:ring-red-500 focus:border-red-500 checked:bg-[#EB1C24] checked:border-[#EB1C24] disabled:opacity-50 disabled:cursor-not-allowed"
+                                    wire:click="toggleAllChecks('{{ $typeTitle }}')"
+                                    wire:loading.attr="disabled"
+                                    @checked($allChecked)
+                                />
+                                <span wire:loading wire:target="toggleAllChecks('{{ $typeTitle }}')" 
+                                      class="absolute left-0 top-0 w-5 h-5 flex items-center justify-center">
+                                    <svg class="animate-spin h-3 w-3 text-[#EB1C24]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                    </svg>
+                                </span>
+                            </div>
                             {{ $typeTitle }}
                         </h3>
 
                         @foreach($checks as $check)
-                            <div class="border-l border-[#d1d1d1] pl-6 mt-4">
+                            <div class="border-l border-[#d1d1d1] pl-6 mt-4" wire:key="checklist-{{ $check['checklistId'] }}">
                                 <!-- Individual Checklist -->
                                 <h4 class="text-[13px] sm:text-[16px] font-semibold text-[#020202] mt-1 flex items-center">
-                                    <input 
-                                        type="checkbox" 
-                                        name="checklist_{{ $check['typeId'] }}" 
-                                        value="{{ $check['checklistId'] }}" 
-                                        wire:click="changeReadStatusOfUserChecklist({{ $check['checklistId'] }}, {{ $check['userReadChecklist'] ? 0 : 1 }})"
-                                        class="appearance-none w-5 h-5 mr-3 border border-gray-400 rounded-full form-checkbox accent-red-500 text-red-600 focus:ring-red-500 focus:border-red-500 checked:bg-[#EB1C24] checked:border-[#EB1C24]"
-                                        @if($check['userReadChecklist']) checked @endif
-                                    >
+                                    <div class="relative">
+                                        <input 
+                                            type="checkbox" 
+                                            name="checklist_{{ $check['typeId'] }}" 
+                                            value="{{ $check['checklistId'] }}" 
+                                            wire:click="toggleChecklistStatus({{ $check['checklistId'] }})"
+                                            wire:loading.attr="disabled"
+                                            class="appearance-none w-5 h-5 mr-3 border border-gray-400 rounded-full form-checkbox accent-red-500 text-red-600 focus:ring-red-500 focus:border-red-500 checked:bg-[#EB1C24] checked:border-[#EB1C24] disabled:opacity-50 disabled:cursor-not-allowed"
+                                            @if($check['userReadChecklist']) checked @endif
+                                        >
+                                        <span wire:loading wire:target="toggleChecklistStatus({{ $check['checklistId'] }})" 
+                                              class="absolute left-0 top-0 w-5 h-5 flex items-center justify-center">
+                                            <svg class="animate-spin h-3 w-3 text-[#EB1C24]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                            </svg>
+                                        </span>
+                                    </div>
                                     {{ $check['checklistTitle'] }}
                                 </h4>
 

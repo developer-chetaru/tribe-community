@@ -194,20 +194,150 @@ public function mount($activePrincipleId = null)
 
     public function toggleAllChecks($typeTitle)
     {
+        $userId = Auth::id();
+        
+        // Get all checklists for this learning type from the active principle
         $checks = collect($this->learningCheckLists[$this->activePrincipleId] ?? [])
-            ->flatten(1)
-            ->where('learningTypeTitle', $typeTitle);
+            ->get($typeTitle, []);
 
-        $allSelected = $this->allSelectedByType[$typeTitle] ?? false;
-        $newStatus = $allSelected ? 0 : 1;
-
-        foreach ($checks as $check) {
-            $this->changeReadStatusOfUserChecklist($check['checklistId'], $newStatus);
+        // Determine current state - check if all are selected
+        $allSelected = true;
+        if (count($checks) > 0) {
+            foreach ($checks as $check) {
+                if (!isset($check['userReadChecklist']) || $check['userReadChecklist'] !== true) {
+                    $allSelected = false;
+                    break;
+                }
+            }
+        } else {
+            $allSelected = false;
         }
 
-        $this->allSelectedByType[$typeTitle] = $newStatus === 1;
+        // Toggle: if all selected, unselect all; otherwise select all
+        $newStatus = $allSelected ? 0 : 1;
 
-        $this->mount();
+        $checklistIds = collect($checks)->pluck('checklistId')->toArray();
+
+        // Get all related checklists for each checklist in this group
+        $allRelatedChecklistIds = [];
+        foreach ($checklistIds as $checklistId) {
+            $checklist = HptmLearningChecklist::find($checklistId);
+            if ($checklist) {
+                $relatedChecklists = HptmLearningChecklist::where('title', $checklist->title)
+                    ->where('output', $checklist->output)
+                    ->where(function($q) use ($checklist) {
+                        if ($checklist->description) {
+                            $q->where('description', $checklist->description);
+                        } else {
+                            $q->whereNull('description');
+                        }
+                    })
+                    ->where(function($q) use ($checklist) {
+                        if ($checklist->link) {
+                            $q->where('link', $checklist->link);
+                        } else {
+                            $q->whereNull('link');
+                        }
+                    })
+                    ->where(function($q) use ($checklist) {
+                        if ($checklist->document) {
+                            $q->where('document', $checklist->document);
+                        } else {
+                            $q->whereNull('document');
+                        }
+                    })
+                    ->pluck('id')
+                    ->toArray();
+                
+                $allRelatedChecklistIds = array_merge($allRelatedChecklistIds, $relatedChecklists);
+            }
+        }
+
+        // Remove duplicates
+        $allRelatedChecklistIds = array_unique($allRelatedChecklistIds);
+
+        // Update all related checklists in batch
+        foreach ($allRelatedChecklistIds as $relatedChecklistId) {
+            $existingStatus = DB::table('hptm_learning_checklist_for_user_read_status')
+                ->where('checklistId', $relatedChecklistId)
+                ->where('userId', $userId)
+                ->first();
+
+            if ($existingStatus) {
+                DB::table('hptm_learning_checklist_for_user_read_status')
+                    ->where('checklistId', $relatedChecklistId)
+                    ->where('userId', $userId)
+                    ->update([
+                        'readStatus' => $newStatus,
+                        'updated_at' => now(),
+                    ]);
+            } else {
+                DB::table('hptm_learning_checklist_for_user_read_status')->insert([
+                    'checklistId' => $relatedChecklistId,
+                    'userId'      => $userId,
+                    'readStatus'  => $newStatus,
+                    'created_at'  => now(),
+                    'updated_at'  => now(),
+                ]);
+            }
+        }
+
+        // Recalculate score
+        $user = Auth::user();
+        if (!$user || $user->id != $userId) {
+            $user = User::find($userId);
+        }
+        
+        if ($user) {
+            $newHptmScore = $this->recalculateHptmScore($userId);
+            $user->update([
+                'hptmScore'  => $newHptmScore,
+                'updated_at' => now(),
+            ]);
+            $user->refresh();
+            $userScore = $user->hptmScore ?? 0;
+            
+            // Dispatch score update
+            $this->dispatch('score-updated', hptmScore: $userScore);
+            $this->js("
+                setTimeout(function() {
+                    window.dispatchEvent(new CustomEvent('score-updated', { 
+                        detail: { hptmScore: {$userScore} } 
+                    }));
+                }, 100);
+            ");
+        }
+
+        // Refresh affected principles
+        $affectedPrincipleIds = HptmLearningChecklist::whereIn('id', $allRelatedChecklistIds)
+            ->distinct()
+            ->pluck('principleId')
+            ->filter()
+            ->toArray();
+
+        $hasNullPrinciple = HptmLearningChecklist::whereIn('id', $allRelatedChecklistIds)
+            ->whereNull('principleId')
+            ->exists();
+
+        if ($hasNullPrinciple) {
+            $allPrincipleIds = HptmPrinciple::pluck('id')->toArray();
+            foreach ($allPrincipleIds as $principleId) {
+                $this->refreshLearningChecklistsForPrinciple($principleId, $userId);
+            }
+        } else {
+            foreach ($affectedPrincipleIds as $principleId) {
+                $this->refreshLearningChecklistsForPrinciple($principleId, $userId);
+            }
+        }
+
+        $this->refreshPrincipleCompletionPercentages($userId);
+        
+        // Update allSelectedByType for the current active principle
+        if ($this->activePrincipleId) {
+            $this->refreshLearningChecklistsForPrinciple($this->activePrincipleId, $userId);
+        }
+        
+        $this->allSelectedByType[$typeTitle] = $newStatus === 1;
     }
 
 
@@ -258,6 +388,47 @@ private function recalculateHptmScore($userId)
     }
 
     return $totalScore;
+}
+
+/**
+ * Toggle checklist status - reads current state from database and toggles it
+ */
+public function toggleChecklistStatus($checklistId)
+{
+    $userId = Auth::id();
+
+    if (!$checklistId) {
+        return;
+    }
+
+    $checklist = HptmLearningChecklist::find($checklistId);
+    if (! $checklist) {
+        return;
+    }
+
+    // Get user - don't filter by status=1 for basecamp users
+    $user = Auth::user();
+    if (!$user || $user->id != $userId) {
+        $user = User::find($userId);
+    }
+
+    if (!$user) {
+        return;
+    }
+
+    // Get current read status from database (not from UI state)
+    // If no record exists, treat as unread (0)
+    $existingStatus = DB::table('hptm_learning_checklist_for_user_read_status')
+        ->where('checklistId', $checklistId)
+        ->where('userId', $userId)
+        ->value('readStatus');
+
+    // Toggle: if currently read (1), set to unread (0), otherwise set to read (1)
+    // Handle null case: if no record exists (null), treat as unread (0), so toggle to read (1)
+    $newReadStatus = ($existingStatus === 1) ? 0 : 1;
+
+    // Now call the update method with the correct status
+    $this->changeReadStatusOfUserChecklist($checklistId, $newReadStatus);
 }
 
 public function changeReadStatusOfUserChecklist($checklistId, $readStatus)
@@ -350,19 +521,37 @@ public function changeReadStatusOfUserChecklist($checklistId, $readStatus)
     $user->refresh();
     $userScore = $user->hptmScore ?? 0;
 
-    $typeTitle = HptmLearningType::find($checklist->output)?->title ?? null;
+    // Refresh learning checklists for all affected principles (where related checklists exist)
+    $affectedPrincipleIds = HptmLearningChecklist::whereIn('id', $relatedChecklists)
+        ->distinct()
+        ->pluck('principleId')
+        ->filter()
+        ->toArray();
 
-    if ($typeTitle) {
-        $checks = collect($this->learningCheckLists[$this->activePrincipleId] ?? [])
-            ->flatten(1)
-            ->where('learningTypeTitle', $typeTitle);
+    // Also refresh for null principleId (All principles)
+    $hasNullPrinciple = HptmLearningChecklist::whereIn('id', $relatedChecklists)
+        ->whereNull('principleId')
+        ->exists();
 
-        $allChecked = $checks->every(fn($c) => $c['userReadChecklist'] == 1);
-        $this->allSelectedByType[$typeTitle] = $allChecked;
+    // Refresh all principles if any checklist has null principleId, otherwise refresh only affected ones
+    if ($hasNullPrinciple) {
+        $allPrincipleIds = HptmPrinciple::pluck('id')->toArray();
+        foreach ($allPrincipleIds as $principleId) {
+            $this->refreshLearningChecklistsForPrinciple($principleId, $userId);
+        }
+    } else {
+        foreach ($affectedPrincipleIds as $principleId) {
+            $this->refreshLearningChecklistsForPrinciple($principleId, $userId);
+        }
     }
 
-    // Refresh principle data after updating score
-    $this->mount();
+    // Always refresh the active principle to ensure UI is up to date
+    if ($this->activePrincipleId) {
+        $this->refreshLearningChecklistsForPrinciple($this->activePrincipleId, $userId);
+    }
+
+    // Refresh principle completion percentages
+    $this->refreshPrincipleCompletionPercentages($userId);
 
     // Dispatch score update event - Livewire 3 format with named parameter
     $this->dispatch('score-updated', hptmScore: $userScore);
@@ -377,7 +566,92 @@ public function changeReadStatusOfUserChecklist($checklistId, $readStatus)
     ");
 }
 
+/**
+ * Refresh learning checklists for a specific principle
+ */
+private function refreshLearningChecklistsForPrinciple($principleId, $userId)
+{
+    $learningCheckListArray = [];
+    $learningTypes = HptmLearningType::orderBy('priority', 'ASC')->get();
 
+    foreach ($learningTypes as $learningType) {
+        $checklists = HptmLearningChecklist::where('output', $learningType->id)
+            ->where(fn($q) => $q->where('principleId', $principleId)->orWhereNull('principleId'))
+            ->orderBy('created_at', 'ASC')
+            ->get();
+
+        $learningCheckListArr = [];
+        $allRead = true;
+
+        foreach ($checklists as $check) {
+            $userReadChecklist = DB::table('hptm_learning_checklist_for_user_read_status')
+                ->where('userId', $userId)
+                ->where('checklistId', $check->id)
+                ->value('readStatus');
+
+            $isRead = ($userReadChecklist == 1);
+            if (!$isRead) $allRead = false;
+
+            $learningCheckListArr[] = [
+                'checklistId'       => $check->id,
+                'principleId'       => $check->principleId,
+                'typeId'            => $check->output,
+                'link'              => $check->link ?? '',
+                'document'          => $check->document ? url("storage/" . $check->document) : '',
+                'checklistTitle'    => $check->title ?? '',
+                'description'       => $check->description ?? '',
+                'learningTypeTitle' => $learningType->title ?? '',
+                'userReadChecklist' => $isRead
+            ];
+        }
+
+        $learningCheckListArray[$learningType->title] = $learningCheckListArr;
+        
+        // Update allSelectedByType for this learning type
+        // Only mark as all selected if there are items AND all are read
+        $typeKey = $learningType->title;
+        $this->allSelectedByType[$typeKey] = (count($learningCheckListArr) > 0) && $allRead;
+    }
+
+    $this->learningCheckLists[$principleId] = $learningCheckListArray;
+}
+
+/**
+ * Refresh principle completion percentages
+ */
+private function refreshPrincipleCompletionPercentages($userId)
+{
+    $principles = HptmPrinciple::orderBy('priority', 'ASC')->get();
+    
+    foreach ($principles as $principle) {
+        $principleId = $principle->id;
+        
+        $totalLearningChecklist = HptmLearningChecklist::where(fn($q) => 
+            $q->where('principleId', $principleId)->orWhereNull('principleId')
+        )->count();
+
+        $readLearningChecklist = HptmLearningChecklist::where(fn($q) => 
+            $q->where('principleId', $principleId)->orWhereNull('principleId')
+        )->whereHas('userReadStatus', fn($q) => 
+            $q->where('userId', $userId)->where('readStatus', 1)
+        )->count();
+
+        $completionPercent = 0;
+        if (!empty($readLearningChecklist) && !empty($totalLearningChecklist)) {
+            $completionPercent = round(($readLearningChecklist / $totalLearningChecklist) * 100, 2);
+        }
+
+        // Update in principleArray
+        if (isset($this->principleArray['principleData'])) {
+            foreach ($this->principleArray['principleData'] as &$principleData) {
+                if ($principleData['id'] == $principleId) {
+                    $principleData['completionPercent'] = $completionPercent;
+                    break;
+                }
+            }
+        }
+    }
+}
 
     public function render()
     {
