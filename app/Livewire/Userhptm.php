@@ -169,12 +169,21 @@ public function mount($activePrincipleId = null)
         $user = User::find($userId);
     }
     
-    // Refresh user data to get latest score
+    // Recalculate to ensure accuracy and sync with database
     // Display only hptmScore (sum of checked checklists), not including hptmEvaluationScore
     if ($user) {
-        $user->refresh();
-        // Recalculate to ensure accuracy
+        // Recalculate score based on actual checked checklists
         $calculatedScore = $this->recalculateHptmScore($userId);
+        
+        // Update user's hptmScore in database to match calculated score
+        // This ensures database and display are always in sync
+        if ($user->hptmScore != $calculatedScore) {
+            $user->update([
+                'hptmScore' => $calculatedScore,
+                'updated_at' => now(),
+            ]);
+        }
+        
         $principleArray['hptmScore'] = $calculatedScore;
     } else {
         $principleArray['hptmScore'] = 0;
