@@ -176,7 +176,7 @@
   
       <!-- Filters -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-        @hasanyrole('organisation_user')
+        @hasanyrole('organisation_user|director')
         @if(auth()->user()->orgId)
         <!-- Offices -->
         <select wire:model.live="selectedOffice" class="border capitalize border-gray-100 rounded-sm py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#808080] focus:ring-red-500 focus:border-red-500">
@@ -256,10 +256,13 @@
             }
             $todayDate = \Carbon\Carbon::today($userTimezone);
             
+            // Get user's registration date (join date)
+            $authUser = auth()->user();
+            $userRegistrationDate = $authUser ? \Carbon\Carbon::parse($authUser->created_at)->setTimezone($userTimezone)->startOfDay() : null;
+            
             // Organisation working days (for org users) - used to mark off-days on calendar
             $isOrgUser = false;
             $orgWorkingDays = ["Mon","Tue","Wed","Thu","Fri"];
-            $authUser = auth()->user();
             if ($authUser && $authUser->orgId) {
                 $isOrgUser = true;
                 $organisation = \App\Models\Organisation::find($authUser->orgId);
@@ -309,10 +312,17 @@
 
                                     $img = null;
 
+                                    // Check if date is before user's registration date - show "-" for those dates
+                                    $isBeforeRegistration = false;
+                                    if ($userRegistrationDate && $dayDate->lt($userRegistrationDate)) {
+                                        $isBeforeRegistration = true;
+                                        $img = null; // Will show "-" in the view
+                                    }
+
                                     // Determine emoji based on date and data
                                     // If org user and this date is a non-working day for the org, show off-day emoji
                                     $isOrgOffDay = false;
-                                    if ($isOrgUser) {
+                                    if (!$isBeforeRegistration && $isOrgUser) {
                                         $dayShort = $dayDate->format('D'); // Mon, Tue, etc.
                                         if (!in_array($dayShort, $orgWorkingDays)) {
                                             $isOrgOffDay = true;
@@ -320,7 +330,7 @@
                                     }
                                     // Using score-based logic similar to app code:
                                     // null or 0-50: red (sad), 51-80: yellow (avarge), 81+: green (happy)
-                                    if ($dayDate->lt($todayDate)) {
+                                    if (!$isBeforeRegistration && $dayDate->lt($todayDate)) {
                                         // Past dates: show mood if data exists, otherwise show red
                                         if ($isOrgOffDay) {
                                             // Org non-working past day - use off-day marker
@@ -340,7 +350,7 @@
                                             // No data for past date - show red
                                             $img = 'sad.svg';
                                         }
-                                    } elseif ($dayDate->isSameDay($todayDate)) {
+                                    } elseif (!$isBeforeRegistration && $dayDate->isSameDay($todayDate)) {
                                         // Today: check leave status first, then check if data exists
                                         if ($isOrgOffDay) {
                                             $img = null;
@@ -363,7 +373,7 @@
                                             // Nothing filled today - show nothing (null)
                                             $img = null;
                                         }
-                                    } else {
+                                    } elseif (!$isBeforeRegistration) {
                                         // Future dates: only show leave icon if applicable
                                         $isFutureLeave = false;
                                         if (!empty($userLeaves)) {
@@ -391,7 +401,10 @@
                                         wire:ignore
                                     >
                                         <span class="text-gray-600 text-sm font-medium">{{ $day }}</span>
-                                        @if(isset($isOrgOffDay) && $isOrgOffDay)
+                                        @if(isset($isBeforeRegistration) && $isBeforeRegistration)
+                                            {{-- Date before user registration - show dash --}}
+                                            <span class="text-gray-400 text-sm mt-1">-</span>
+                                        @elseif(isset($isOrgOffDay) && $isOrgOffDay)
                                             {{-- Organization non-working day - show no emoji (placeholder dash) --}}
                                             <span class="text-gray-400 text-sm mt-1">-</span>
                                         @else

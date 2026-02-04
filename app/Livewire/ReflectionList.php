@@ -810,7 +810,17 @@ public function statusCancelResolved()
             $query->where('status', $this->statusFilter);
         }
 
-        $reflectionListTbl = $query->orderByDesc('id')->paginate(5);
+        // Sort by latest message timestamp (newest message first)
+        // If no messages exist, use reflection's created_at
+        $reflectionTable = (new Reflection)->getTable(); // Get table name from model (hptm_reflections)
+        $query->orderByRaw('COALESCE((
+            SELECT MAX(created_at) 
+            FROM reflection_messages 
+            WHERE reflection_messages.reflectionId = `' . $reflectionTable . '`.`id` 
+            AND reflection_messages.status = "Active"
+        ), `' . $reflectionTable . '`.`created_at`) DESC');
+
+        $reflectionListTbl = $query->paginate(5);
 
         $reflectionList = $reflectionListTbl->map(function($r) use ($user) {
             // Count unread messages (messages from admin/other users created after last_viewed_at)
