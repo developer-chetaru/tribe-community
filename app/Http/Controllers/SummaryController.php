@@ -212,7 +212,7 @@ class SummaryController extends Controller
     // Fetch happy indexes in UTC range
     $happyIndexes = HappyIndex::where('user_id', $userId)
         ->whereBetween('created_at', [$startUTC, $endUTC])
-        ->get();
+        ->get(['id', 'user_id', 'mood_value', 'description', 'status', 'timezone', 'created_at', 'updated_at']);
 
     // Fetch leaves in range
     $leaves = UserLeave::where('user_id', $userId)
@@ -225,6 +225,8 @@ class SummaryController extends Controller
 
     $summary = [];
     $leavesArray = [];
+    $displayedEntryIds = []; // Track which entries have been displayed to prevent duplicates
+    $displayedDates = []; // Track which dates (Y-m-d) have been displayed to prevent "Missed" for dates with entries
 
     // Helper to build full image URL with current domain
     $imageUrl = function (string $fileName): string {
@@ -241,6 +243,106 @@ class SummaryController extends Controller
     $userToday = Carbon::now($userTimezone);
     $isBasecamp = $user->hasRole('basecamp');
 
+    // Process all entries and determine which period date each should appear on
+    // Key: period date (Y-m-d in user timezone), Value: entry object
+    $entryMapByPeriodDate = [];
+    $usedEntryIds = []; // Track which entries have been used to prevent duplicates
+    
+    // First, build a map of entries by their stored date (in their stored timezone)
+    // This helps us quickly find entries for a given date
+    $entriesByStoredDate = [];
+    foreach ($happyIndexes as $entry) {
+        // Get stored timezone from database
+        $entryTimezone = $entry->timezone ?? $userTimezone;
+        if (!in_array($entryTimezone, timezone_identifiers_list())) {
+            $entryTimezone = $userTimezone;
+        }
+        
+        // Get entry's date in its stored timezone
+        $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone)->startOfDay();
+        $entryDateKey = $entryDate->format('Y-m-d'); // Date in entry's stored timezone
+        
+        // Store entry by its stored date key
+        if (!isset($entriesByStoredDate[$entryDateKey])) {
+            $entriesByStoredDate[$entryDateKey] = [];
+        }
+        $entriesByStoredDate[$entryDateKey][] = $entry;
+    }
+    
+    // Now, for each period date, find the matching entry
+    // We iterate through period dates and find the entry that matches
+    foreach ($period as $periodDate) {
+        $periodDateStr = $periodDate->format('Y-m-d'); // Date in current user timezone
+        
+        // Skip if this period date already has an entry mapped
+        if (isset($entryMapByPeriodDate[$periodDateStr])) {
+            continue;
+        }
+        
+        // Try to find an entry that matches this period date
+        // Logic: Match entries based on their stored date (day number) in their stored timezone
+        // The calendar shows entries on the day they were saved (e.g., Feb 3rd entry shows on day 3)
+        // So for Daily Summary, we should match: period date's day number = entry's stored day number
+        // AND period date's month/year = entry's stored month/year (in entry's timezone)
+        
+        $exactMatchEntry = null; // Entry where timezones match (priority)
+        $timezoneMatchEntry = null; // Entry from different timezone
+        
+        // Get period date's day, month, year
+        $periodDay = (int)$periodDate->format('d');
+        $periodMonth = (int)$periodDate->format('m');
+        $periodYear = (int)$periodDate->format('Y');
+        
+        // Iterate through all entries to find matches
+        foreach ($happyIndexes as $entry) {
+            // Skip if already used
+            if (in_array($entry->id, $usedEntryIds)) {
+                continue;
+            }
+            
+            // Get entry's stored timezone
+            $entryTimezone = $entry->timezone ?? $userTimezone;
+            if (!in_array($entryTimezone, timezone_identifiers_list())) {
+                $entryTimezone = $userTimezone;
+            }
+            
+            // Get entry's date in its stored timezone (this is what we stored)
+            $entryDateInStoredTimezone = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone)->startOfDay();
+            $entryDay = (int)$entryDateInStoredTimezone->format('d');
+            $entryMonth = (int)$entryDateInStoredTimezone->format('m');
+            $entryYear = (int)$entryDateInStoredTimezone->format('Y');
+            
+            // Check if period date's day/month/year matches entry's stored day/month/year
+            // This ensures entries show on the same day number they were saved (like the calendar)
+            if ($periodDay === $entryDay && $periodMonth === $entryMonth && $periodYear === $entryYear) {
+                // If entry's timezone matches user's timezone, it's an exact match (priority)
+                if ($entryTimezone === $userTimezone) {
+                    $exactMatchEntry = $entry;
+                    break; // Found exact match, use it
+                } else {
+                    // Store as timezone match (fallback)
+                    if (!$timezoneMatchEntry) {
+                        $timezoneMatchEntry = $entry;
+                    }
+                }
+            }
+        }
+        
+        // Use exact match if available, otherwise use timezone match
+        $matchedEntry = $exactMatchEntry ?? $timezoneMatchEntry;
+        
+        if ($matchedEntry) {
+            $entryMapByPeriodDate[$periodDateStr] = $matchedEntry;
+            $usedEntryIds[] = $matchedEntry->id; // Mark as used
+        }
+    }
+    
+    // Track which period dates have entries (to prevent showing "Missed" for dates with entries)
+    $periodDatesWithEntries = array_keys($entryMapByPeriodDate);
+
+    // Track which date keys we've already processed to prevent duplicates
+    $processedDateKeys = [];
+    
     foreach ($period as $date) {
         // Skip future dates (using user's timezone)
         if ($date->greaterThan($userToday)) continue;
@@ -258,6 +360,13 @@ class SummaryController extends Controller
         }
 
         $dateStr = $date->format('M d, Y');
+        $dateKey = $date->format('Y-m-d');
+        
+        // Skip if we've already processed this date key (prevent duplicates)
+        if (in_array($dateKey, $processedDateKeys)) {
+            continue;
+        }
+        $processedDateKeys[] = $dateKey;
 
         // Check if leave
         $onLeave = $leaves->first(fn($l) =>
@@ -277,13 +386,26 @@ class SummaryController extends Controller
             continue;
         }
 
-        // Check happy index - convert entry's created_at (UTC) to user's timezone and compare dates
-        $entry = $happyIndexes->first(function($h) use ($date, $userTimezone) {
-            $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($h->created_at), $userTimezone);
-            return $entryDate->isSameDay($date);
-        });
+        // Check if there's an entry for this period date
+        $entry = $entryMapByPeriodDate[$dateKey] ?? null;
 
         if ($entry) {
+            // Skip if this entry has already been displayed
+            if (in_array($entry->id, $displayedEntryIds)) {
+                continue;
+            }
+            
+            // Mark this entry as displayed
+            $displayedEntryIds[] = $entry->id;
+            
+            // Use entry's stored timezone to format the date string
+            $entryTimezone = $entry->timezone ?? $userTimezone;
+            if (!in_array($entryTimezone, timezone_identifiers_list())) {
+                $entryTimezone = $userTimezone;
+            }
+            $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone);
+            $entryDateStr = $entryDate->format('M d, Y');
+            
             $image = match($entry->mood_value) {
                 3 => $imageUrl('happy-app.png'),
                 2 => $imageUrl('sad-app.png'),
@@ -291,14 +413,105 @@ class SummaryController extends Controller
                 default => $imageUrl('sad-app.png'),
             };
             $summary[] = [
-                'date'        => $dateStr,
+                'date'        => $entryDateStr, // Use entry's date in its stored timezone
                 'score'       => $entry->score,
                 'mood_value'  => $entry->mood_value,
                 'description' => $entry->description ?? 'No message added.',
                 'image'       => $image,
                 'status'      => 'Present',
             ];
+            
+            // Mark this date as having an entry displayed (use both dateKey and entryDateKey for safety)
+            $displayedDates[] = $dateKey;
+            $entryDateKey = $entryDate->format('Y-m-d');
+            if ($entryDateKey !== $dateKey) {
+                $displayedDates[] = $entryDateKey;
+            }
+            
+            // Continue to next date - don't process "Missed" for this date
+            continue;
         } else {
+            // Before showing "Missed", check if this date already has an entry mapped or displayed
+            // Check directly in the map to ensure we have the latest state
+            if (isset($entryMapByPeriodDate[$dateKey]) || in_array($dateKey, $displayedDates)) {
+                continue; // Skip showing "Missed" if entry exists for this date
+            }
+            
+            // Additional check: verify no entry exists for this date by checking all entries
+            // This is a safety check in case the mapping missed an entry due to timezone issues
+            $hasEntryForThisDate = false;
+            $foundEntry = null;
+            
+            foreach ($happyIndexes as $checkEntry) {
+                // Skip if already displayed (to avoid checking entries we've already shown)
+                if (in_array($checkEntry->id, $displayedEntryIds)) {
+                    continue;
+                }
+                
+                $checkEntryTimezone = $checkEntry->timezone ?? $userTimezone;
+                if (!in_array($checkEntryTimezone, timezone_identifiers_list())) {
+                    $checkEntryTimezone = $userTimezone;
+                }
+                
+                // Convert period date to entry's timezone
+                $dateInEntryTimezone = \App\Helpers\TimezoneHelper::setTimezone($date->copy(), $checkEntryTimezone)->startOfDay();
+                
+                // Get entry's date in its stored timezone
+                $checkEntryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($checkEntry->created_at), $checkEntryTimezone)->startOfDay();
+                
+                // If dates match, an entry exists for this date
+                if ($dateInEntryTimezone->format('Y-m-d') === $checkEntryDate->format('Y-m-d')) {
+                    $hasEntryForThisDate = true;
+                    $foundEntry = $checkEntry;
+                    // Map it now to prevent "Missed" and ensure it's displayed
+                    $entryMapByPeriodDate[$dateKey] = $checkEntry;
+                    break;
+                }
+            }
+            
+            if ($hasEntryForThisDate && $foundEntry && !in_array($foundEntry->id, $displayedEntryIds)) {
+                // Display the entry as "Present" (it wasn't mapped earlier, so we display it now)
+                $displayedEntryIds[] = $foundEntry->id;
+                
+                $entryTimezone = $foundEntry->timezone ?? $userTimezone;
+                if (!in_array($entryTimezone, timezone_identifiers_list())) {
+                    $entryTimezone = $userTimezone;
+                }
+                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($foundEntry->created_at), $entryTimezone);
+                $entryDateStr = $entryDate->format('M d, Y');
+                
+                $image = match($foundEntry->mood_value) {
+                    3 => $imageUrl('happy-app.png'),
+                    2 => $imageUrl('sad-app.png'),
+                    1 => $imageUrl('average-app.png'),
+                    default => $imageUrl('sad-app.png'),
+                };
+                $summary[] = [
+                    'date'        => $entryDateStr,
+                    'score'       => $foundEntry->score,
+                    'mood_value'  => $foundEntry->mood_value,
+                    'description' => $foundEntry->description ?? 'No message added.',
+                    'image'       => $image,
+                    'status'      => 'Present',
+                ];
+                
+                // Mark this date as having an entry displayed
+                $displayedDates[] = $dateKey;
+                continue; // Skip showing "Missed" since we just displayed "Present"
+            }
+            
+            // If entry exists but was already displayed, skip "Missed"
+            if ($hasEntryForThisDate) {
+                // Mark this date as having an entry (even if already displayed)
+                $displayedDates[] = $dateKey;
+                continue;
+            }
+            
+            // Final check: ensure this date hasn't been displayed yet
+            if (in_array($dateKey, $displayedDates)) {
+                continue; // Skip if this date already has an entry displayed
+            }
+            
             // Show "Missed" only for past working days
             // For basecamp users: show all days, but only mark as "Missed" if it's a working day
             // For organization users: only working days are shown, so mark as "Missed"
@@ -313,6 +526,8 @@ class SummaryController extends Controller
                     'image'       => $imageUrl('sentiment-missed-summary.png'),
                     'status'      => 'Missed',
                 ];
+                // Mark this date as displayed to prevent duplicates
+                $displayedDates[] = $dateKey;
             } elseif ($isBasecamp && !$isWorkingDay && !$date->isSameDay($userToday)) {
                 // For basecamp users on non-working days: show the day but don't mark as "Missed"
                 // This ensures all days are visible in the summary

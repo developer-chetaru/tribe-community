@@ -82,17 +82,22 @@ public function getFreeVersionHomeDetails(array $filters = [])
     // Fetch entries within the month range (UTC time for database query)
     $happyData = HappyIndex::whereBetween('created_at', [$startDateUTC, $endDateUTC])
         ->whereIn('user_id', $filteredUserIds)
-        ->get(['created_at', 'mood_value', 'description', 'user_id']);
+        ->get(['created_at', 'mood_value', 'description', 'user_id', 'timezone']);
 
     $dateData = [];
     foreach ($happyData as $entry) {
-        // Get the user who created this entry to use their timezone
+        // Use stored timezone from entry if available, otherwise fallback to user's current timezone
         $entryUser = User::find($entry->user_id);
-        $entryUserTimezone = $entryUser && $entryUser->timezone && in_array($entryUser->timezone, timezone_identifiers_list()) 
+        $entryUserTimezone = $entry->timezone ?? ($entryUser && $entryUser->timezone && in_array($entryUser->timezone, timezone_identifiers_list()) 
             ? $entryUser->timezone 
-            : 'Asia/Kolkata';
+            : 'Asia/Kolkata');
         
-        // Convert entry's created_at (UTC) to entry creator's timezone to get the date
+        // Ensure timezone is valid
+        if (!in_array($entryUserTimezone, timezone_identifiers_list())) {
+            $entryUserTimezone = 'Asia/Kolkata';
+        }
+        
+        // Convert entry's created_at (UTC) to entry's stored timezone to get the date
         $entryDate = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $entryUserTimezone);
         $entryYear = (int) $entryDate->format('Y');
         $entryMonth = (int) $entryDate->format('m');

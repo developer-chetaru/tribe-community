@@ -83,18 +83,27 @@ class HappyIndexController extends Controller
         // Get user's timezone safely using helper
         $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
         
+        // Log user's timezone for debugging
+        Log::info('User timezone before HappyIndex creation (API)', [
+            'user_id' => $userId,
+            'user_timezone_from_db' => $user->timezone ?? 'null',
+            'resolved_timezone' => $userTimezone,
+        ]);
+        
         // Get current date in user's timezone
         $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
         $userDate = $userNow->toDateString(); // Y-m-d format in user's timezone
         
-        // Check if user already submitted today in their timezone
-        // We need to check all entries and convert their created_at to user's timezone to compare dates
+        // Check if user already submitted today in their CURRENT timezone
+        // We check if any entry exists that, when converted to current user timezone, matches today's date
+        // This allows one entry per day in the current timezone, regardless of when timezone was changed
         $existing = HappyIndex::where('user_id', $userId)
             ->get()
             ->filter(function ($entry) use ($userTimezone, $userDate) {
-                // Convert entry's created_at to user's timezone and compare dates
-                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $userTimezone)->toDateString();
-                return $entryDate === $userDate;
+                // Convert entry's created_at (UTC) to current user's timezone
+                $entryDateInUserTimezone = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $userTimezone)->toDateString();
+                // Compare with today's date in current user timezone
+                return $entryDateInUserTimezone === $userDate;
             })
             ->first();
 
@@ -107,14 +116,36 @@ class HappyIndexController extends Controller
             ]);
         }
       
-        // Store timestamp in UTC (Laravel default), but the date represented is in user's timezone
-        HappyIndex::create([
+        // Create entry with timezone-aware timestamp
+        // We need to ensure the created_at represents the user's local date/time
+        // Get the user's current date/time in their timezone, then convert to UTC for storage
+        $userLocalDateTime = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
+        $utcTimestamp = $userLocalDateTime->utc();
+        
+        // Ensure timezone is saved correctly (should be user's timezone, default to Asia/Kolkata)
+        $timezoneToSave = !empty($userTimezone) ? $userTimezone : 'Asia/Kolkata';
+        
+        // Use DB facade to insert with explicit timestamps to prevent Laravel from overriding
+        $happyIndexId = \DB::table('happy_indexes')->insertGetId([
             'user_id'      => $userId,
             'mood_value'   => $moodValue,
             'description' => $description,
             'status'      => 'active',
-            'created_at'  => $userNow->utc(), // Convert user's timezone to UTC for storage
-            'updated_at'  => $userNow->utc(),
+            'timezone'    => $timezoneToSave, // Store the timezone when entry was created
+            'created_at'  => $utcTimestamp,
+            'updated_at'  => $utcTimestamp,
+        ]);
+        
+        Log::info('HappyIndex created with timezone-aware timestamp', [
+            'user_id' => $userId,
+            'happy_index_id' => $happyIndexId,
+            'user_timezone' => $userTimezone,
+            'timezone_saved' => $timezoneToSave,
+            'user_local_date' => $userLocalDateTime->toDateString(),
+            'user_local_time' => $userLocalDateTime->toTimeString(),
+            'user_local_datetime' => $userLocalDateTime->toDateTimeString(),
+            'utc_timestamp' => $utcTimestamp->toDateTimeString(),
+            'timezone_offset' => $userLocalDateTime->format('P'), // +05:30 for IST
         ]);
 
         $user->EIScore += 250;

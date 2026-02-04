@@ -13,6 +13,7 @@ class HappyIndex extends Model
         'mood_value',
         'description',
         'status',
+        'timezone',
         'created_at',
         'updated_at'
     ];

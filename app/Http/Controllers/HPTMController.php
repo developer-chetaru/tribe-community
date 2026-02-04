@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Concerns\UpdatesUserTimezone;
+use Carbon\Carbon;
 
 /**
  * @OA\Tag(
@@ -446,20 +447,38 @@ class HPTMController extends Controller
             // Basecamp user: get only their data
             $userHappyData = HappyIndex::where('user_id', $userId)
                 ->where('created_at', 'like', $yearAndMonth . '%')
-                ->get(['created_at', 'mood_value', 'description']);
+                ->get(['created_at', 'mood_value', 'description', 'timezone']);
 
             $dateData = [];
             foreach ($userHappyData as $entry) {
-                $day = date('d', strtotime($entry->created_at));
-                $score = 0;
-                if ($entry->mood_value == 3) $score = 100;
-                elseif ($entry->mood_value == 2) $score = 51;
-                elseif ($entry->mood_value == 1) $score = 0;
+                // Use stored timezone from entry if available, otherwise fallback to user's current timezone
+                $entryTimezone = $entry->timezone ?? ($user->timezone && in_array($user->timezone, timezone_identifiers_list()) 
+                    ? $user->timezone 
+                    : 'Asia/Kolkata');
+                
+                // Ensure timezone is valid
+                if (!in_array($entryTimezone, timezone_identifiers_list())) {
+                    $entryTimezone = 'Asia/Kolkata';
+                }
+                
+                // Convert entry's created_at (UTC) to entry's stored timezone to get the date
+                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $entryTimezone);
+                $entryYear = (int) $entryDate->format('Y');
+                $entryMonth = (int) $entryDate->format('m');
+                $day = sprintf("%02d", (int) $entryDate->format('d'));
+                
+                // Only include if the entry falls in the selected month/year in the entry creator's timezone
+                if ($entryYear == $year && $entryMonth == (int)$month) {
+                    $score = 0;
+                    if ($entry->mood_value == 3) $score = 100;
+                    elseif ($entry->mood_value == 2) $score = 51;
+                    elseif ($entry->mood_value == 1) $score = 0;
 
-                $dateData[$day] = [
-                    'score'       => $score,
-                    'description' => $entry->description ?? '',
-                ];
+                    $dateData[$day] = [
+                        'score'       => $score,
+                        'description' => $entry->description ?? '',
+                    ];
+                }
             }
 
             for ($i = 1; $i <= $noOfDaysInMonth; $i++) {
@@ -483,32 +502,58 @@ class HPTMController extends Controller
                 $filteredUserIds[] = $userId;
             }
 
-            $happyData = HappyIndex::whereYear('created_at', $year)
-                ->whereMonth('created_at', $month)
+            // Fetch happy indexes for filtered users with timezone
+            // We fetch a wider range to ensure we get all entries that fall in the selected month in any user's timezone
+            $startDate = \Carbon\Carbon::create($year, $month, 1, 0, 0, 0, $user->timezone ?? 'Asia/Kolkata')->startOfMonth();
+            $endDate = \Carbon\Carbon::create($year, $month, cal_days_in_month(CAL_GREGORIAN, $month, $year), 23, 59, 59, $user->timezone ?? 'Asia/Kolkata')->endOfMonth();
+            
+            // Convert to UTC for database query (created_at is stored in UTC)
+            $startDateUTC = $startDate->utc();
+            $endDateUTC = $endDate->utc();
+            
+            $happyData = HappyIndex::whereBetween('created_at', [$startDateUTC, $endDateUTC])
                 ->whereDate('created_at', '<', $todayStr)
                 ->whereIn('user_id', $filteredUserIds)
-                ->get(['created_at', 'mood_value', 'description', 'user_id']);
+                ->get(['created_at', 'mood_value', 'description', 'user_id', 'timezone']);
 
             $dateData = [];
             foreach ($happyData as $entry) {
-                $day = date('d', strtotime($entry->created_at));
-
-                if (!isset($dateData[$day])) {
-                    $dateData[$day] = [
-                        'total_users' => 0,
-                        'total_score' => 0, // Count of happy users (mood_value=3)
-                        'description' => null,
-                    ];
+                // Use stored timezone from entry if available, otherwise fallback to entry user's current timezone
+                $entryUser = User::find($entry->user_id);
+                $entryUserTimezone = $entry->timezone ?? ($entryUser && $entryUser->timezone && in_array($entryUser->timezone, timezone_identifiers_list()) 
+                    ? $entryUser->timezone 
+                    : 'Asia/Kolkata');
+                
+                // Ensure timezone is valid
+                if (!in_array($entryUserTimezone, timezone_identifiers_list())) {
+                    $entryUserTimezone = 'Asia/Kolkata';
                 }
+                
+                // Convert entry's created_at (UTC) to entry's stored timezone to get the date
+                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $entryUserTimezone);
+                $entryYear = (int) $entryDate->format('Y');
+                $entryMonth = (int) $entryDate->format('m');
+                $day = sprintf("%02d", (int) $entryDate->format('d'));
+                
+                // Only include if the entry falls in the selected month/year in the entry creator's timezone
+                if ($entryYear == $year && $entryMonth == (int)$month) {
+                    if (!isset($dateData[$day])) {
+                        $dateData[$day] = [
+                            'total_users' => 0,
+                            'total_score' => 0, // Count of happy users (mood_value=3)
+                            'description' => null,
+                        ];
+                    }
 
-                $dateData[$day]['total_users'] += 1;
+                    $dateData[$day]['total_users'] += 1;
 
-                if ($entry->mood_value == 3) {
-                    $dateData[$day]['total_score'] += 1;
-                }
+                    if ($entry->mood_value == 3) {
+                        $dateData[$day]['total_score'] += 1;
+                    }
 
-                if ($entry->user_id == $userId) {
-                    $dateData[$day]['description'] = $entry->description ?? '';
+                    if ($entry->user_id == $userId) {
+                        $dateData[$day]['description'] = $entry->description ?? '';
+                    }
                 }
             }
 
@@ -535,37 +580,65 @@ class HPTMController extends Controller
         }
 
         // Include today's data
-        if ($yearAndMonth == date('Y-m')) {
-            $today = date('d');
+        // Get user's timezone for today's date comparison
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+        $userToday = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
+        $userTodayDate = $userToday->toDateString(); // Y-m-d format in user's timezone
+        $userTodayYear = (int) $userToday->format('Y');
+        $userTodayMonth = (int) $userToday->format('m');
+        
+        if ($yearAndMonth == date('Y-m') && $year == $userTodayYear && (int)$month == $userTodayMonth) {
+            $today = sprintf("%02d", (int) $userToday->format('d'));
             $score = 0;
             $descriptionToday = '';
 
             if ($user->hasRole('basecamp')) {
-                $userMood = HappyIndex::where('user_id', $userId)
-                    ->whereDate('created_at', $todayStr)
-                    ->value('mood_value');
+                // Get today's entry using stored timezone
+                $todayEntry = HappyIndex::where('user_id', $userId)
+                    ->get()
+                    ->filter(function ($entry) use ($userTimezone, $userTodayDate) {
+                        // Use stored timezone if available, otherwise fallback to current user timezone
+                        $entryTimezone = $entry->timezone ?? $userTimezone;
+                        // Convert entry's created_at (UTC) to entry's stored timezone and compare dates
+                        $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone)->toDateString();
+                        // Compare with today's date in the entry's timezone
+                        $entryTodayDate = \App\Helpers\TimezoneHelper::carbon(null, $entryTimezone)->toDateString();
+                        return $entryDate === $entryTodayDate;
+                    })
+                    ->first();
 
-                if ($userMood == 3) $score = 100;
-                elseif ($userMood == 2) $score = 51;
-                elseif ($userMood == 1) $score = 0;
-
-                $descriptionToday = HappyIndex::where('user_id', $userId)
-                    ->whereDate('created_at', $todayStr)
-                    ->value('description');
+                if ($todayEntry) {
+                    if ($todayEntry->mood_value == 3) $score = 100;
+                    elseif ($todayEntry->mood_value == 2) $score = 51;
+                    elseif ($todayEntry->mood_value == 1) $score = 0;
+                    $descriptionToday = $todayEntry->description ?? '';
+                }
 
             } else {
-                $happyToday = HappyIndex::whereDate('created_at', $todayStr)
-                    ->whereIn('user_id', $filteredUserIds)
-                    ->get(['mood_value', 'user_id']);
+                // Get today's entries for all filtered users using stored timezone
+                $happyToday = HappyIndex::whereIn('user_id', $filteredUserIds)
+                    ->get()
+                    ->filter(function ($entry) use ($userTimezone) {
+                        // Use stored timezone if available, otherwise fallback to entry user's current timezone
+                        $entryUser = User::find($entry->user_id);
+                        $entryTimezone = $entry->timezone ?? ($entryUser && $entryUser->timezone && in_array($entryUser->timezone, timezone_identifiers_list()) 
+                            ? $entryUser->timezone 
+                            : $userTimezone);
+                        // Convert entry's created_at (UTC) to entry's stored timezone and compare dates
+                        $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone)->toDateString();
+                        // Compare with today's date in the entry's timezone
+                        $entryTodayDate = \App\Helpers\TimezoneHelper::carbon(null, $entryTimezone)->toDateString();
+                        return $entryDate === $entryTodayDate;
+                    });
 
                 $totalUsers = $happyToday->count();
                 $happyUsers = $happyToday->where('mood_value', 3)->count();
 
                 $score = $totalUsers ? round(($happyUsers / $totalUsers) * 100) : 0;
 
-                $descriptionToday = HappyIndex::where('user_id', $userId)
-                    ->whereDate('created_at', $todayStr)
-                    ->value('description');
+                // Get logged-in user's description for today
+                $userTodayEntry = $happyToday->where('user_id', $userId)->first();
+                $descriptionToday = $userTodayEntry ? ($userTodayEntry->description ?? '') : '';
             }
 
             $happyIndexArr[] = [

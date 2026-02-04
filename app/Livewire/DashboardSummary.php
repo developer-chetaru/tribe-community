@@ -16,6 +16,7 @@ use App\Models\HptmLearningType;
 use App\Services\OneSignalService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 
 class DashboardSummary extends Component
 {
@@ -79,23 +80,31 @@ class DashboardSummary extends Component
         $userTodayDate = $userNow->toDateString(); // Y-m-d format
         
         // Check if user gave feedback today in their timezone
-        // Need to check all entries and convert to user's timezone to compare dates
+        // Use the stored timezone for each entry, not the current user timezone
         $this->userGivenFeedback = HappyIndex::where('user_id', $user->id)
             ->get()
             ->filter(function ($entry) use ($userTimezone, $userTodayDate) {
-                // Convert entry's created_at (UTC) to user's timezone and compare dates
-                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $userTimezone)->toDateString();
-                return $entryDate === $userTodayDate;
+                // Use stored timezone if available, otherwise fallback to current user timezone
+                $entryTimezone = $entry->timezone ?? $userTimezone;
+                // Convert entry's created_at (UTC) to entry's stored timezone and compare dates
+                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone)->toDateString();
+                // Compare with today's date in the entry's timezone
+                $entryTodayDate = \App\Helpers\TimezoneHelper::carbon(null, $entryTimezone)->toDateString();
+                return $entryDate === $entryTodayDate;
             })
             ->isNotEmpty();
         
-        // Fetch today's actual mood data if exists (using user's timezone)
+        // Fetch today's actual mood data if exists (using entry's stored timezone)
         $todayHappyIndex = HappyIndex::where('user_id', $user->id)
             ->get()
             ->filter(function ($entry) use ($userTimezone, $userTodayDate) {
-                // Convert entry's created_at (UTC) to user's timezone and compare dates
-                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $userTimezone)->toDateString();
-                return $entryDate === $userTodayDate;
+                // Use stored timezone if available, otherwise fallback to current user timezone
+                $entryTimezone = $entry->timezone ?? $userTimezone;
+                // Convert entry's created_at (UTC) to entry's stored timezone and compare dates
+                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone)->toDateString();
+                // Compare with today's date in the entry's timezone
+                $entryTodayDate = \App\Helpers\TimezoneHelper::carbon(null, $entryTimezone)->toDateString();
+                return $entryDate === $entryTodayDate;
             })
             ->first();
         
@@ -320,13 +329,17 @@ public function updatedSelectedDepartment($value)
         $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
         $userTodayDate = $userNow->toDateString(); // Y-m-d format
         
-        // Fetch today's mood data (using user's timezone)
+        // Fetch today's mood data (using entry's stored timezone)
         $todayHappyIndex = HappyIndex::where('user_id', $user->id)
             ->get()
             ->filter(function ($entry) use ($userTimezone, $userTodayDate) {
-                // Convert entry's created_at (UTC) to user's timezone and compare dates
-                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $userTimezone)->toDateString();
-                return $entryDate === $userTodayDate;
+                // Use stored timezone if available, otherwise fallback to current user timezone
+                $entryTimezone = $entry->timezone ?? $userTimezone;
+                // Convert entry's created_at (UTC) to entry's stored timezone and compare dates
+                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone)->toDateString();
+                // Compare with today's date in the entry's timezone
+                $entryTodayDate = \App\Helpers\TimezoneHelper::carbon(null, $entryTimezone)->toDateString();
+                return $entryDate === $entryTodayDate;
             })
             ->first();
         
@@ -486,17 +499,27 @@ public function updatedSelectedDepartment($value)
         // Get user's timezone safely using helper
         $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
         
+        // Log user's timezone for debugging
+        Log::info('User timezone before HappyIndex creation', [
+            'user_id' => $userId,
+            'user_timezone_from_db' => $user->timezone ?? 'null',
+            'resolved_timezone' => $userTimezone,
+        ]);
+        
         // Get current date in user's timezone
         $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
         $userDate = $userNow->toDateString(); // Y-m-d format in user's timezone
         
-        // Check if user already submitted today in their timezone
+        // Check if user already submitted today in their CURRENT timezone
+        // We check if any entry exists that, when converted to current user timezone, matches today's date
+        // This allows one entry per day in the current timezone, regardless of when timezone was changed
         $existing = HappyIndex::where('user_id', $userId)
             ->get()
             ->filter(function ($entry) use ($userTimezone, $userDate) {
-                // Convert entry's created_at to user's timezone and compare dates
-                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $userTimezone)->toDateString();
-                return $entryDate === $userDate;
+                // Convert entry's created_at (UTC) to current user's timezone
+                $entryDateInUserTimezone = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $userTimezone)->toDateString();
+                // Compare with today's date in current user timezone
+                return $entryDateInUserTimezone === $userDate;
             })
             ->first();
 
@@ -506,13 +529,36 @@ public function updatedSelectedDepartment($value)
             return;
         }
 
-        HappyIndex::create([
+        // Create entry with timezone-aware timestamp
+        // We need to ensure the created_at represents the user's local date/time
+        // Get the user's current date/time in their timezone, then convert to UTC for storage
+        $userLocalDateTime = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
+        $utcTimestamp = $userLocalDateTime->utc();
+        
+        // Ensure timezone is saved correctly (should be user's timezone, default to Asia/Kolkata)
+        $timezoneToSave = !empty($userTimezone) ? $userTimezone : 'Asia/Kolkata';
+        
+        // Use DB facade to insert with explicit timestamps to prevent Laravel from overriding
+        $happyIndexId = \DB::table('happy_indexes')->insertGetId([
             'user_id'      => $userId,
             'mood_value'   => $moodValue,
             'description'  => $description,
             'status'       => 'active',
-            'created_at'   => $userNow->utc(), // Convert user's timezone to UTC for storage
-            'updated_at'   => $userNow->utc(),
+            'timezone'     => $timezoneToSave, // Store the timezone when entry was created
+            'created_at'   => $utcTimestamp,
+            'updated_at'   => $utcTimestamp,
+        ]);
+        
+        Log::info('HappyIndex created with timezone-aware timestamp', [
+            'user_id' => $userId,
+            'happy_index_id' => $happyIndexId,
+            'user_timezone' => $userTimezone,
+            'timezone_saved' => $timezoneToSave,
+            'user_local_date' => $userLocalDateTime->toDateString(),
+            'user_local_time' => $userLocalDateTime->toTimeString(),
+            'user_local_datetime' => $userLocalDateTime->toDateTimeString(),
+            'utc_timestamp' => $utcTimestamp->toDateTimeString(),
+            'timezone_offset' => $userLocalDateTime->format('P'), // +05:30 for IST
         ]);
 
         $user->EIScore += 250;
@@ -567,18 +613,22 @@ public function updatedSelectedDepartment($value)
         // Dispatch event to close modal
         $this->dispatch('close-leave-modal');
         
+        // Dispatch event to refresh Summary component (Daily Summary)
+        $this->dispatch('summary-saved');
+        
         // Refresh the component to show updated data
         $this->loadData();
         
         Log::info('HappyIndex submitted successfully', [
             'user_id' => $userId,
             'mood_value' => $moodValue,
+            'happy_index_id' => $happyIndexId,
         ]);
         
         session()->flash('success', "Sentiment submitted successfully! Today's EI Score: $todayEIScore");
         
-        // Redirect after a short delay to allow modal to close
-        return redirect()->route('dashboard');
+        // Don't redirect - let Livewire handle the update
+        // The modal will close via the dispatched event
     }
 
     public function render()

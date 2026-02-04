@@ -297,7 +297,7 @@
                             @if($day)
                                 @php
                                     $dayData = $happyIndexMonthly[$day-1] ?? null;
-                                    $dayDate = \Carbon\Carbon::createFromDate($year, $month, $day, $userTimezone);
+                                    $dayDate = \Carbon\Carbon::createFromDate($year, $month, $day, $userTimezone)->startOfDay();
                                     
                                     // For today, use todayMoodData if available, otherwise use dayData
                                     if ($dayDate->isSameDay($todayDate) && $todayMoodData) {
@@ -396,7 +396,9 @@
                                 <td class="p-1" wire:key="day-{{ $day }}">
                                     <div class="flex flex-col items-center justify-center bg-white border w-14 h-14 mx-auto cursor-pointer hover:bg-gray-50 transition rounded w-full"
                                         @if($dayDate->lte($todayDate) || $img === 'leave-office.svg')
-                                            @click="openModal = true; modalData = { day: {{ $day }}, score: '{{ $score }}', desc: '{{ $desc }}', img: '{{ $img ?? '-' }}' }"
+                                            x-on:click="openModal = true; modalData.day = {{ $day }}; modalData.score = {{ $score !== null ? $score : 'null' }}; modalData.desc = {{ json_encode($desc ?? 'No description available') }}; modalData.img = {{ json_encode($img ?? '-') }};"
+                                        @else
+                                            style="cursor: default;"
                                         @endif
                                         wire:ignore
                                     >
