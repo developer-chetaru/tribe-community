@@ -529,56 +529,91 @@ public function updatedSelectedDepartment($value)
         // Check if user already submitted today in their CURRENT timezone
         // Logic: One entry per day based on current timezone's "today"
         // We check if any entry's date (when converted to current timezone) matches today
-        $allEntries = HappyIndex::where('user_id', $userId)->get();
+        $allEntries = HappyIndex::where('user_id', $userId)
+            ->orderBy('created_at', 'desc')
+            ->get();
         
-        Log::info('All user entries for comparison', [
+        $debugInfo = [
             'user_id' => $userId,
             'total_entries' => $allEntries->count(),
             'current_timezone' => $userTimezone,
             'today_date_in_current_tz' => $userDate,
-            'entries' => $allEntries->map(function($entry) use ($userTimezone) {
-                $entryDateInCurrentTz = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $userTimezone)->toDateString();
-                return [
-                    'id' => $entry->id,
-                    'created_at_utc' => $entry->created_at,
-                    'timezone' => $entry->timezone ?? 'null',
-                    'mood_value' => $entry->mood_value,
-                    'entry_date_in_current_tz' => $entryDateInCurrentTz,
-                ];
-            })->toArray(),
-        ]);
+            'user_now_datetime' => $userNow->toDateTimeString(),
+            'entries' => [],
+        ];
         
-        $existing = $allEntries->filter(function ($entry) use ($userTimezone, $userDate, $userId) {
+        $existing = null;
+        foreach ($allEntries as $entry) {
+            try {
                 // Convert entry's created_at (UTC) to current user's timezone
-                // This tells us what date the entry represents in the current timezone
-                $entryDateInCurrentTimezone = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $userTimezone)->toDateString();
+                $entryDateInCurrentTimezone = \App\Helpers\TimezoneHelper::setTimezone(
+                    \Carbon\Carbon::parse($entry->created_at), 
+                    $userTimezone
+                )->toDateString();
                 
                 // Compare with today's date in current user timezone
                 $isMatch = $entryDateInCurrentTimezone === $userDate;
                 
-                return $isMatch;
-            })
-            ->first();
+                $entryDebug = [
+                    'id' => $entry->id,
+                    'created_at_utc' => $entry->created_at,
+                    'timezone' => $entry->timezone ?? 'null',
+                    'mood_value' => $entry->mood_value,
+                    'entry_date_in_current_tz' => $entryDateInCurrentTimezone,
+                    'is_match' => $isMatch,
+                ];
+                
+                $debugInfo['entries'][] = $entryDebug;
+                
+                if ($isMatch && !$existing) {
+                    $existing = $entry;
+                }
+            } catch (\Exception $e) {
+                Log::error('Error checking entry for existing submission', [
+                    'entry_id' => $entry->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+        
+        Log::info('HappyIndex existing entry check', $debugInfo);
+        
+        // Dispatch debug info to console
+        $this->dispatch('happyindex-debug', debugInfo: $debugInfo);
 
         if ($existing) {
-            Log::warning('HappyIndex save blocked - already submitted today', [
+            $blockInfo = [
                 'user_id' => $userId,
                 'existing_entry_id' => $existing->id,
                 'existing_entry_created_at' => $existing->created_at,
                 'existing_entry_timezone' => $existing->timezone ?? 'null',
                 'current_timezone' => $userTimezone,
                 'today_date' => $userDate,
-            ]);
+                'message' => 'You have already submitted your response today.',
+            ];
+            
+            Log::warning('HappyIndex save blocked - already submitted today', $blockInfo);
+            
+            // Dispatch to console
+            $this->dispatch('happyindex-blocked', blockInfo: $blockInfo);
+            
             $this->dispatch('close-leave-modal'); 
             session()->flash('error', 'You have already submitted your response today.');
             return;
         }
         
-        Log::info('No existing entry found - proceeding with save', [
+        $saveInfo = [
             'user_id' => $userId,
             'current_timezone' => $userTimezone,
             'today_date' => $userDate,
-        ]);
+            'mood_value' => $moodValue,
+            'message' => 'No existing entry found - proceeding with save',
+        ];
+        
+        Log::info('HappyIndex proceeding with save', $saveInfo);
+        
+        // Dispatch to console
+        $this->dispatch('happyindex-saving', saveInfo: $saveInfo);
 
         // Create entry with timezone-aware timestamp
         // We need to ensure the created_at represents the user's local date/time
@@ -658,18 +693,27 @@ public function updatedSelectedDepartment($value)
         $this->moodStatus = null;
         $this->moodNote = null;
         
-        Log::info('HappyIndex submitted successfully', [
-            'user_id' => $userId,
-            'mood_value' => $moodValue,
-            'happy_index_id' => $happyIndexId,
-        ]);
-        
-        // Show success message
-        session()->flash('success', "Sentiment submitted successfully! Today's EI Score: $todayEIScore");
-        
-        // Dispatch event to close modal
-        $this->dispatch('close-leave-modal');
-        
+            $successInfo = [
+                'user_id' => $userId,
+                'mood_value' => $moodValue,
+                'happy_index_id' => $happyIndexId,
+                'timezone' => $timezoneToSave,
+                'created_at_utc' => $utcTimestamp->toDateTimeString(),
+                'ei_score' => $todayEIScore,
+                'message' => "Sentiment submitted successfully! Today's EI Score: $todayEIScore",
+            ];
+            
+            Log::info('HappyIndex submitted successfully', $successInfo);
+            
+            // Dispatch to console
+            $this->dispatch('happyindex-success', successInfo: $successInfo);
+            
+            // Show success message
+            session()->flash('success', "Sentiment submitted successfully! Today's EI Score: $todayEIScore");
+            
+            // Dispatch event to close modal
+            $this->dispatch('close-leave-modal');
+            
             // Refresh the page to show updated data
             return $this->redirect(route('dashboard'), navigate: true);
         } catch (\Exception $e) {

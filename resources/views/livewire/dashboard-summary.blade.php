@@ -1,4 +1,52 @@
 <div>
+<script>
+    // Listen for HappyIndex debug events
+    document.addEventListener('livewire:init', () => {
+        Livewire.on('happyindex-debug', (data) => {
+            console.group('🔍 HappyIndex Debug - Existing Entry Check');
+            console.log('User ID:', data.debugInfo.user_id);
+            console.log('Current Timezone:', data.debugInfo.current_timezone);
+            console.log('Today Date (Current TZ):', data.debugInfo.today_date_in_current_tz);
+            console.log('Total Entries:', data.debugInfo.total_entries);
+            console.table(data.debugInfo.entries);
+            console.groupEnd();
+        });
+        
+        Livewire.on('happyindex-blocked', (data) => {
+            console.group('⚠️ HappyIndex Save Blocked');
+            console.log('Reason: Already submitted today');
+            console.log('Existing Entry ID:', data.blockInfo.existing_entry_id);
+            console.log('Existing Entry Created At (UTC):', data.blockInfo.existing_entry_created_at);
+            console.log('Existing Entry Timezone:', data.blockInfo.existing_entry_timezone);
+            console.log('Current Timezone:', data.blockInfo.current_timezone);
+            console.log('Today Date:', data.blockInfo.today_date);
+            console.log('Message:', data.blockInfo.message);
+            console.groupEnd();
+        });
+        
+        Livewire.on('happyindex-saving', (data) => {
+            console.group('💾 HappyIndex Saving');
+            console.log('User ID:', data.saveInfo.user_id);
+            console.log('Current Timezone:', data.saveInfo.current_timezone);
+            console.log('Today Date:', data.saveInfo.today_date);
+            console.log('Mood Value:', data.saveInfo.mood_value);
+            console.log('Message:', data.saveInfo.message);
+            console.groupEnd();
+        });
+        
+        Livewire.on('happyindex-success', (data) => {
+            console.group('✅ HappyIndex Save Success');
+            console.log('User ID:', data.successInfo.user_id);
+            console.log('Happy Index ID:', data.successInfo.happy_index_id);
+            console.log('Mood Value:', data.successInfo.mood_value);
+            console.log('Timezone:', data.successInfo.timezone);
+            console.log('Created At (UTC):', data.successInfo.created_at_utc);
+            console.log('EI Score:', data.successInfo.ei_score);
+            console.log('Message:', data.successInfo.message);
+            console.groupEnd();
+        });
+    });
+</script>
 @if($showSubscriptionExpiredModal)
     <!-- Subscription Expired Modal - Show first, block everything -->
     <div x-data="{ show: @entangle('showSubscriptionExpiredModal') }" x-show="show" x-cloak style="display: block;" class="fixed inset-0 bg-black bg-opacity-50 z-[10000] flex items-center justify-center">
