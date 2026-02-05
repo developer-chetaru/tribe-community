@@ -15,7 +15,7 @@
      ">
 <div class="w-full bg-white rounded-md p-5">
     <div class="flex items-center mb-6 flex-wrap sm:flex-nowrap">
-        <h2 class="text-[14px] sm:text-[24px] font-semibold text-[#EB1C24]">The 5 HPTM Principles</h2>
+        <h2 class="text-[14px] sm:text-[24px] font-semibold text-[#EB1C24]">The {{ $principleArray['count'] ?? 5 }} HPTM Principles</h2>
         <button class="ml-2 sm:ml-6 bg-[#FFEFF0] border border-[#FF9AA0] rounded-md flex items-center py-2 px-4 text-[#EB1C24] text-[13px] sm:text-[16px] " style="line-height: normal;"> 
             HPTM <span class="text-black ml-2">
     {{ $principleArray['hptmScore'] ?? 0 }}

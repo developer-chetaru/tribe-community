@@ -279,6 +279,7 @@ public function mount($activePrincipleId = null)
     }
 
     $principleArray['principleData'] = $resultArray;
+    $principleArray['count'] = count($resultArray);
 
     // --- User HPTM Score ---
     // For basecamp users, don't filter by status=1 as they might have different status
