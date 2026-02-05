@@ -511,32 +511,42 @@ public function updatedSelectedDepartment($value)
         $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
         $userDate = $userNow->toDateString(); // Y-m-d format in user's timezone
         
+        Log::info('HappyIndex save attempt - checking existing entries', [
+            'user_id' => $userId,
+            'current_timezone' => $userTimezone,
+            'today_date_in_current_tz' => $userDate,
+            'user_now_datetime' => $userNow->toDateTimeString(),
+        ]);
+        
         // Check if user already submitted today in their CURRENT timezone
         // Logic: One entry per day based on current timezone's "today"
-        // If user submitted on 4 Feb in Vancouver, and today is 4 Feb in India, prevent duplicate
-        // If user submitted on 4 Feb in Vancouver, and today is 5 Feb in India, allow new entry
-        $existing = HappyIndex::where('user_id', $userId)
-            ->get()
-            ->filter(function ($entry) use ($userTimezone, $userDate, $userId) {
+        // We check if any entry's date (when converted to current timezone) matches today
+        $allEntries = HappyIndex::where('user_id', $userId)->get();
+        
+        Log::info('All user entries for comparison', [
+            'user_id' => $userId,
+            'total_entries' => $allEntries->count(),
+            'current_timezone' => $userTimezone,
+            'today_date_in_current_tz' => $userDate,
+            'entries' => $allEntries->map(function($entry) use ($userTimezone) {
+                $entryDateInCurrentTz = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $userTimezone)->toDateString();
+                return [
+                    'id' => $entry->id,
+                    'created_at_utc' => $entry->created_at,
+                    'timezone' => $entry->timezone ?? 'null',
+                    'mood_value' => $entry->mood_value,
+                    'entry_date_in_current_tz' => $entryDateInCurrentTz,
+                ];
+            })->toArray(),
+        ]);
+        
+        $existing = $allEntries->filter(function ($entry) use ($userTimezone, $userDate, $userId) {
                 // Convert entry's created_at (UTC) to current user's timezone
                 // This tells us what date the entry represents in the current timezone
                 $entryDateInCurrentTimezone = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $userTimezone)->toDateString();
                 
                 // Compare with today's date in current user timezone
                 $isMatch = $entryDateInCurrentTimezone === $userDate;
-                
-                // Log for debugging
-                if ($isMatch) {
-                    Log::info('Existing entry found preventing save', [
-                        'user_id' => $userId,
-                        'entry_id' => $entry->id,
-                        'entry_created_at_utc' => $entry->created_at,
-                        'entry_timezone' => $entry->timezone ?? 'null',
-                        'current_user_timezone' => $userTimezone,
-                        'entry_date_in_current_tz' => $entryDateInCurrentTimezone,
-                        'today_date_in_current_tz' => $userDate,
-                    ]);
-                }
                 
                 return $isMatch;
             })
@@ -546,6 +556,8 @@ public function updatedSelectedDepartment($value)
             Log::warning('HappyIndex save blocked - already submitted today', [
                 'user_id' => $userId,
                 'existing_entry_id' => $existing->id,
+                'existing_entry_created_at' => $existing->created_at,
+                'existing_entry_timezone' => $existing->timezone ?? 'null',
                 'current_timezone' => $userTimezone,
                 'today_date' => $userDate,
             ]);
@@ -553,6 +565,12 @@ public function updatedSelectedDepartment($value)
             session()->flash('error', 'You have already submitted your response today.');
             return;
         }
+        
+        Log::info('No existing entry found - proceeding with save', [
+            'user_id' => $userId,
+            'current_timezone' => $userTimezone,
+            'today_date' => $userDate,
+        ]);
 
         // Create entry with timezone-aware timestamp
         // We need to ensure the created_at represents the user's local date/time
