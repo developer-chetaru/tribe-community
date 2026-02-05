@@ -528,14 +528,20 @@ public function updatedSelectedDepartment($value)
         
         // Check if user already submitted today in their CURRENT timezone
         // Logic: One entry per day based on current timezone's "today"
-        // We check if any entry's date (when converted to current timezone) matches today
+        // We only check entries that were created "today" in the current timezone
+        // This means: if user submitted on 4 Feb in LA, and today is 5 Feb in India, they can submit for 5 Feb
+        // Because the 4 Feb LA entry represents 4 Feb, not 5 Feb (even though in India timezone it shows as 5 Feb)
+        
+        // Get entries from the last 2 days to avoid checking all entries
+        $twoDaysAgo = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone)->subDays(2)->startOfDay()->utc();
         $allEntries = HappyIndex::where('user_id', $userId)
+            ->where('created_at', '>=', $twoDaysAgo)
             ->orderBy('created_at', 'desc')
             ->get();
         
         $debugInfo = [
             'user_id' => $userId,
-            'total_entries' => $allEntries->count(),
+            'total_entries_checked' => $allEntries->count(),
             'current_timezone' => $userTimezone,
             'today_date_in_current_tz' => $userDate,
             'user_now_datetime' => $userNow->toDateTimeString(),
@@ -545,21 +551,52 @@ public function updatedSelectedDepartment($value)
         $existing = null;
         foreach ($allEntries as $entry) {
             try {
-                // Convert entry's created_at (UTC) to current user's timezone
+                // Get entry's stored timezone (or fallback to current timezone if not set)
+                $entryTimezone = $entry->timezone ?? $userTimezone;
+                
+                // Convert entry's created_at (UTC) to entry's stored timezone to get the actual date when it was submitted
+                $entryDateInStoredTimezone = \App\Helpers\TimezoneHelper::setTimezone(
+                    \Carbon\Carbon::parse($entry->created_at), 
+                    $entryTimezone
+                )->toDateString();
+                
+                // Get today's date in the entry's stored timezone
+                $todayInEntryTimezone = \App\Helpers\TimezoneHelper::carbon(null, $entryTimezone)->toDateString();
+                
+                // Check: Was this entry created "today" in its stored timezone?
+                // If yes, then check if that "today" in entry's timezone matches "today" in current timezone
+                // We need to check if the entry's date (in its timezone) and today's date (in current timezone) 
+                // represent the same calendar day when considering timezone differences
+                
+                // Convert entry's UTC timestamp directly to current timezone to see what date it represents
                 $entryDateInCurrentTimezone = \App\Helpers\TimezoneHelper::setTimezone(
                     \Carbon\Carbon::parse($entry->created_at), 
                     $userTimezone
                 )->toDateString();
                 
-                // Compare with today's date in current user timezone
-                $isMatch = $entryDateInCurrentTimezone === $userDate;
+                // Only block if BOTH conditions are true:
+                // 1. Entry represents "today" in the current timezone
+                // 2. Entry was created "today" in its stored timezone (to prevent blocking old entries)
+                // This allows: if user submitted on 4 Feb in LA, and now it's 5 Feb in India, they can submit for 5 Feb
+                // Because the 4 Feb LA entry was created on 4 Feb (not 5 Feb) in LA timezone
+                $entryWasCreatedTodayInStoredTz = ($entryDateInStoredTimezone === $todayInEntryTimezone);
+                $entryRepresentsTodayInCurrentTz = ($entryDateInCurrentTimezone === $userDate);
+                
+                // Block only if entry was created "today" in its stored timezone AND represents "today" in current timezone
+                // This means: if entry was created yesterday in a different timezone, don't block
+                $isMatch = $entryWasCreatedTodayInStoredTz && $entryRepresentsTodayInCurrentTz;
                 
                 $entryDebug = [
                     'id' => $entry->id,
                     'created_at_utc' => $entry->created_at,
-                    'timezone' => $entry->timezone ?? 'null',
-                    'mood_value' => $entry->mood_value,
+                    'entry_timezone' => $entryTimezone,
+                    'entry_date_in_stored_tz' => $entryDateInStoredTimezone,
+                    'today_in_entry_tz' => $todayInEntryTimezone,
+                    'entry_was_today_in_stored_tz' => $entryWasCreatedTodayInStoredTz,
                     'entry_date_in_current_tz' => $entryDateInCurrentTimezone,
+                    'today_in_current_tz' => $userDate,
+                    'entry_represents_today_in_current_tz' => $entryRepresentsTodayInCurrentTz,
+                    'mood_value' => $entry->mood_value,
                     'is_match' => $isMatch,
                 ];
                 
