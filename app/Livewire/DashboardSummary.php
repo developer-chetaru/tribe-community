@@ -43,7 +43,8 @@ class DashboardSummary extends Component
     protected $service;
 
     protected $listeners = [
-        'refreshData' => 'loadData'
+        'refreshData' => 'loadData',
+        'summary-saved' => 'refreshAfterSubmit'
     ];
 
     public function boot(DashboardService $service)
@@ -607,28 +608,30 @@ public function updatedSelectedDepartment($value)
         $this->moodStatus = null;
         $this->moodNote = null;
         
-        // Show success message
-        session()->flash('success', 'Sentiment submitted successfully!');
-        
-        // Dispatch event to close modal
-        $this->dispatch('close-leave-modal');
-        
-        // Dispatch event to refresh Summary component (Daily Summary)
-        $this->dispatch('summary-saved');
-        
-        // Refresh the component to show updated data
-        $this->loadData();
-        
         Log::info('HappyIndex submitted successfully', [
             'user_id' => $userId,
             'mood_value' => $moodValue,
             'happy_index_id' => $happyIndexId,
         ]);
         
+        // Show success message
         session()->flash('success', "Sentiment submitted successfully! Today's EI Score: $todayEIScore");
         
-        // Don't redirect - let Livewire handle the update
-        // The modal will close via the dispatched event
+        // Dispatch event to close modal
+        $this->dispatch('close-leave-modal');
+        
+        // Refresh the page to show updated data
+        return $this->redirect(route('dashboard'), navigate: true);
+    }
+
+    /**
+     * Refresh data after sentiment submission
+     * This is called when 'summary-saved' event is dispatched
+     */
+    public function refreshAfterSubmit()
+    {
+        // Refresh calendar and today's mood data
+        $this->loadData();
     }
 
     public function render()

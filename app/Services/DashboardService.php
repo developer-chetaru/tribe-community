@@ -84,10 +84,14 @@ public function getFreeVersionHomeDetails(array $filters = [])
         ->whereIn('user_id', $filteredUserIds)
         ->get(['created_at', 'mood_value', 'description', 'user_id', 'timezone']);
 
+    // Eager load users to avoid N+1 query problem
+    $userIds = $happyData->pluck('user_id')->unique()->toArray();
+    $users = User::whereIn('id', $userIds)->get()->keyBy('id');
+
     $dateData = [];
     foreach ($happyData as $entry) {
         // Use stored timezone from entry if available, otherwise fallback to user's current timezone
-        $entryUser = User::find($entry->user_id);
+        $entryUser = $users->get($entry->user_id);
         $entryUserTimezone = $entry->timezone ?? ($entryUser && $entryUser->timezone && in_array($entryUser->timezone, timezone_identifiers_list()) 
             ? $entryUser->timezone 
             : 'Asia/Kolkata');
