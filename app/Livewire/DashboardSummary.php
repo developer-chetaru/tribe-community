@@ -512,19 +512,43 @@ public function updatedSelectedDepartment($value)
         $userDate = $userNow->toDateString(); // Y-m-d format in user's timezone
         
         // Check if user already submitted today in their CURRENT timezone
-        // We check if any entry exists that, when converted to current user timezone, matches today's date
-        // This allows one entry per day in the current timezone, regardless of when timezone was changed
+        // Logic: One entry per day based on current timezone's "today"
+        // If user submitted on 4 Feb in Vancouver, and today is 4 Feb in India, prevent duplicate
+        // If user submitted on 4 Feb in Vancouver, and today is 5 Feb in India, allow new entry
         $existing = HappyIndex::where('user_id', $userId)
             ->get()
-            ->filter(function ($entry) use ($userTimezone, $userDate) {
+            ->filter(function ($entry) use ($userTimezone, $userDate, $userId) {
                 // Convert entry's created_at (UTC) to current user's timezone
-                $entryDateInUserTimezone = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $userTimezone)->toDateString();
+                // This tells us what date the entry represents in the current timezone
+                $entryDateInCurrentTimezone = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $userTimezone)->toDateString();
+                
                 // Compare with today's date in current user timezone
-                return $entryDateInUserTimezone === $userDate;
+                $isMatch = $entryDateInCurrentTimezone === $userDate;
+                
+                // Log for debugging
+                if ($isMatch) {
+                    Log::info('Existing entry found preventing save', [
+                        'user_id' => $userId,
+                        'entry_id' => $entry->id,
+                        'entry_created_at_utc' => $entry->created_at,
+                        'entry_timezone' => $entry->timezone ?? 'null',
+                        'current_user_timezone' => $userTimezone,
+                        'entry_date_in_current_tz' => $entryDateInCurrentTimezone,
+                        'today_date_in_current_tz' => $userDate,
+                    ]);
+                }
+                
+                return $isMatch;
             })
             ->first();
 
         if ($existing) {
+            Log::warning('HappyIndex save blocked - already submitted today', [
+                'user_id' => $userId,
+                'existing_entry_id' => $existing->id,
+                'current_timezone' => $userTimezone,
+                'today_date' => $userDate,
+            ]);
             $this->dispatch('close-leave-modal'); 
             session()->flash('error', 'You have already submitted your response today.');
             return;
