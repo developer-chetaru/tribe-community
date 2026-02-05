@@ -100,18 +100,86 @@ public function mount($activePrincipleId = null)
         }
 
         // --- Completion percentage for learning checklists ---
-        $totalLearningChecklist = HptmLearningChecklist::where(fn($q) => 
+        // Get all checklists for this principle (including null principleId)
+        $allChecklists = HptmLearningChecklist::where(fn($q) => 
             $q->where('principleId', $principleId)->orWhereNull('principleId')
-        )->count();
+        )->get();
 
-        $readLearningChecklist = HptmLearningChecklist::where(fn($q) => 
-            $q->where('principleId', $principleId)->orWhereNull('principleId')
-        )->whereHas('userReadStatus', fn($q) => 
-            $q->where('userId', $userId)->where('readStatus', 1)
-        )->count();
+        // Deduplicate checklists based on unique content (same as display logic)
+        $uniqueChecklists = [];
+        $seenChecklists = [];
+        
+        foreach ($allChecklists as $check) {
+            // Create a unique key based on title, output, description, link, and document
+            $uniqueKey = md5(
+                ($check->title ?? '') . '|' . 
+                ($check->output ?? '') . '|' . 
+                ($check->description ?? '') . '|' . 
+                ($check->link ?? '') . '|' . 
+                ($check->document ?? '')
+            );
 
-        if (!empty($readLearningChecklist) && !empty($totalLearningChecklist)) {
+            // Skip if we've already seen this checklist
+            if (isset($seenChecklists[$uniqueKey])) {
+                continue;
+            }
+
+            $seenChecklists[$uniqueKey] = true;
+            
+            // Get all related checklist IDs (same content, different IDs)
+            $relatedChecklistIds = HptmLearningChecklist::where('title', $check->title)
+                ->where('output', $check->output)
+                ->where(function($q) use ($check) {
+                    if ($check->description) {
+                        $q->where('description', $check->description);
+                    } else {
+                        $q->whereNull('description');
+                    }
+                })
+                ->where(function($q) use ($check) {
+                    if ($check->link) {
+                        $q->where('link', $check->link);
+                    } else {
+                        $q->whereNull('link');
+                    }
+                })
+                ->where(function($q) use ($check) {
+                    if ($check->document) {
+                        $q->where('document', $check->document);
+                    } else {
+                        $q->whereNull('document');
+                    }
+                })
+                ->pluck('id')
+                ->toArray();
+
+            $uniqueChecklists[] = [
+                'ids' => $relatedChecklistIds,
+                'uniqueKey' => $uniqueKey
+            ];
+        }
+
+        $totalLearningChecklist = count($uniqueChecklists);
+
+        // Count how many unique checklists are read
+        $readLearningChecklist = 0;
+        foreach ($uniqueChecklists as $uniqueChecklist) {
+            // Check if any of the related checklist IDs is read
+            $isRead = DB::table('hptm_learning_checklist_for_user_read_status')
+                ->where('userId', $userId)
+                ->whereIn('checklistId', $uniqueChecklist['ids'])
+                ->where('readStatus', 1)
+                ->exists();
+            
+            if ($isRead) {
+                $readLearningChecklist++;
+            }
+        }
+
+        if ($totalLearningChecklist > 0) {
             $result['completionPercent'] = round(($readLearningChecklist / $totalLearningChecklist) * 100, 2);
+        } else {
+            $result['completionPercent'] = 0;
         }
 
         $resultArray[] = $result;
@@ -775,22 +843,88 @@ private function refreshPrincipleCompletionPercentages($userId)
     foreach ($principles as $principle) {
         $principleId = $principle->id;
         
-        $totalLearningChecklist = HptmLearningChecklist::where(fn($q) => 
+        // Get all checklists for this principle (including null principleId)
+        $allChecklists = HptmLearningChecklist::where(fn($q) => 
             $q->where('principleId', $principleId)->orWhereNull('principleId')
-        )->count();
+        )->get();
 
-        $readLearningChecklist = HptmLearningChecklist::where(fn($q) => 
-            $q->where('principleId', $principleId)->orWhereNull('principleId')
-        )->whereHas('userReadStatus', fn($q) => 
-            $q->where('userId', $userId)->where('readStatus', 1)
-        )->count();
+        // Deduplicate checklists based on unique content (same as display logic)
+        $uniqueChecklists = [];
+        $seenChecklists = [];
+        
+        foreach ($allChecklists as $check) {
+            // Create a unique key based on title, output, description, link, and document
+            $uniqueKey = md5(
+                ($check->title ?? '') . '|' . 
+                ($check->output ?? '') . '|' . 
+                ($check->description ?? '') . '|' . 
+                ($check->link ?? '') . '|' . 
+                ($check->document ?? '')
+            );
+
+            // Skip if we've already seen this checklist
+            if (isset($seenChecklists[$uniqueKey])) {
+                continue;
+            }
+
+            $seenChecklists[$uniqueKey] = true;
+            
+            // Get all related checklist IDs (same content, different IDs)
+            $relatedChecklistIds = HptmLearningChecklist::where('title', $check->title)
+                ->where('output', $check->output)
+                ->where(function($q) use ($check) {
+                    if ($check->description) {
+                        $q->where('description', $check->description);
+                    } else {
+                        $q->whereNull('description');
+                    }
+                })
+                ->where(function($q) use ($check) {
+                    if ($check->link) {
+                        $q->where('link', $check->link);
+                    } else {
+                        $q->whereNull('link');
+                    }
+                })
+                ->where(function($q) use ($check) {
+                    if ($check->document) {
+                        $q->where('document', $check->document);
+                    } else {
+                        $q->whereNull('document');
+                    }
+                })
+                ->pluck('id')
+                ->toArray();
+
+            $uniqueChecklists[] = [
+                'ids' => $relatedChecklistIds,
+                'uniqueKey' => $uniqueKey
+            ];
+        }
+
+        $totalLearningChecklist = count($uniqueChecklists);
+
+        // Count how many unique checklists are read
+        $readLearningChecklist = 0;
+        foreach ($uniqueChecklists as $uniqueChecklist) {
+            // Check if any of the related checklist IDs is read
+            $isRead = DB::table('hptm_learning_checklist_for_user_read_status')
+                ->where('userId', $userId)
+                ->whereIn('checklistId', $uniqueChecklist['ids'])
+                ->where('readStatus', 1)
+                ->exists();
+            
+            if ($isRead) {
+                $readLearningChecklist++;
+            }
+        }
 
         $completionPercent = 0;
-        if (!empty($readLearningChecklist) && !empty($totalLearningChecklist)) {
+        if ($totalLearningChecklist > 0) {
             $completionPercent = round(($readLearningChecklist / $totalLearningChecklist) * 100, 2);
         }
 
-        // Update in principleArray
+        // Update in principleArray - ensure Livewire detects the change
         if (isset($this->principleArray['principleData'])) {
             foreach ($this->principleArray['principleData'] as &$principleData) {
                 if ($principleData['id'] == $principleId) {
@@ -798,6 +932,8 @@ private function refreshPrincipleCompletionPercentages($userId)
                     break;
                 }
             }
+            // Force Livewire to detect the change by reassigning the array
+            $this->principleArray = $this->principleArray;
         }
     }
 }
