@@ -432,18 +432,26 @@ public function updatedSelectedDepartment($value)
 
     public function happyIndex()
     {
-        $userId = auth()->id();
-        $user = User::find($userId);
-        
-        // Debug: Log moodStatus value and user details
-        Log::info('happyIndex called', [
-            'moodStatus' => $this->moodStatus,
-            'moodNote' => $this->moodNote,
-            'user_id' => $userId,
-            'user_status' => $user ? $user->status : null,
-            'user_orgId' => $user ? $user->orgId : null,
-            'user_has_basecamp_role' => $user ? $user->hasRole('basecamp') : false,
-        ]);
+        try {
+            $userId = auth()->id();
+            if (!$userId) {
+                Log::error('HappyIndex: User not authenticated');
+                $this->dispatch('close-leave-modal');
+                session()->flash('error', 'Please login to submit sentiment.');
+                return;
+            }
+            
+            $user = User::find($userId);
+            
+            // Debug: Log moodStatus value and user details
+            Log::info('happyIndex called', [
+                'moodStatus' => $this->moodStatus,
+                'moodNote' => $this->moodNote,
+                'user_id' => $userId,
+                'user_status' => $user ? $user->status : null,
+                'user_orgId' => $user ? $user->orgId : null,
+                'user_has_basecamp_role' => $user ? $user->hasRole('basecamp') : false,
+            ]);
 
         // Validate moodStatus
         try {
@@ -662,8 +670,18 @@ public function updatedSelectedDepartment($value)
         // Dispatch event to close modal
         $this->dispatch('close-leave-modal');
         
-        // Refresh the page to show updated data
-        return $this->redirect(route('dashboard'), navigate: true);
+            // Refresh the page to show updated data
+            return $this->redirect(route('dashboard'), navigate: true);
+        } catch (\Exception $e) {
+            Log::error('HappyIndex save failed with exception', [
+                'user_id' => $userId ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            $this->dispatch('close-leave-modal');
+            session()->flash('error', 'Failed to save sentiment. Please try again.');
+            return;
+        }
     }
 
     /**
