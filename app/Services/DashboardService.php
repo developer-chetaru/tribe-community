@@ -71,13 +71,19 @@ public function getFreeVersionHomeDetails(array $filters = [])
 
     // Fetch happy indexes for filtered users
     // We fetch a wider range to ensure we get all entries that fall in the selected month in any user's timezone
-    // Then filter by user's timezone when processing
+    // IMPORTANT: We need to account for timezone differences - an entry created on Feb 5 in one timezone
+    // might appear as Feb 4 or Feb 6 in another timezone. So we expand the range by ±1 day in UTC.
     $startDate = \Carbon\Carbon::create($year, $month, 1, 0, 0, 0, $userTimezone)->startOfMonth();
     $endDate = \Carbon\Carbon::create($year, $month, $noOfDaysInMonth, 23, 59, 59, $userTimezone)->endOfMonth();
     
     // Convert to UTC for database query (created_at is stored in UTC)
     $startDateUTC = $startDate->utc();
     $endDateUTC = $endDate->utc();
+    
+    // Expand range by ±1 day to account for timezone differences
+    // This ensures entries created in different timezones are included
+    $startDateUTC = $startDateUTC->subDay();
+    $endDateUTC = $endDateUTC->addDay();
     
     // Fetch entries within the month range (UTC time for database query)
     $happyData = HappyIndex::whereBetween('created_at', [$startDateUTC, $endDateUTC])
@@ -90,7 +96,8 @@ public function getFreeVersionHomeDetails(array $filters = [])
 
     $dateData = [];
     foreach ($happyData as $entry) {
-        // Use stored timezone from entry if available, otherwise fallback to user's current timezone
+        // IMPORTANT: Use stored timezone from entry if available, otherwise fallback to entry user's timezone
+        // The entry's timezone field contains the timezone when the entry was created
         $entryUser = $users->get($entry->user_id);
         $entryUserTimezone = $entry->timezone ?? ($entryUser && $entryUser->timezone && in_array($entryUser->timezone, timezone_identifiers_list()) 
             ? $entryUser->timezone 
@@ -102,40 +109,101 @@ public function getFreeVersionHomeDetails(array $filters = [])
         }
         
         // Convert entry's created_at (UTC) to entry's stored timezone to get the date
-        $entryDate = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $entryUserTimezone);
+        // This ensures entries are displayed on the correct day based on when they were actually created (in their timezone)
+        // Example: If entry was created on Feb 5 in US timezone, it should show on Feb 5, not Feb 6 (even if current timezone is different)
+        $entryDate = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $entryUserTimezone)->startOfDay();
         $entryYear = (int) $entryDate->format('Y');
         $entryMonth = (int) $entryDate->format('m');
-        $d = (int) $entryDate->format('d');
+        $d = (int) $entryDate->format('d'); // Day number in entry's stored timezone
+        
+        // Debug logging for recent entries or specific entry IDs
+        if ($entry->id >= 380 || $entry->id == 382) { // Log recent entries or entry 382
+            \Illuminate\Support\Facades\Log::info('DashboardService: Processing entry for calendar', [
+                'entry_id' => $entry->id,
+                'user_id' => $entry->user_id,
+                'logged_in_user_id' => $userId,
+                'created_at_utc' => $entry->created_at,
+                'entry_timezone' => $entry->timezone,
+                'entry_user_timezone' => $entryUserTimezone,
+                'entry_date_in_stored_tz' => $entryDate->format('Y-m-d'),
+                'entry_day' => $d,
+                'entry_month' => $entryMonth,
+                'entry_year' => $entryYear,
+                'selected_month' => $month,
+                'selected_year' => $year,
+                'will_include' => ($entryYear == $year && $entryMonth == $month),
+                'mood_value' => $entry->mood_value,
+                'orgId' => $orgId,
+                'is_user_entry' => ($entry->user_id == $userId),
+            ]);
+        }
         
         // Only include if the entry falls in the selected month/year in the entry creator's timezone
         if ($entryYear == $year && $entryMonth == $month) {
             if (!isset($dateData[$d])) {
-                $dateData[$d] = ['total_users' => 0, 'total_score' => 0, 'description' => null, 'mood_value' => null];
+                $dateData[$d] = [
+                    'total_users' => 0, 
+                    'total_score' => 0, 
+                    'description' => null, 
+                    'mood_value' => null,
+                    'latest_entry_time' => null // Track latest entry for user-only data
+                ];
             }
 
             $dateData[$d]['total_users'] += 1;
 
             // If user has no orgId, show individual user mood value directly
             if (empty($orgId)) {
-                // For user-only data, use the mood value directly
-                $dateData[$d]['mood_value'] = $entry->mood_value;
-                if ($entry->mood_value == 3) {
-                    $dateData[$d]['total_score'] = 100;
-                } elseif ($entry->mood_value == 2) {
-                    $dateData[$d]['total_score'] = 51;
-                } else {
-                    $dateData[$d]['total_score'] = 0;
+                // For user-only data, use the latest entry's mood value (by created_at timestamp)
+                $entryTimestamp = \Carbon\Carbon::parse($entry->created_at)->timestamp;
+                $currentLatestTime = $dateData[$d]['latest_entry_time'];
+                
+                // If this is the first entry for this day, or this entry is newer, use it
+                if ($currentLatestTime === null || $entryTimestamp > $currentLatestTime) {
+                    $dateData[$d]['mood_value'] = $entry->mood_value;
+                    if ($entry->mood_value == 3) {
+                        $dateData[$d]['total_score'] = 100;
+                    } elseif ($entry->mood_value == 2) {
+                        $dateData[$d]['total_score'] = 51;
+                    } else {
+                        $dateData[$d]['total_score'] = 0;
+                    }
+                    $dateData[$d]['description'] = $entry->description;
+                    $dateData[$d]['latest_entry_time'] = $entryTimestamp;
                 }
-                $dateData[$d]['description'] = $entry->description;
             } else {
                 // ✅ Updated logic: count only users with mood_value = 3 for organization
                 if ($entry->mood_value == 3) {
                     $dateData[$d]['total_score'] += 1;
                 }
 
-                // Logged-in user's description only
+                // Logged-in user's description and mood_value (use latest entry)
+                // IMPORTANT: For calendar display, we need the logged-in user's individual mood_value
                 if ($entry->user_id == $userId) {
-                    $dateData[$d]['description'] = $entry->description;
+                    $entryTimestamp = \Carbon\Carbon::parse($entry->created_at)->timestamp;
+                    $currentLatestTime = $dateData[$d]['latest_entry_time'];
+                    if ($currentLatestTime === null || $entryTimestamp > $currentLatestTime) {
+                        $dateData[$d]['description'] = $entry->description;
+                        $dateData[$d]['mood_value'] = $entry->mood_value; // Store logged-in user's mood_value
+                        // Also store score for logged-in user
+                        if ($entry->mood_value == 3) {
+                            $dateData[$d]['user_score'] = 100;
+                        } elseif ($entry->mood_value == 2) {
+                            $dateData[$d]['user_score'] = 51;
+                        } else {
+                            $dateData[$d]['user_score'] = 0;
+                        }
+                        $dateData[$d]['latest_entry_time'] = $entryTimestamp;
+                        
+                        // Debug logging
+                        \Illuminate\Support\Facades\Log::info('DashboardService: Stored user mood in org mode', [
+                            'entry_id' => $entry->id,
+                            'user_id' => $userId,
+                            'day' => $d,
+                            'mood_value' => $entry->mood_value,
+                            'user_score' => $dateData[$d]['user_score'],
+                        ]);
+                    }
                 }
             }
         }
@@ -147,8 +215,11 @@ public function getFreeVersionHomeDetails(array $filters = [])
     $todayMonth = (int) $userNow->format('m');
     $todayYear  = (int) $userNow->format('Y');
 
-    // ✅ Your original for-loop logic remains exactly the same
+    // Build array for all days in month, ensuring proper data structure
+    // IMPORTANT: Array index $i-1 corresponds to calendar day $i (0-indexed array)
+    // Data in $dateData[$d] is organized by day number in entry's stored timezone
     for ($i = 1; $i <= $noOfDaysInMonth; $i++) {
+        // Get data for day $i (data is stored by day number in entry's stored timezone)
         $dayData = $dateData[$i] ?? ['total_users' => 0, 'total_score' => 0, 'description' => null, 'mood_value' => null];
 
         $score = null;
@@ -158,19 +229,75 @@ public function getFreeVersionHomeDetails(array $filters = [])
             // For user-only data, use the mood_value and score directly from the entry
             if (isset($dayData['mood_value']) && $dayData['mood_value'] !== null) {
                 $mood_value = $dayData['mood_value'];
-                $score = $dayData['total_score'];
+                // Ensure score is set based on mood_value if not already set
+                if (isset($dayData['total_score']) && $dayData['total_score'] !== null) {
+                    $score = $dayData['total_score'];
+                } else {
+                    // Calculate score from mood_value if not set
+                    if ($mood_value == 3) {
+                        $score = 100;
+                    } elseif ($mood_value == 2) {
+                        $score = 51;
+                    } else {
+                        $score = 0;
+                    }
+                }
             }
         } else {
-            // For organization data, calculate average
-            if ($dayData['total_users'] > 0) {
+            // For organization data, show logged-in user's individual mood if available
+            // Otherwise calculate organization average
+            if (isset($dayData['mood_value']) && $dayData['mood_value'] !== null) {
+                // Use logged-in user's individual mood_value and score
+                $mood_value = $dayData['mood_value'];
+                if (isset($dayData['user_score']) && $dayData['user_score'] !== null) {
+                    $score = $dayData['user_score'];
+                } else {
+                    // Calculate score from mood_value if not set
+                    if ($mood_value == 3) {
+                        $score = 100;
+                    } elseif ($mood_value == 2) {
+                        $score = 51;
+                    } else {
+                        $score = 0;
+                    }
+                }
+            } elseif ($dayData['total_users'] > 0) {
+                // Fallback to organization average if no individual entry
                 $score = round(($dayData['total_score'] / $dayData['total_users']) * 100);
                 $mood_value = $score >= 81 ? 3 : ($score >= 51 ? 2 : 1);
             }
+            
+            // Debug logging for organization mode
+            if ($i >= 2 && $i <= 6) {
+                \Illuminate\Support\Facades\Log::info('DashboardService: Org mode calendar building', [
+                    'calendar_day' => $i,
+                    'dayData_mood_value' => $dayData['mood_value'] ?? null,
+                    'dayData_user_score' => $dayData['user_score'] ?? null,
+                    'dayData_total_users' => $dayData['total_users'] ?? 0,
+                    'dayData_total_score' => $dayData['total_score'] ?? 0,
+                    'final_mood_value' => $mood_value,
+                    'final_score' => $score,
+                ]);
+            }
         }
 
-        // Hide today's data if current month & year
+        // Hide today's data if current month & year (will be shown via todayMoodData)
         if ($i === $todayDay && $month == $todayMonth && $year == $todayYear) {
-            $score = $mood_value = $dayData['description'] = null;
+            $score = null;
+            $mood_value = null;
+            $dayData['description'] = null;
+        }
+
+        // Debug logging for specific days
+        if ($i >= 2 && $i <= 6) {
+            \Illuminate\Support\Facades\Log::info('DashboardService: Building calendar array', [
+                'calendar_day' => $i,
+                'array_index' => $i - 1,
+                'dayData_exists' => isset($dateData[$i]),
+                'mood_value' => $mood_value,
+                'score' => $score,
+                'description' => $dayData['description'] ?? null,
+            ]);
         }
 
         $happyIndexArr[] = [

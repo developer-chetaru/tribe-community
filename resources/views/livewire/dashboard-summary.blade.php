@@ -269,7 +269,7 @@
             @endforeach
         </select>
     </div>
-  <div class="w-full overflow-x-auto sm:px-3 pb-3">
+  <div class="w-full overflow-x-auto sm:px-3 pb-3" wire:key="calendar-{{ $month }}-{{ $year }}-{{ auth()->user()->timezone ?? 'default' }}">
         @php
             $year = $this->year ?? now()->year;
             $month = $this->month ?? now()->month;

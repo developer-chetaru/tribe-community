@@ -290,8 +290,40 @@ class Summary extends Component
             'entry_379_in_map' => isset($entriesByStoredDate['2026-02-04']) ? 'yes' : 'no',
         ]);
         
-        // Now, for each period date, find the matching entry
-        // We iterate through period dates and find the entry that matches
+        // Group entries by their stored timezone date (Y-m-d format in entry's stored timezone)
+        // This ensures we use the timezone-based date for matching
+        $entriesByStoredTimezoneDate = [];
+        foreach ($happyIndexes as $entry) {
+            // Get entry's stored timezone
+            $entryTimezone = $entry->timezone ?? $userTimezone;
+            if (!in_array($entryTimezone, timezone_identifiers_list())) {
+                $entryTimezone = $userTimezone;
+            }
+            
+            // Get entry's date in its stored timezone (this is the date we should use)
+            $entryDateInStoredTimezone = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone)->startOfDay();
+            $entryStoredDateKey = $entryDateInStoredTimezone->format('Y-m-d'); // Date in entry's stored timezone
+            
+            // Group entries by their stored timezone date
+            if (!isset($entriesByStoredTimezoneDate[$entryStoredDateKey])) {
+                $entriesByStoredTimezoneDate[$entryStoredDateKey] = [];
+            }
+            $entriesByStoredTimezoneDate[$entryStoredDateKey][] = $entry;
+        }
+        
+        // For each stored timezone date, get the latest entry
+        $latestEntryByStoredDate = [];
+        foreach ($entriesByStoredTimezoneDate as $storedDateKey => $entriesForDate) {
+            // Sort by created_at descending and take the first (latest) one
+            usort($entriesForDate, function($a, $b) {
+                return \Carbon\Carbon::parse($b->created_at)->timestamp <=> \Carbon\Carbon::parse($a->created_at)->timestamp;
+            });
+            $latestEntryByStoredDate[$storedDateKey] = $entriesForDate[0];
+        }
+        
+        // Now map entries to period dates based on stored timezone date
+        // Match: period date's day/month/year = entry's stored day/month/year (in entry's timezone)
+        // IMPORTANT: Each entry can only be mapped to ONE period date to prevent duplicates
         foreach ($period as $periodDate) {
             $periodDateStr = $periodDate->format('Y-m-d'); // Date in current user timezone
             
@@ -300,23 +332,18 @@ class Summary extends Component
                 continue;
             }
             
-            // Try to find an entry that matches this period date
-            // Logic: Match entries based on their stored date (day number) in their stored timezone
-            // The calendar shows entries on the day they were saved (e.g., Feb 3rd entry shows on day 3)
-            // So for Daily Summary, we should match: period date's day number = entry's stored day number
-            // AND period date's month/year = entry's stored month/year (in entry's timezone)
-            
-            $exactMatchEntry = null; // Entry where timezones match (priority)
-            $timezoneMatchEntry = null; // Entry from different timezone
-            
             // Get period date's day, month, year
             $periodDay = (int)$periodDate->format('d');
             $periodMonth = (int)$periodDate->format('m');
             $periodYear = (int)$periodDate->format('Y');
             
-            // Iterate through all entries to find matches
-            foreach ($happyIndexes as $entry) {
-                // Skip if already used
+            // Find entry that matches this period date based on stored timezone date
+            $matchedEntry = null;
+            $exactMatchEntry = null;
+            $timezoneMatchEntry = null;
+            
+            foreach ($latestEntryByStoredDate as $storedDateKey => $entry) {
+                // Skip if already used (this entry is already mapped to another period date)
                 if (in_array($entry->id, $usedEntryIds)) {
                     continue;
                 }
@@ -327,7 +354,7 @@ class Summary extends Component
                     $entryTimezone = $userTimezone;
                 }
                 
-                // Get entry's date in its stored timezone (this is what we stored)
+                // Get entry's date in its stored timezone
                 $entryDateInStoredTimezone = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone)->startOfDay();
                 $entryDay = (int)$entryDateInStoredTimezone->format('d');
                 $entryMonth = (int)$entryDateInStoredTimezone->format('m');
@@ -335,16 +362,14 @@ class Summary extends Component
                 
                 // Check if period date's day/month/year matches entry's stored day/month/year
                 // This ensures entries show on the same day number they were saved (like the calendar)
-                if ($periodDay === $entryDay && $periodMonth === $entryMonth && $periodYear === $entryYear) {
-                    // If entry's timezone matches user's timezone, it's an exact match (priority)
+                if ($periodDay === $entryDay && $periodMonth === $entryMonth && $entryYear === $periodYear) {
+                    // Priority: exact timezone match first
                     if ($entryTimezone === $userTimezone) {
                         $exactMatchEntry = $entry;
-                        break; // Found exact match, use it
-                    } else {
-                        // Store as timezone match (fallback)
-                        if (!$timezoneMatchEntry) {
-                            $timezoneMatchEntry = $entry;
-                        }
+                        break; // Found exact match, use it immediately
+                    } elseif ($timezoneMatchEntry === null) {
+                        // Store as timezone match (fallback, but only if no exact match found)
+                        $timezoneMatchEntry = $entry;
                     }
                 }
             }
@@ -354,10 +379,10 @@ class Summary extends Component
             
             if ($matchedEntry) {
                 $entryMapByPeriodDate[$periodDateStr] = $matchedEntry;
-                $usedEntryIds[] = $matchedEntry->id; // Mark as used
+                $usedEntryIds[] = $matchedEntry->id; // Mark as used - prevents this entry from being mapped again
                 
                 // Debug: Log mapping result
-                if ($periodDateStr === '2026-02-04' || $periodDateStr === '2026-02-03') {
+                if ($periodDateStr === '2026-02-04' || $periodDateStr === '2026-02-05' || $periodDateStr === '2026-02-03') {
                     $matchedEntryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($matchedEntry->created_at), $matchedEntry->timezone ?? $userTimezone)->startOfDay();
                     Log::info('Entry mapped', [
                         'user_id' => $userId,
@@ -386,6 +411,8 @@ class Summary extends Component
 
         // Track which date keys we've already processed to prevent duplicates
         $processedDateKeys = [];
+        // Track displayed entry date strings to prevent duplicates based on formatted date
+        $displayedEntryDateStrings = [];
         
         foreach ($period as $date) {
             // Skip future dates (using user's timezone)
@@ -463,13 +490,10 @@ class Summary extends Component
             }
 
             if ($entry) {
-                // Skip if this entry has already been displayed
+                // Skip if this entry has already been displayed (by ID)
                 if (in_array($entry->id, $displayedEntryIds)) {
                     continue;
                 }
-                
-                // Mark this entry as displayed
-                $displayedEntryIds[] = $entry->id;
                 
                 // Use entry's stored timezone to format the date string
                 $entryTimezone = $entry->timezone ?? $userTimezone;
@@ -478,6 +502,28 @@ class Summary extends Component
                 }
                 $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone);
                 $entryDateStr = $entryDate->format('M d, Y');
+                $entryDateKeyFormatted = $entryDate->format('Y-m-d');
+                
+                // Skip if we've already displayed an entry with this formatted date string
+                // This prevents duplicates when multiple entries exist for the same date
+                if (in_array($entryDateStr, $displayedEntryDateStrings)) {
+                    // Mark this entry as displayed to prevent it from being checked again
+                    $displayedEntryIds[] = $entry->id;
+                    continue;
+                }
+                
+                // Also check if this date key (Y-m-d format) has already been processed
+                // This is an additional safety check
+                if (in_array($entryDateKeyFormatted, $displayedDates)) {
+                    // Mark this entry as displayed to prevent it from being checked again
+                    $displayedEntryIds[] = $entry->id;
+                    continue;
+                }
+                
+                // Mark this entry as displayed BEFORE adding to array to prevent race conditions
+                $displayedEntryIds[] = $entry->id;
+                $displayedEntryDateStrings[] = $entryDateStr;
+                $displayedDates[] = $entryDateKeyFormatted;
                 
                 $image = match($entry->mood_value) {
                     3       => 'happy-user.svg',

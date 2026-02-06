@@ -444,139 +444,57 @@ class HPTMController extends Controller
         $departmentIds = $departmentId ? [$departmentId] : [];
 
         if ($user->hasRole('basecamp')) {
-            // Basecamp user: get only their data
-            $userHappyData = HappyIndex::where('user_id', $userId)
-                ->where('created_at', 'like', $yearAndMonth . '%')
-                ->get(['created_at', 'mood_value', 'description', 'timezone']);
-
-            $dateData = [];
-            foreach ($userHappyData as $entry) {
-                // Use stored timezone from entry if available, otherwise fallback to user's current timezone
-                $entryTimezone = $entry->timezone ?? ($user->timezone && in_array($user->timezone, timezone_identifiers_list()) 
-                    ? $user->timezone 
-                    : 'Asia/Kolkata');
-                
-                // Ensure timezone is valid
-                if (!in_array($entryTimezone, timezone_identifiers_list())) {
-                    $entryTimezone = 'Asia/Kolkata';
+            // Basecamp user: use DashboardService for consistent logic with web view
+            // This ensures timezone-based data is handled correctly
+            $dashboardService = new \App\Services\DashboardService();
+            $filters = [
+                'month' => (int) $month,
+                'year' => (int) $year,
+                'orgId' => null, // Basecamp users have no orgId
+            ];
+            $serviceData = $dashboardService->getFreeVersionHomeDetails($filters);
+            $happyIndexArr = $serviceData['happyIndexMonthly'] ?? [];
+            
+            // Convert date format from integer to string with leading zero (for API compatibility)
+            // Also ensure mood_value is included in response
+            foreach ($happyIndexArr as &$dayData) {
+                if (isset($dayData['date'])) {
+                    $dayData['date'] = sprintf("%02d", $dayData['date']);
                 }
-                
-                // Convert entry's created_at (UTC) to entry's stored timezone to get the date
-                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $entryTimezone);
-                $entryYear = (int) $entryDate->format('Y');
-                $entryMonth = (int) $entryDate->format('m');
-                $day = sprintf("%02d", (int) $entryDate->format('d'));
-                
-                // Only include if the entry falls in the selected month/year in the entry creator's timezone
-                if ($entryYear == $year && $entryMonth == (int)$month) {
-                    $score = 0;
-                    if ($entry->mood_value == 3) $score = 100;
-                    elseif ($entry->mood_value == 2) $score = 51;
-                    elseif ($entry->mood_value == 1) $score = 0;
-
-                    $dateData[$day] = [
-                        'score'       => $score,
-                        'description' => $entry->description ?? '',
-                    ];
+                // Ensure mood_value is set (DashboardService should provide this)
+                if (!isset($dayData['mood_value']) && isset($dayData['score'])) {
+                    // Derive mood_value from score if not set
+                    if ($dayData['score'] >= 81) {
+                        $dayData['mood_value'] = 3;
+                    } elseif ($dayData['score'] >= 51) {
+                        $dayData['mood_value'] = 2;
+                    } else {
+                        $dayData['mood_value'] = 1;
+                    }
                 }
             }
-
-            for ($i = 1; $i <= $noOfDaysInMonth; $i++) {
-                $d = sprintf("%02d", $i);
-                $happyIndexArr[] = [
-                    'date'        => $d,
-                    'score'       => $dateData[$d]['score'] ?? 0,
-                    'description' => $dateData[$d]['description'] ?? '',
-                ];
-            }
+            unset($dayData); // Unset reference
         } else {
-            // Organisation users: calculate total happy users per day
-            // Status is boolean: true = active, false = inactive
-            $usersQuery = User::where('status', true)->where('orgId', $orgId);
-            if ($officeIds) $usersQuery->whereIn('officeId', $officeIds);
-            if ($departmentIds) $usersQuery->whereIn('departmentId', $departmentIds);
-            $filteredUserIds = $usersQuery->pluck('id')->toArray();
-
-            // Include current user if not in filtered list
-            if (!in_array($userId, $filteredUserIds)) {
-                $filteredUserIds[] = $userId;
-            }
-
-            // Fetch happy indexes for filtered users with timezone
-            // We fetch a wider range to ensure we get all entries that fall in the selected month in any user's timezone
-            $startDate = \Carbon\Carbon::create($year, $month, 1, 0, 0, 0, $user->timezone ?? 'Asia/Kolkata')->startOfMonth();
-            $endDate = \Carbon\Carbon::create($year, $month, cal_days_in_month(CAL_GREGORIAN, $month, $year), 23, 59, 59, $user->timezone ?? 'Asia/Kolkata')->endOfMonth();
+            // Organisation users: use DashboardService for consistent logic with web view
+            // This ensures timezone-based data is handled correctly
+            $dashboardService = new \App\Services\DashboardService();
+            $filters = [
+                'month' => (int) $month,
+                'year' => (int) $year,
+                'orgId' => $orgId,
+                'officeId' => $officeId,
+                'departmentId' => $departmentId,
+            ];
+            $serviceData = $dashboardService->getFreeVersionHomeDetails($filters);
+            $happyIndexArr = $serviceData['happyIndexMonthly'] ?? [];
             
-            // Convert to UTC for database query (created_at is stored in UTC)
-            $startDateUTC = $startDate->utc();
-            $endDateUTC = $endDate->utc();
-            
-            $happyData = HappyIndex::whereBetween('created_at', [$startDateUTC, $endDateUTC])
-                ->whereDate('created_at', '<', $todayStr)
-                ->whereIn('user_id', $filteredUserIds)
-                ->get(['created_at', 'mood_value', 'description', 'user_id', 'timezone']);
-
-            $dateData = [];
-            foreach ($happyData as $entry) {
-                // Use stored timezone from entry if available, otherwise fallback to entry user's current timezone
-                $entryUser = User::find($entry->user_id);
-                $entryUserTimezone = $entry->timezone ?? ($entryUser && $entryUser->timezone && in_array($entryUser->timezone, timezone_identifiers_list()) 
-                    ? $entryUser->timezone 
-                    : 'Asia/Kolkata');
-                
-                // Ensure timezone is valid
-                if (!in_array($entryUserTimezone, timezone_identifiers_list())) {
-                    $entryUserTimezone = 'Asia/Kolkata';
-                }
-                
-                // Convert entry's created_at (UTC) to entry's stored timezone to get the date
-                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(\Carbon\Carbon::parse($entry->created_at), $entryUserTimezone);
-                $entryYear = (int) $entryDate->format('Y');
-                $entryMonth = (int) $entryDate->format('m');
-                $day = sprintf("%02d", (int) $entryDate->format('d'));
-                
-                // Only include if the entry falls in the selected month/year in the entry creator's timezone
-                if ($entryYear == $year && $entryMonth == (int)$month) {
-                    if (!isset($dateData[$day])) {
-                        $dateData[$day] = [
-                            'total_users' => 0,
-                            'total_score' => 0, // Count of happy users (mood_value=3)
-                            'description' => null,
-                        ];
-                    }
-
-                    $dateData[$day]['total_users'] += 1;
-
-                    if ($entry->mood_value == 3) {
-                        $dateData[$day]['total_score'] += 1;
-                    }
-
-                    if ($entry->user_id == $userId) {
-                        $dateData[$day]['description'] = $entry->description ?? '';
-                    }
+            // Convert date format from integer to string with leading zero (for API compatibility)
+            foreach ($happyIndexArr as &$dayData) {
+                if (isset($dayData['date'])) {
+                    $dayData['date'] = sprintf("%02d", $dayData['date']);
                 }
             }
-
-            for ($i = 1; $i <= $noOfDaysInMonth; $i++) {
-                $d = sprintf("%02d", $i);
-                $dayData = $dateData[$d] ?? ['total_users' => 0, 'total_score' => 0, 'description' => null];
-
-                $score = null;
-                $mood_value = null;
-
-                if ($dayData['total_users'] > 0) {
-                    // Keep original calculation logic
-                    $score = round(($dayData['total_score'] / $dayData['total_users']) * 100);
-                    $mood_value = $score >= 81 ? 3 : ($score >= 51 ? 2 : 1);
-                }
-
-                $happyIndexArr[] = [
-                    'date'        => $d,
-                    'score'       => $score,
-                    'mood_value'  => $mood_value,
-                    'description' => $dayData['description'],
-                ];
-            }
+            unset($dayData); // Unset reference
         }
 
         // Include today's data

@@ -80,33 +80,31 @@ class DashboardSummary extends Component
         $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
         $userTodayDate = $userNow->toDateString(); // Y-m-d format
         
-        // Check if user gave feedback today in their timezone
-        // Use the stored timezone for each entry, not the current user timezone
+        // Check if user gave feedback today in their CURRENT timezone
+        // IMPORTANT: Convert entry's created_at (UTC) to CURRENT user timezone and check if it matches today
+        // Example: If user filled sentiment on 5 Feb in India, and today is 6 Feb in India, popup should NOT show
+        // But if user changes timezone to US where it's still 5 Feb, popup should show for 5 Feb in US
         $this->userGivenFeedback = HappyIndex::where('user_id', $user->id)
             ->get()
             ->filter(function ($entry) use ($userTimezone, $userTodayDate) {
-                // Use stored timezone if available, otherwise fallback to current user timezone
-                $entryTimezone = $entry->timezone ?? $userTimezone;
-                // Convert entry's created_at (UTC) to entry's stored timezone and compare dates
-                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone)->toDateString();
-                // Compare with today's date in the entry's timezone
-                $entryTodayDate = \App\Helpers\TimezoneHelper::carbon(null, $entryTimezone)->toDateString();
-                return $entryDate === $entryTodayDate;
+                // Convert entry's created_at (UTC) to CURRENT user timezone (not entry's stored timezone)
+                // This ensures: if user filled on 5 Feb in India, and today is 6 Feb in India, no popup
+                $entryDateInCurrentTimezone = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $userTimezone)->toDateString();
+                // Compare with today's date in CURRENT user timezone
+                return $entryDateInCurrentTimezone === $userTodayDate;
             })
             ->isNotEmpty();
         
-        // Fetch today's actual mood data if exists (using entry's stored timezone)
+        // Fetch today's actual mood data if exists (convert to CURRENT user timezone)
         $todayHappyIndex = HappyIndex::where('user_id', $user->id)
             ->get()
             ->filter(function ($entry) use ($userTimezone, $userTodayDate) {
-                // Use stored timezone if available, otherwise fallback to current user timezone
-                $entryTimezone = $entry->timezone ?? $userTimezone;
-                // Convert entry's created_at (UTC) to entry's stored timezone and compare dates
-                $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone)->toDateString();
-                // Compare with today's date in the entry's timezone
-                $entryTodayDate = \App\Helpers\TimezoneHelper::carbon(null, $entryTimezone)->toDateString();
-                return $entryDate === $entryTodayDate;
+                // Convert entry's created_at (UTC) to CURRENT user timezone
+                $entryDateInCurrentTimezone = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $userTimezone)->toDateString();
+                // Compare with today's date in CURRENT user timezone
+                return $entryDateInCurrentTimezone === $userTodayDate;
             })
+            ->sortByDesc('created_at') // Get latest entry if multiple exist
             ->first();
         
         if ($todayHappyIndex) {
@@ -287,6 +285,15 @@ class DashboardSummary extends Component
                 $user->save();
                 
                 Log::info("Updated timezone for user {$user->id} to '{$timezone}' from dashboard");
+                
+                // Refresh calendar data after timezone change to show correct timezone-based data
+                // Also refresh popup check and today's mood data
+                // Clear existing data first to prevent stale data
+                $this->happyIndexMonthly = [];
+                $this->loadData();
+                
+                // Force Livewire to refresh the component
+                $this->dispatch('$refresh');
             }
         } catch (\Exception $e) {
             Log::error("Error updating user timezone: " . $e->getMessage());
@@ -317,7 +324,33 @@ public function updatedSelectedDepartment($value)
 
         $data = $this->service->getFreeVersionHomeDetails($filters);
 
-        $this->happyIndexMonthly = $data['happyIndexMonthly'] ?? [];
+        // Force update calendar data - ensure fresh timezone-based data
+        // IMPORTANT: Clear existing data first to prevent stale data
+        $this->happyIndexMonthly = [];
+        
+        // Get fresh data from service and ensure it's an array
+        $calendarData = $data['happyIndexMonthly'] ?? [];
+        if (is_array($calendarData)) {
+            $this->happyIndexMonthly = $calendarData;
+        } else {
+            $this->happyIndexMonthly = [];
+        }
+        
+        // Debug: Log calendar data for verification
+        Log::info('DashboardSummary: Calendar data loaded', [
+            'user_id' => auth()->id(),
+            'month' => $this->month,
+            'year' => $this->year,
+            'orgId' => $filters['orgId'],
+            'user_timezone' => \App\Helpers\TimezoneHelper::getUserTimezone(auth()->user()),
+            'total_days' => count($this->happyIndexMonthly),
+            'days_with_data' => collect($this->happyIndexMonthly)->filter(function($day) {
+                return isset($day['mood_value']) && $day['mood_value'] !== null;
+            })->map(function($day, $index) {
+                return ['day' => $index + 1, 'mood' => $day['mood_value'], 'score' => $day['score']];
+            })->values()->toArray(),
+            'sample_data' => array_slice($this->happyIndexMonthly, 0, 7), // First 7 days for debugging
+        ]);
         $this->orgYearList = $data['orgYearList'] ?? [];
         $this->departments = $this->service->getDepartmentList($filters);
         $this->offices = $this->service->getAllOfficenDepartments($filters);
