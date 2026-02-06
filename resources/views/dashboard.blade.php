@@ -285,8 +285,10 @@
             </div> -->
         </div>
         @livewire('dashboard-summary')
-        @livewire('weekly-summary')
-        @livewire('monthly-summary')
+        <div class="grid items-start grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+            @livewire('weekly-summary')
+            @livewire('monthly-summary')
+        </div>
     </div>
 @endif
 </x-app-layout>

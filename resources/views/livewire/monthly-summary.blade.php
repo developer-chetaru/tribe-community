@@ -1,12 +1,12 @@
-<div class="mt-8">
-    <div class="relative">
-        <div class="p-4 bg-white rounded-lg shadow">
-            <!-- Header -->
-            <div class="flex flex-col sm:flex-row items-center justify-between px-0 py-0 sm:px-4 sm:py-4 bg-white rounded-t-lg sm:shadow-md border-b border-gray-200">
-                <h3 class="text-[14px] sm:text-2xl font-bold text-red-600 tracking-wide">
-                    Monthly Summary
-                </h3>
-            </div>
+<div class="flex flex-wrap border border-gray-100 rounded-md w-full">
+    <div class="flex px-3 py-2 bg-white w-full min-h-[74px]">
+        <h3 class="text-lg sm:text-2xl text-[#EB1C24] font-bold mb-1 sm:mb-0 flex items-center gap-2">Monthly Summary</h3>
+    </div>
+    <div class="relative w-full">
+        <div class="p-4 bg-white rounded-lg">
+        <!-- Header -->
+        <div class="flex flex-col sm:flex-row items-center justify-between px-0 py-0 sm:px-4 sm:py-4 bg-white rounded-t-lg border-b border-gray-200">
+        </div>
 
             <!-- Filters -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 my-4">
@@ -45,17 +45,18 @@
                 @endif
             </div>
         </div>
-    </div>
-
-    <!-- Loader Overlay -->
-    <div wire:loading wire:target="selectedMonth,selectedYear"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-        <div class="flex flex-col items-center space-y-2 p-4 rounded-lg">
-            <svg class="animate-spin h-14 w-14 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-            </svg>
-            <span class="text-white text-lg font-semibold">Refreshing...</span>
+        </div>
+        
+        <!-- Loader Overlay -->
+        <div wire:loading wire:target="selectedMonth,selectedYear"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div class="flex flex-col items-center space-y-2 p-4 rounded-lg">
+                <svg class="animate-spin h-14 w-14 text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                </svg>
+                <span class="text-white text-lg font-semibold">Refreshing...</span>
+            </div>
         </div>
     </div>
 </div>

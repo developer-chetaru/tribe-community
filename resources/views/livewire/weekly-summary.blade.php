@@ -1,10 +1,11 @@
-<div class="relative">
-    <div class="p-4 bg-white rounded-lg shadow">
+<div class="flex flex-wrap border border-gray-100 rounded-md w-full">
+    <div class="flex px-3 py-2 bg-white w-full min-h-[74px]">
+        <h3 class="text-lg sm:text-2xl text-[#EB1C24] font-bold mb-1 sm:mb-0 flex items-center gap-2">Weekly Summary</h3>
+    </div>
+    <div class="relative w-full">
+        <div class="p-4 bg-white rounded-lg">
         <!-- Header -->
-        <div class="flex flex-col sm:flex-row items-center justify-between px-0 py-0 sm:px-4 sm:py-4 bg-white rounded-t-lg sm:shadow-md border-b border-gray-200">
-            <h3 class="text-[14px] sm:text-2xl font-bold text-red-600 tracking-wide">
-                Weekly Summary
-            </h3>
+        <div class="flex flex-col sm:flex-row items-center justify-between px-0 py-0 sm:px-4 sm:py-4 bg-white rounded-t-lg border-b border-gray-200">
             <div wire:loading wire:target="selectedMonth,selectedYear" 
                 class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
                 <div class="flex flex-col items-center space-y-2 p-4 rounded-lg">
@@ -64,6 +65,7 @@
                     You’ll be able to view your updated summary after that.</p>
                 </div>
             @endif
+        </div>
         </div>
     </div>
 </div>
