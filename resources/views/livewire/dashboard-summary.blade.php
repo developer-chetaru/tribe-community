@@ -376,11 +376,17 @@
                                             $isOrgOffDay = true;
                                         }
                                     }
+                                    // Check if this is a leave day (from DashboardService)
+                                    $isLeaveDay = isset($dayData['is_leave']) && $dayData['is_leave'] === true;
+                                    
                                     // Using score-based logic similar to app code:
                                     // null or 0-50: red (sad), 51-80: yellow (avarge), 81+: green (happy)
                                     if (!$isBeforeRegistration && $dayDate->lt($todayDate)) {
-                                        // Past dates: show mood if data exists, otherwise show red
-                                        if ($isOrgOffDay) {
+                                        // Past dates: check leave first, then show mood if data exists, otherwise show red
+                                        if ($isLeaveDay) {
+                                            // User was on leave - show leave emoji
+                                            $img = 'leave-office.svg';
+                                        } elseif ($isOrgOffDay) {
                                             // Org non-working past day - use off-day marker
                                             $img = null;
                                         } elseif ($dayData && $mood !== null && $score !== null) {

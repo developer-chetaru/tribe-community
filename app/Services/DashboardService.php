@@ -7,6 +7,7 @@ use App\Models\Organisation;
 use App\Models\User;
 use App\Models\Department;
 use App\Models\Office;
+use App\Models\UserLeave;
 use Illuminate\Support\Facades\Auth;
 use App\Models\HappyIndex;
 use Illuminate\Http\Request;
@@ -209,6 +210,19 @@ public function getFreeVersionHomeDetails(array $filters = [])
         }
     }
 
+    // Fetch approved leaves for the logged-in user for the selected month
+    $userLeaves = UserLeave::where('user_id', $userId)
+        ->where('leave_status', 1) // Approved leaves only
+        ->where(function ($q) use ($startDate, $endDate) {
+            $q->whereBetween('start_date', [$startDate->toDateString(), $endDate->toDateString()])
+              ->orWhereBetween('end_date', [$startDate->toDateString(), $endDate->toDateString()])
+              ->orWhere(function ($subQ) use ($startDate, $endDate) {
+                  $subQ->where('start_date', '<=', $startDate->toDateString())
+                       ->where('end_date', '>=', $endDate->toDateString());
+              });
+        })
+        ->get();
+
     $happyIndexArr = [];
     // Use user's timezone for "today" comparison
     $todayDay = (int) $userNow->format('d');
@@ -219,6 +233,17 @@ public function getFreeVersionHomeDetails(array $filters = [])
     // IMPORTANT: Array index $i-1 corresponds to calendar day $i (0-indexed array)
     // Data in $dateData[$d] is organized by day number in entry's stored timezone
     for ($i = 1; $i <= $noOfDaysInMonth; $i++) {
+        // Check if this day is a leave day
+        $dayDate = \Carbon\Carbon::create($year, $month, $i, 0, 0, 0, $userTimezone)->startOfDay();
+        $isLeaveDay = false;
+        foreach ($userLeaves as $leave) {
+            $leaveStart = \Carbon\Carbon::parse($leave->start_date)->startOfDay();
+            $leaveEnd = \Carbon\Carbon::parse($leave->end_date)->startOfDay();
+            if ($dayDate->between($leaveStart, $leaveEnd)) {
+                $isLeaveDay = true;
+                break;
+            }
+        }
         // Get data for day $i (data is stored by day number in entry's stored timezone)
         $dayData = $dateData[$i] ?? ['total_users' => 0, 'total_score' => 0, 'description' => null, 'mood_value' => null];
 
@@ -281,11 +306,21 @@ public function getFreeVersionHomeDetails(array $filters = [])
             }
         }
 
+        // If it's a leave day, override with leave data
+        if ($isLeaveDay) {
+            $score = null;
+            $mood_value = null;
+            $dayData['description'] = "You were on leave on " . $dayDate->format('M d, Y');
+        }
+
         // Hide today's data if current month & year (will be shown via todayMoodData)
         if ($i === $todayDay && $month == $todayMonth && $year == $todayYear) {
             $score = null;
             $mood_value = null;
-            $dayData['description'] = null;
+            // Only clear description if not on leave
+            if (!$isLeaveDay) {
+                $dayData['description'] = null;
+            }
         }
 
         // Debug logging for specific days
@@ -297,6 +332,7 @@ public function getFreeVersionHomeDetails(array $filters = [])
                 'mood_value' => $mood_value,
                 'score' => $score,
                 'description' => $dayData['description'] ?? null,
+                'is_leave_day' => $isLeaveDay,
             ]);
         }
 
@@ -305,6 +341,7 @@ public function getFreeVersionHomeDetails(array $filters = [])
             'score'       => $score,
             'mood_value'  => $mood_value,
             'description' => $dayData['description'],
+            'is_leave'    => $isLeaveDay,
         ];
     }
 

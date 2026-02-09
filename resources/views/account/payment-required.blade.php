@@ -74,16 +74,17 @@
             </div>
 
             {{-- Help Text --}}
-            <div class="text-center text-sm text-gray-600">
+            <div class="text-center text-sm text-gray-600 mb-4">
                 <p>Need help? <a href="mailto:support@tribe365.com" class="text-red-600 hover:underline">Contact Support</a></p>
             </div>
 
-            {{-- Logout Link --}}
-            <div class="mt-6 text-center">
-                <form method="POST" action="{{ route('logout') }}" class="inline">
+            {{-- Logout Button --}}
+            <div class="mt-4 pt-4 border-t border-gray-200">
+                <form method="POST" action="{{ route('logout') }}">
                     @csrf
-                    <button type="submit" class="text-sm text-gray-500 hover:text-gray-700 underline">
-                        Log Out
+                    <button type="submit" 
+                            class="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-6 rounded-lg transition duration-150 ease-in-out border-2 border-gray-300 hover:border-gray-400">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Log Out
                     </button>
                 </form>
             </div>

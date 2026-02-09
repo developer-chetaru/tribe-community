@@ -58,7 +58,7 @@
             @endif
         </div>
 
-        <div class="flex gap-3">
+        <div class="flex flex-col gap-3">
             @if($isBasecamp)
                 <button type="button" 
                         onclick="handleDashboardPayment({{ $user->id ?? 0 }})"
@@ -72,6 +72,17 @@
                     Pay Now
                 </button>
             @endif
+            
+            {{-- Logout Button --}}
+            <div class="mt-2 pt-3 border-t border-gray-200">
+                <form method="POST" action="{{ route('logout') }}">
+                    @csrf
+                    <button type="submit" 
+                            class="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-2 px-4 rounded-lg transition border-2 border-gray-300 hover:border-gray-400">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Log Out
+                    </button>
+                </form>
+            </div>
         </div>
         
         <script>

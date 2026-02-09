@@ -39,6 +39,7 @@ class DashboardSummary extends Component
     public $showSubscriptionExpiredModal = false;
     public $subscriptionStatus = [];
     public $todayMoodData = null; // Store today's actual mood data
+    public $userLeaves = []; // Store user leaves for the selected month
 
     protected $service;
 
@@ -354,6 +355,31 @@ public function updatedSelectedDepartment($value)
         $this->orgYearList = $data['orgYearList'] ?? [];
         $this->departments = $this->service->getDepartmentList($filters);
         $this->offices = $this->service->getAllOfficenDepartments($filters);
+        
+        // Fetch user leaves for the selected month
+        $user = auth()->user();
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+        $startDate = \Carbon\Carbon::create($this->year ?? now()->year, $this->month ?? now()->month, 1, 0, 0, 0, $userTimezone)->startOfMonth();
+        $endDate = \Carbon\Carbon::create($this->year ?? now()->year, $this->month ?? now()->month, cal_days_in_month(CAL_GREGORIAN, $this->month ?? now()->month, $this->year ?? now()->year), 23, 59, 59, $userTimezone)->endOfMonth();
+        
+        $this->userLeaves = UserLeave::where('user_id', $user->id)
+            ->where('leave_status', 1)
+            ->where(function ($q) use ($startDate, $endDate) {
+                $q->whereBetween('start_date', [$startDate->toDateString(), $endDate->toDateString()])
+                  ->orWhereBetween('end_date', [$startDate->toDateString(), $endDate->toDateString()])
+                  ->orWhere(function ($subQ) use ($startDate, $endDate) {
+                      $subQ->where('start_date', '<=', $startDate->toDateString())
+                           ->where('end_date', '>=', $endDate->toDateString());
+                  });
+            })
+            ->get()
+            ->map(function ($leave) {
+                return [
+                    'start_date' => $leave->start_date,
+                    'end_date' => $leave->end_date,
+                ];
+            })
+            ->toArray();
         
         // Refresh today's mood data
         $user = auth()->user();
