@@ -233,14 +233,29 @@ public function getFreeVersionHomeDetails(array $filters = [])
     // IMPORTANT: Array index $i-1 corresponds to calendar day $i (0-indexed array)
     // Data in $dateData[$d] is organized by day number in entry's stored timezone
     for ($i = 1; $i <= $noOfDaysInMonth; $i++) {
-        // Check if this day is a leave day
+        // Check if this day is a leave day - use date string comparison to avoid timezone issues
         $dayDate = \Carbon\Carbon::create($year, $month, $i, 0, 0, 0, $userTimezone)->startOfDay();
+        $dayDateStr = $dayDate->toDateString(); // Y-m-d format
         $isLeaveDay = false;
         foreach ($userLeaves as $leave) {
-            $leaveStart = \Carbon\Carbon::parse($leave->start_date)->startOfDay();
-            $leaveEnd = \Carbon\Carbon::parse($leave->end_date)->startOfDay();
-            if ($dayDate->between($leaveStart, $leaveEnd)) {
+            $leaveStart = \Carbon\Carbon::parse($leave->start_date)->startOfDay()->toDateString();
+            $leaveEnd = \Carbon\Carbon::parse($leave->end_date)->startOfDay()->toDateString();
+            // Check if date falls within leave range (inclusive)
+            if ($dayDateStr >= $leaveStart && $dayDateStr <= $leaveEnd) {
                 $isLeaveDay = true;
+                
+                // Debug logging for Feb 6
+                if ($dayDateStr === '2026-02-06') {
+                    \Illuminate\Support\Facades\Log::info('DashboardService: Leave check for Feb 6', [
+                        'day_date_str' => $dayDateStr,
+                        'leave_id' => $leave->id,
+                        'leave_start' => $leaveStart,
+                        'leave_end' => $leaveEnd,
+                        'is_leave_day' => true,
+                        'leave_status' => $leave->leave_status,
+                    ]);
+                }
+                
                 break;
             }
         }

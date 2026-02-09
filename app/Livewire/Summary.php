@@ -204,13 +204,40 @@ class Summary extends Component
             ->get(['id', 'user_id', 'mood_value', 'description', 'status', 'timezone', 'created_at', 'updated_at']);
 
         // Fetch approved leaves
+        // Include leaves that overlap with the period in any way:
+        // 1. Leave starts within period
+        // 2. Leave ends within period
+        // 3. Leave completely contains the period (starts before and ends after)
+        $startDate = $start->toDateString();
+        $endDate = $end->toDateString();
         $leaves = UserLeave::where('user_id', $userId)
             ->where('leave_status', 1)
-            ->where(function ($q) use ($start, $end) {
-                $q->whereBetween('start_date', [$start, $end])
-                  ->orWhereBetween('end_date', [$start, $end]);
+            ->where(function ($q) use ($startDate, $endDate) {
+                $q->whereBetween('start_date', [$startDate, $endDate])
+                  ->orWhereBetween('end_date', [$startDate, $endDate])
+                  ->orWhere(function ($subQ) use ($startDate, $endDate) {
+                      // Leave that completely contains the period
+                      $subQ->where('start_date', '<=', $startDate)
+                           ->where('end_date', '>=', $endDate);
+                  });
             })
             ->get();
+        
+        // Debug logging for leave fetching
+        \Illuminate\Support\Facades\Log::info('Summary: Fetched leaves', [
+            'user_id' => $userId,
+            'period_start' => $startDate,
+            'period_end' => $endDate,
+            'total_leaves' => $leaves->count(),
+            'leaves' => $leaves->map(function($l) {
+                return [
+                    'id' => $l->id,
+                    'start_date' => $l->start_date,
+                    'end_date' => $l->end_date,
+                    'leave_status' => $l->leave_status,
+                ];
+            })->toArray(),
+        ]);
 
         $entriesWithStatus = [];
         $leavesArray = [];
@@ -457,10 +484,28 @@ class Summary extends Component
             }
             $processedDateKeys[] = $dateKey;
 
-            // Check leave
-            $onLeave = $leaves->first(fn($l) =>
-                $date->between(Carbon::parse($l->start_date), Carbon::parse($l->end_date))
-            );
+            // Check leave - use date string comparison to avoid timezone issues
+            $dateStrForLeave = $date->toDateString(); // Y-m-d format
+            $onLeave = $leaves->first(function($l) use ($dateStrForLeave) {
+                $leaveStart = Carbon::parse($l->start_date)->startOfDay()->toDateString();
+                $leaveEnd = Carbon::parse($l->end_date)->startOfDay()->toDateString();
+                // Check if date falls within leave range (inclusive)
+                $isOnLeave = $dateStrForLeave >= $leaveStart && $dateStrForLeave <= $leaveEnd;
+                
+                // Debug logging for Feb 6
+                if ($dateStrForLeave === '2026-02-06') {
+                    \Illuminate\Support\Facades\Log::info('Leave check for Feb 6', [
+                        'date_str' => $dateStrForLeave,
+                        'leave_id' => $l->id,
+                        'leave_start' => $leaveStart,
+                        'leave_end' => $leaveEnd,
+                        'is_on_leave' => $isOnLeave,
+                        'leave_status' => $l->leave_status,
+                    ]);
+                }
+                
+                return $isOnLeave;
+            });
 
             if ($onLeave) {
                 $entriesWithStatus[] = [
