@@ -485,8 +485,27 @@ class Summary extends Component
             $processedDateKeys[] = $dateKey;
 
             // Check leave - use date string comparison to avoid timezone issues
+            // IMPORTANT: Check leave BEFORE checking for entries to prevent "Missed" for leave days
             $dateStrForLeave = $date->toDateString(); // Y-m-d format
-            $onLeave = $leaves->first(function($l) use ($dateStrForLeave) {
+            $onLeave = null;
+            
+            // Debug: Log all leaves for Feb 6 check
+            if ($dateStrForLeave === '2026-02-06') {
+                \Illuminate\Support\Facades\Log::info('Summary: Checking leave for Feb 6', [
+                    'date_str' => $dateStrForLeave,
+                    'total_leaves' => $leaves->count(),
+                    'all_leaves' => $leaves->map(function($l) {
+                        return [
+                            'id' => $l->id,
+                            'start_date' => $l->start_date,
+                            'end_date' => $l->end_date,
+                            'leave_status' => $l->leave_status,
+                        ];
+                    })->toArray(),
+                ]);
+            }
+            
+            foreach ($leaves as $l) {
                 $leaveStart = Carbon::parse($l->start_date)->startOfDay()->toDateString();
                 $leaveEnd = Carbon::parse($l->end_date)->startOfDay()->toDateString();
                 // Check if date falls within leave range (inclusive)
@@ -494,18 +513,22 @@ class Summary extends Component
                 
                 // Debug logging for Feb 6
                 if ($dateStrForLeave === '2026-02-06') {
-                    \Illuminate\Support\Facades\Log::info('Leave check for Feb 6', [
+                    \Illuminate\Support\Facades\Log::info('Summary: Leave comparison for Feb 6', [
                         'date_str' => $dateStrForLeave,
                         'leave_id' => $l->id,
                         'leave_start' => $leaveStart,
                         'leave_end' => $leaveEnd,
                         'is_on_leave' => $isOnLeave,
                         'leave_status' => $l->leave_status,
+                        'comparison' => "$dateStrForLeave >= $leaveStart && $dateStrForLeave <= $leaveEnd",
                     ]);
                 }
                 
-                return $isOnLeave;
-            });
+                if ($isOnLeave) {
+                    $onLeave = $l;
+                    break; // Found matching leave, stop searching
+                }
+            }
 
             if ($onLeave) {
                 $entriesWithStatus[] = [
@@ -680,11 +703,50 @@ class Summary extends Component
                 }
                 
                 // Show "Missed" only for past working days
+                // IMPORTANT: Never show "Missed" if user was on leave (double-check)
                 // For basecamp users: show all days, but only mark as "Missed" if it's a working day
                 // For organization users: only working days are shown, so mark as "Missed"
                 $shouldShowMissed = $date->isPast() && !$date->isSameDay($userToday) && $isWorkingDay;
                 
+                // Final check: ensure this date is not a leave day before showing "Missed"
                 if ($shouldShowMissed) {
+                    // Double-check leave (in case leave check above failed or was skipped)
+                    $isLeaveDay = false;
+                    foreach ($leaves as $l) {
+                        $leaveStart = Carbon::parse($l->start_date)->startOfDay()->toDateString();
+                        $leaveEnd = Carbon::parse($l->end_date)->startOfDay()->toDateString();
+                        if ($dateStrForLeave >= $leaveStart && $dateStrForLeave <= $leaveEnd) {
+                            $isLeaveDay = true;
+                            
+                            // Debug logging for Feb 6
+                            if ($dateStrForLeave === '2026-02-06') {
+                                \Illuminate\Support\Facades\Log::info('Summary: Found leave in final check for Feb 6', [
+                                    'date_str' => $dateStrForLeave,
+                                    'leave_id' => $l->id,
+                                    'leave_start' => $leaveStart,
+                                    'leave_end' => $leaveEnd,
+                                ]);
+                            }
+                            
+                            break;
+                        }
+                    }
+                    
+                    if ($isLeaveDay) {
+                        // User was on leave, show leave message instead of "Missed"
+                        $entriesWithStatus[] = [
+                            'date'        => $dateStr,
+                            'score'       => null,
+                            'mood_value'  => null,
+                            'description' => "You were on leave on $dateStr",
+                            'image'       => 'leave-user.svg',
+                            'status'      => 'Out of office',
+                        ];
+                        $displayedDates[] = $dateKey;
+                        continue; // Skip "Missed" message
+                    }
+                    
+                    // Only show "Missed" if not on leave
                     $entriesWithStatus[] = [
                         'date'        => $dateStr,
                         'score'       => null,
