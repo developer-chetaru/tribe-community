@@ -73,18 +73,18 @@
                                 <div x-show="open" x-cloak
                                      class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
                                      x-transition>
-                                    <div class="bg-white rounded-lg shadow-lg max-w-sm w-full p-6" @click.away="open = false">
-                                        <h3 class="text-lg font-semibold mb-4 text-red-600">Delete Principle</h3>
-                                        <p class="mb-4 font-[400] text-[16px] text-[#808080]">
+                                    <div class="bg-white rounded-lg shadow-lg max-w-sm w-full p-6 pt-3" @click.away="open = false">
+                                        <h3 class="text-lg font-semibold mb-4 text-red-600 border-b pb-1.5">Delete Principle</h3>
+                                        <p class="mb-4 font-[400] text-[16px] text-[#808080] ">
                                             Are you sure you want to delete <strong>{{ $item['title'] }}</strong>?
                                         </p>
                                         <div class="flex justify-end gap-2">
                                             <button @click="open = false"
-                                                    class="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded text-sm font-semibold w-[45px]">
+                                                    class="px-4 py-2 bg-gray-300 hover:bg-red-600 hover:text-white rounded text-sm font-semibold">
                                                 Cancel
                                             </button>
                                             <button wire:click="deletePrinciple('{{ $item['id'] }}')" @click="open = false"
-                                                    class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-white text-sm font-semibold w-[45px]">
+                                                    class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-white text-sm font-semibold ">
                                                 Delete
                                             </button>
                                         </div>

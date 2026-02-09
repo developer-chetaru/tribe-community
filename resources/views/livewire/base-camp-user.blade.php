@@ -4,7 +4,7 @@
     </h2>
 </x-slot>
 
-<div class="max-w-7xl mx-auto">
+<div class="">
 
     {{-- FLASH MESSAGE --}}
     @if (session()->has('message'))

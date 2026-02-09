@@ -4,7 +4,7 @@
     </h2>
 </x-slot>
 
-<div class="max-w-6xl mx-auto p-6">
+<div class="p-6">
     @if(session()->has('success'))
         <div class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
             <p class="text-green-800">{{ session('success') }}</p>
