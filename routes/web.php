@@ -117,6 +117,11 @@ Route::get('/', function () {
     return redirect()->to('/login');
 });
 
+// Handle GET requests to /logout (redirect to login instead of showing error)
+Route::get('/logout', function () {
+    return redirect()->to('/login');
+})->name('logout.get');
+
 Route::post('/register', [RegisteredUserController::class, 'store'])->name('custom.register');
 
 // CSRF Token Refresh Route
