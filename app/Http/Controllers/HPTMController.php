@@ -755,7 +755,7 @@ class HPTMController extends Controller
                 ->count();
         }
 
-        $principles = \App\Models\HptmPrinciple::all();
+        $principles = \App\Models\HptmPrinciple::orderBy('priority', 'ASC')->get();
 
         $resultArray = [];
         foreach ($principles as $priciVal) {
@@ -763,6 +763,7 @@ class HPTMController extends Controller
             $result['id']          = $priciVal->id;
             $result['title']       = $priciVal->title;
             $result['description'] = $priciVal->description;
+            $result['priority']     = $priciVal->priority;
             $principleId           = $priciVal->id;
 
             $result['teamFeedbackScorePercent'] = 0;
