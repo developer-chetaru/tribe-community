@@ -31,13 +31,12 @@
                     </tr>
                     <tr>
                         <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
-                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Tribe365® Basecamp Completed Reflection</h2>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ $reflection->user->first_name ?? $reflection->user->name ?? '<Name>' }},</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Great Work for taking time to reflect and maximise your engagement</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">It looks like your reflection <strong>{{ $reflection->topic ?? 'N/A' }}</strong> has been marked as <strong>{{ $status ?? 'Resolved' }}</strong> by our HPTM® Coaches</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">This means that it is felt the reflection has been supported and marked as resolved, what do you think? Have you explored it enough and feel better balanced to move forwards?</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you want to explore further do access your "Reflections" space on Tribe365® Basecamp and open it back up to explore further with our HPTM® coaches</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Great Work for taking time to reflect and maximise your engagement.</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">It looks like your reflection <strong>{{ $reflection->topic ?? 'N/A' }}</strong> has been marked as <strong>{{ $status ?? 'Resolved' }}</strong> by our HPTM® Coaches.</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">This means that it is felt the reflection has been supported and marked as resolved. What do you think? Have you explored it enough and feel better balanced to move forwards?</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you want to explore further, do access your "Reflections" space on Tribe365® Basecamp and open it back up to explore further with our HPTM® coaches.</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions, please contact us.</p>
                             <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
                         </td>
                     </tr>

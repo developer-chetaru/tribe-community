@@ -31,17 +31,16 @@
                     </tr>
                     <tr>
                         <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
-                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Team Sentiment Index</h2>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ $user->first_name ?? $user->name ?? '<Name>' }},</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Below is this weeks sentiment graph for your team, what do you think?</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Below is this week's sentiment graph for your team. What do you think?</p>
                             @if(isset($chartUrl))
                             <div style="text-align:center;margin:20px 0;">
                                 <img src="{{ $chartUrl }}" style="width:100%;max-width:600px;" alt="Sentiment Graph">
                             </div>
                             @endif
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Is everyone in a great space? If not, what can be done to build towards everyone in a great space?</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;"><strong>HPTM® Coach Notes:</strong> We remind everyone that people in great spaces do great things, people in not so great spaces probably don't. Getting to better spaces takes individual ownership and team support. The HI-PB'S™ give you the framework to shape all conversations and activity</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;"><strong>HPTM® Coach Notes:</strong> We remind everyone that people in great spaces do great things, people in not so great spaces probably don't. Getting to better spaces takes individual ownership and team support. The HI-PB'S™ give you the framework to shape all conversations and activity.</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions, please contact us.</p>
                             <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
                         </td>
                     </tr>

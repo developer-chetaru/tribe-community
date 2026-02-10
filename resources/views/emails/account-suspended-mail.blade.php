@@ -31,24 +31,23 @@
                     </tr>
                     <tr>
                         <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
-                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Account Suspended</h2>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ $user->first_name ?? '<Name>' }},</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">We regret to inform you that your Tribe365® Basecamp account has been suspended as of {{ $suspensionDate ?? '<Date>' }} due to unpaid subscription fees</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">We regret to inform you that your Tribe365® Basecamp account has been suspended as of {{ $suspensionDate ?? '<Date>' }} due to unpaid subscription fees.</p>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;"><strong>What this means:</strong></p>
                             <ul style="margin:0 0 15px 0;padding-left:20px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
-                                <li>You no longer have access to Tribe365® Basecamp features</li>
-                                <li>Your data will only be retained for 30 days from date of suspension</li>
-                                <li>Your account will be permanently deleted on {{ $deletionDate ?? '<Date>' }}</li>
-                                <li>Future access will only be possible with a new sign up and activation</li>
+                                <li>You no longer have access to Tribe365® Basecamp features.</li>
+                                <li>Your data will only be retained for 30 days from date of suspension.</li>
+                                <li>Your account will be permanently deleted on {{ $deletionDate ?? '<Date>' }}.</li>
+                                <li>Future access will only be possible with a new sign up and activation.</li>
                             </ul>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;"><strong>To reactivate your account:</strong></p>
                             <ul style="margin:0 0 15px 0;padding-left:20px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
-                                <li>Update your payment method</li>
-                                <li>Pay outstanding invoices</li>
-                                <li>Your account will be reactivated immediately upon payment</li>
+                                <li>Update your payment method.</li>
+                                <li>Pay outstanding invoices.</li>
+                                <li>Your account will be reactivated immediately upon payment.</li>
                             </ul>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;"><strong>Important Note:</strong> If you do not reactivate your account within 30 days of suspension, your account and all associated data will be permanently deleted and cannot be recovered</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;"><strong>Important Note:</strong> If you do not reactivate your account within 30 days of suspension, your account and all associated data will be permanently deleted and cannot be recovered.</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions, please contact us.</p>
                             <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
                         </td>
                     </tr>

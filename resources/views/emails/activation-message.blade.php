@@ -31,7 +31,6 @@
                     </tr>
                     <tr>
                         <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
-                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Basecamp Activation Message</h2>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Your Tribe365® Basecamp account has been successfully activated!</p>
                             <p style="margin:0 0 20px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">We're setting things up for you. Please proceed to login.</p>
                             <table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:25px auto;">

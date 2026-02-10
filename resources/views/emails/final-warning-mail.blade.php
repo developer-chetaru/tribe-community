@@ -31,17 +31,16 @@
                     </tr>
                     <tr>
                         <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
-                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Final Warning - Account Suspension Imminent</h2>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ $user->first_name ?? '<Name>' }},</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;"><strong>URGENT ACTION REQUIRED:</strong> Your Tribe365® Basecamp account will be suspended {{ $suspensionDate ?? '<date>' }} if payment is not received or you do not contact us</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;"><strong>URGENT ACTION REQUIRED:</strong> Your Tribe365® Basecamp account will be suspended {{ $suspensionDate ?? '<date>' }} if payment is not received or you do not contact us.</p>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;"><strong>What happens if your account is suspended:</strong></p>
                             <ul style="margin:0 0 15px 0;padding-left:20px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
-                                <li>You will lose access to Tribe365® Basecamp features</li>
-                                <li>Your data will be retained for 30 days</li>
-                                <li>After 30 days your account and data will be permanently deleted</li>
+                                <li>You will lose access to Tribe365® Basecamp features.</li>
+                                <li>Your data will be retained for 30 days.</li>
+                                <li>After 30 days, your account and data will be permanently deleted.</li>
                             </ul>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Please update your payment method or contact us immediately to avoid account suspension.</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions, please contact us.</p>
                             <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
                         </td>
                     </tr>

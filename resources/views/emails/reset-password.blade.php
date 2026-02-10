@@ -31,9 +31,8 @@
                     </tr>
                     <tr>
                         <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
-                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Tribe365® Password Reset</h2>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ $user->first_name ?? $user->name ?? '<Name>' }},</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">We received a request to reset your Tribe365® password, click the button below to complete your reset</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">We received a request to reset your Tribe365® password. Click the button below to complete your reset.</p>
                             <table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:25px auto;">
                                 <tr>
                                     <td bgcolor="#eb1c24" style="border-radius:5px;">
@@ -41,9 +40,9 @@
                                     </td>
                                 </tr>
                             </table>
-                            <p style="margin:0 0 15px 0;color:#666;font-family: 'Lexend', Arial, Helvetica, sans-serif;">This code is valid for the next 24 hours</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you did not request a password reset please ignore this message</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us</p>
+                            <p style="margin:0 0 15px 0;color:#666;font-family: 'Lexend', Arial, Helvetica, sans-serif;">This code is valid for the next 24 hours.</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you did not request a password reset, please ignore this message.</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions, please contact us.</p>
                             <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
                         </td>
                     </tr>

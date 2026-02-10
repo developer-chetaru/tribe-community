@@ -31,17 +31,16 @@
                     </tr>
                     <tr>
                         <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
-                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Password Reset OTP</h2>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hello {{ ucfirst($first_name ?? '<Name>') }},</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">We received a request to reset your Tribe365® Basecamp account password</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">We received a request to reset your Tribe365® Basecamp account password.</p>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Please use the one-time password (OTP) below:</p>
                             <div style="text-align:center;margin:25px 0;">
                                 <div style="display:inline-block;padding:15px 30px;background-color:#f5f5f5;border:2px solid #eb1c24;border-radius:8px;">
                                     <p style="margin:0;font-size:32px;font-weight:700;color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;letter-spacing:5px;">{{ $otp }}</p>
                                 </div>
                             </div>
-                            <p style="margin:20px 0 15px 0;color:#666;font-family: 'Lexend', Arial, Helvetica, sans-serif;">This code is valid for the next 10 minutes</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you did not request a password reset please ignore this message</p>
+                            <p style="margin:20px 0 15px 0;color:#666;font-family: 'Lexend', Arial, Helvetica, sans-serif;">This code is valid for the next 10 minutes.</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you did not request a password reset, please ignore this message.</p>
                             <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
                         </td>
                     </tr>

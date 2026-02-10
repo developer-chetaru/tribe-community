@@ -31,13 +31,12 @@
                     </tr>
                     <tr>
                         <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
-                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Tribe365® Basecamp Monthly Report</h2>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ $user->first_name ?? $user->name ?? '<Name>' }},</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Below is your monthly sentiment summary for {{ $month ?? '<month>' }}</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Below is your monthly sentiment summary for {{ $month ?? '<month>' }}.</p>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Reflecting on how you are regularly is critical to self-growth.</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">How you feel is directly impacted by your HI-PB'S™ relationships. This is your chance to reflect "Are you in a good space?", "Are you framing things as needed to work well with everyone?"</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you are having any medium or bad days why not use the Reflections tab in the Tribe365® Basecamp app to connect to our HPTM® coaches? There you can shape how to make every day a good day - or great day!</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">How you feel is directly impacted by your HI-PB'S™ relationships. This is your chance to reflect: "Are you in a good space?", "Are you framing things as needed to work well with everyone?"</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you are having any medium or bad days, why not use the Reflections tab in the Tribe365® Basecamp app to connect to our HPTM® coaches? There you can shape how to make every day a good day - or great day!</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions, please contact us.</p>
                             <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
                         </td>
                     </tr>

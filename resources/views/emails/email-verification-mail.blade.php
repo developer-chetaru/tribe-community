@@ -31,9 +31,8 @@
                     </tr>
                     <tr>
                         <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
-                            <h2 style="color:#eb1c24;font-family: 'Lexend', Arial, Helvetica, sans-serif;margin:0 0 20px 0;font-size:24px;font-weight:600;">Verify Your Email Address</h2>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ $user->first_name ?? '<Name>' }},</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you for signing up to Tribe365® Basecamp! Please verify your email address to continue your account setup</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you for signing up to Tribe365® Basecamp! Please verify your email address to continue your account setup.</p>
                             <table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:25px auto;">
                                 <tr>
                                     <td bgcolor="#eb1c24" style="border-radius:5px;">
@@ -41,11 +40,11 @@
                                     </td>
                                 </tr>
                             </table>
-                            <p style="margin:0 0 15px 0;color:#666;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Or copy and paste this link into your browser</p>
+                            <p style="margin:0 0 15px 0;color:#666;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Or copy and paste this link into your browser:</p>
                             <p style="margin:0 0 15px 0;color:#666;font-size:12px;word-break:break-all;font-family: 'Lexend', Arial, Helvetica, sans-serif;">{{ $verificationUrl }}</p>
-                            <p style="margin:0 0 15px 0;color:#666;font-family: 'Lexend', Arial, Helvetica, sans-serif;">This verification link will expire in 24 hours</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you didn't create a Tribe365® Basecamp account you can safely ignore this email</p>
-                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions please contact us</p>
+                            <p style="margin:0 0 15px 0;color:#666;font-family: 'Lexend', Arial, Helvetica, sans-serif;">This verification link will expire in 24 hours.</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you didn't create a Tribe365® Basecamp account, you can safely ignore this email.</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions, please contact us.</p>
                             <p style="margin-top:25px;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Thank you<br>Team Tribe365®</p>
                         </td>
                     </tr>
