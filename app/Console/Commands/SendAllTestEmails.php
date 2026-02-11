@@ -34,9 +34,9 @@ class SendAllTestEmails extends Command
     {
         $testEmail = $this->argument('email');
         $saveMode = $this->option('save');
+        $saveDir = storage_path('app/test-emails');
         
         if ($saveMode) {
-            $saveDir = storage_path('app/test-emails');
             if (!File::exists($saveDir)) {
                 File::makeDirectory($saveDir, 0755, true);
             }
@@ -85,16 +85,17 @@ class SendAllTestEmails extends Command
         $oneSignal = new OneSignalService();
 
         // Helper function to send or save email via OneSignal
-        $sendOrSaveEmail = function($emailHtml, $subject, $filename) use ($testEmail, $saveMode, $saveDir, $oneSignal, &$sentCount, &$errors) {
+        $command = $this;
+        $sendOrSaveEmail = function($emailHtml, $subject, $filename) use ($testEmail, $saveMode, $saveDir, $oneSignal, &$sentCount, &$errors, $command) {
             try {
                 if ($saveMode) {
                     File::put($saveDir . '/' . $filename . '.html', $emailHtml);
-                    $this->info("Saved: {$filename}.html");
+                    $command->info("Saved: {$filename}.html");
                     $sentCount++;
                 } else {
                     $result = $oneSignal->sendEmailMessage($testEmail, $subject, $emailHtml);
                     if ($result !== false) {
-                        $this->info("Sent: {$subject}");
+                        $command->info("Sent: {$subject}");
                         $sentCount++;
                     } else {
                         $errors[] = "{$subject}: OneSignal send failed";
