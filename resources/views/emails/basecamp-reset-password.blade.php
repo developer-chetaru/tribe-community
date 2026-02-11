@@ -33,6 +33,7 @@
                         <td style="padding:20px 40px 30px 40px;color:#333;font-size:15px;line-height:1.6;font-family: 'Lexend', Arial, Helvetica, sans-serif;">
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ $user->first_name ?? $user->name ?? '<Name>' }},</p>
                             <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">We have received a request to reset your Tribe365® Basecamp password.</p>
+                            <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Click the button below to create a new password for your account:</p>
                             <table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:25px auto;">
                                 <tr>
                                     <td bgcolor="#eb1c24" style="border-radius:5px;">

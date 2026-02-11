@@ -40,8 +40,8 @@
                             @if($inviterName)
                                 {{-- Invitation Email --}}
                                 <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ ucfirst($userFullName ?? 'User') }},</p>
-                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">You have been invited by {{ ucfirst($inviterName ?? 'an administrator') }} to join {{ ucfirst($orgName ?? 'the organisation') }} on the Tribe365® behaviour coach app.</p>
-                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Tribe365® helps teams to stay connected, aligned, and build a positive work culture together. Get started by following the link below to set your password and activate your account.</p>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">You have been invited by {{ ucfirst($inviterName ?? '<Name>') }} to join {{ ucfirst($orgName ?? '<Organisation>') }} on the Tribe365® behaviour coach app.</p>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Tribe365® helps teams to stay connected, aligned, and build a positive work culture together. Get started by following the below link to set your password and activate your account.</p>
                                 <table cellspacing="0" cellpadding="0" border="0" align="center" style="margin:25px auto;">
                                     <tr>
                                         <td bgcolor="#eb1c24" style="border-radius:5px;">
@@ -49,8 +49,8 @@
                                         </td>
                                     </tr>
                                 </table>
-                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Prefer not to join? You can decline this invitation, and we'll let {{ ucfirst($inviterName ?? 'the administrator') }} know.</p>
-                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions, please contact us or {{ ucfirst($inviterName ?? 'the administrator') }} directly.</p>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Prefer not to join? You can decline this invitation, and we'll let {{ ucfirst($inviterName ?? '<Name>') }} know.</p>
+                                <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">If you have any questions, please contact us or {{ ucfirst($inviterName ?? '<Name>') }} directly.</p>
                             @else
                                 {{-- Password Reset Email --}}
                                 <p style="margin:0 0 15px 0;font-family: 'Lexend', Arial, Helvetica, sans-serif;">Hi {{ ucfirst($userFullName ?? 'User') }},</p>
