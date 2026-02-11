@@ -140,10 +140,14 @@ class SendAllTestEmails extends Command
         try {
             // 4. Payment Confirmation
             $this->info("Processing: Payment Confirmation");
+            $amount = '£' . number_format($dummyInvoice->total_amount, 2);
+            $billingPeriod = Carbon::now()->format('M d, Y') . ' - ' . Carbon::now()->addMonth()->format('M d, Y');
             $emailHtml = view('emails.payment-confirmation-mail', [
                 'user' => $dummyUser,
                 'invoice' => $dummyInvoice,
                 'payment' => null,
+                'amount' => $amount,
+                'billingPeriod' => $billingPeriod,
                 'isBasecamp' => true,
             ])->render();
             $sendOrSaveEmail($emailHtml, 'Payment Confirmation - Tribe365', '04-payment-confirmation');
