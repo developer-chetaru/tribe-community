@@ -49,6 +49,8 @@
                             type="password"
                             name="password"
                             placeholder="New Password"
+                            autocomplete="new-password"
+                            value=""
                             class="w-full bg-transparent border-none outline-none focus:ring-0 text-gray-500"
                         />
                         <button type="button" onclick="togglePassword('password', this)">
@@ -69,6 +71,8 @@
                             type="password"
                             name="password_confirmation"
                             placeholder="Confirm Password"
+                            autocomplete="new-password"
+                            value=""
                             class="w-full bg-transparent border-none outline-none focus:ring-0 text-gray-500"
                         />
                         <button type="button" onclick="togglePassword('confirmPassword', this)">
