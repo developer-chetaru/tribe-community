@@ -290,6 +290,7 @@ class AuthController extends Controller
         	    'email'      => $request->email,
         	    'password'   => Hash::make($request->password),
     	        'status'     => false, // Set to false initially, will be activated after email verification
+    	        'timezone'   => 'Europe/London', // Default UK timezone on registration
 	        ]);
    
 	        // Ensure role exists for both guards

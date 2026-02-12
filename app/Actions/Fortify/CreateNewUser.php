@@ -49,6 +49,7 @@ class CreateNewUser implements CreatesNewUsers
             'last_name'  => $input['last_name'] ?? '',
             'email'      => $input['email'],
             'password'   => $input['password'],
+            'timezone'   => 'Europe/London', // Default UK timezone on registration
         ]);
         
         // Update status using DB raw to avoid type conversion issues
