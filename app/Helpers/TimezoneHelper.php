@@ -10,7 +10,7 @@ class TimezoneHelper
     /**
      * Default timezone to use when user timezone is invalid or empty
      */
-    const DEFAULT_TIMEZONE = 'Asia/Kolkata';
+    const DEFAULT_TIMEZONE = 'Europe/London';
 
     /**
      * Get a safe timezone for a user.
