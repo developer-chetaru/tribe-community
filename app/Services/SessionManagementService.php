@@ -11,8 +11,9 @@ use Illuminate\Support\Facades\Cache;
 class SessionManagementService
 {
     /**
-     * Invalidate all previous sessions/tokens for a user
-     * This ensures only one active session per device at a time
+     * Invalidate previous sessions/tokens for a user
+     * NEW LOGIC: Allow one web session + one app session simultaneously
+     * But only one session per platform (one web, one app)
      * 
      * @param User $user
      * @param string|null $currentToken Current JWT token (for API)
@@ -40,41 +41,55 @@ class SessionManagementService
             $cacheKey = "user_active_session_{$user->id}_{$deviceId}";
             Cache::put($cacheKey, $sessionInfo, now()->addDays(30)); // Store for 30 days
             
-            // Also store a mapping of user_id -> current device_id for quick lookup
-            $userDeviceKey = "user_current_device_{$user->id}";
-            $previousDeviceId = Cache::get($userDeviceKey);
-            
             // Check if this is a web session (browser/private tab)
             $isWebSession = ($deviceType === 'web' || strpos($deviceId, 'web_') === 0);
             
-            // If user logged in from a different device, invalidate previous device's session
-            if ($previousDeviceId && $previousDeviceId !== $deviceId) {
-                $this->invalidateDeviceSession($user, $previousDeviceId);
-                Log::info("Previous device session invalidated for user {$user->id}", [
-                    'previous_device_id' => $previousDeviceId,
-                    'new_device_id' => $deviceId,
-                ]);
-            }
-            
-            // Store last login timestamp FIRST - this will be used to invalidate old sessions
-            $lastLoginKey = "user_last_login_{$user->id}";
-            $lastLoginTimestamp = now()->timestamp;
-            Cache::put($lastLoginKey, $lastLoginTimestamp, now()->addDays(30));
-            
-            // For web sessions, ALWAYS invalidate ALL previous web sessions (including private tabs)
-            // This ensures only the latest browser/tab is active
+            // NEW LOGIC: Store separate mappings for web and app sessions
             if ($isWebSession) {
-                // Clear ALL previous web session cache entries by updating device mapping first
-                // This ensures old sessions can't find their cache entries
-                Cache::put($userDeviceKey, $deviceId, now()->addDays(30));
+                // For web sessions: invalidate only previous web sessions
+                $webDeviceKey = "user_current_web_device_{$user->id}";
+                $previousWebDeviceId = Cache::get($webDeviceKey);
                 
-                // Then delete all old sessions from database
+                // If there was a previous web session, invalidate it
+                if ($previousWebDeviceId && $previousWebDeviceId !== $deviceId) {
+                    $this->invalidateDeviceSession($user, $previousWebDeviceId);
+                    Log::info("Previous web session invalidated for user {$user->id}", [
+                        'previous_web_device_id' => $previousWebDeviceId,
+                        'new_web_device_id' => $deviceId,
+                    ]);
+                }
+                
+                // Store current web device mapping
+                Cache::put($webDeviceKey, $deviceId, now()->addDays(30));
+                
+                // Delete all old web sessions from database (except current)
                 $this->invalidateAllWebSessions($user, $currentSessionId);
             } else {
-                // For mobile devices, invalidate all web sessions too
-                Cache::put($userDeviceKey, $deviceId, now()->addDays(30));
-                $this->invalidateWebSessions($user, $currentSessionId);
+                // For app/mobile sessions: invalidate only previous app sessions
+                $appDeviceKey = "user_current_app_device_{$user->id}";
+                $previousAppDeviceId = Cache::get($appDeviceKey);
+                
+                // If there was a previous app session, invalidate it
+                if ($previousAppDeviceId && $previousAppDeviceId !== $deviceId) {
+                    $this->invalidateDeviceSession($user, $previousAppDeviceId);
+                    Log::info("Previous app session invalidated for user {$user->id}", [
+                        'previous_app_device_id' => $previousAppDeviceId,
+                        'new_app_device_id' => $deviceId,
+                    ]);
+                }
+                
+                // Store current app device mapping
+                Cache::put($appDeviceKey, $deviceId, now()->addDays(30));
+                
+                // DO NOT invalidate web sessions - allow both web and app simultaneously
             }
+            
+            // Store last login timestamp for this platform
+            $lastLoginKey = $isWebSession 
+                ? "user_last_web_login_{$user->id}" 
+                : "user_last_app_login_{$user->id}";
+            $lastLoginTimestamp = now()->timestamp;
+            Cache::put($lastLoginKey, $lastLoginTimestamp, now()->addDays(30));
             
             // For JWT tokens, store timestamp with device ID
             // Use token's issued at time if available, otherwise use current time
@@ -184,6 +199,9 @@ class SessionManagementService
             $deviceId = $user->deviceId ?? 'web_' . $sessionId;
             $deviceType = $user->deviceType ?? 'web';
             
+            // Check if this is a web session
+            $isWebSession = ($deviceType === 'web' || strpos($deviceId, 'web_') === 0);
+            
             $sessionInfo = [
                 'user_id' => $user->id,
                 'token_issued_at' => now()->timestamp,
@@ -198,13 +216,18 @@ class SessionManagementService
             $cacheKey = "user_active_session_{$user->id}_{$deviceId}";
             Cache::put($cacheKey, $sessionInfo, now()->addDays(30));
             
-            // Store current device mapping
-            $userDeviceKey = "user_current_device_{$user->id}";
-            Cache::put($userDeviceKey, $deviceId, now()->addDays(30));
+            // Store platform-specific device mapping
+            if ($isWebSession) {
+                $platformDeviceKey = "user_current_web_device_{$user->id}";
+            } else {
+                $platformDeviceKey = "user_current_app_device_{$user->id}";
+            }
+            Cache::put($platformDeviceKey, $deviceId, now()->addDays(30));
             
             Log::info("Active session stored for user {$user->id}", [
                 'session_id' => $sessionId,
                 'device_id' => $deviceId,
+                'platform' => $isWebSession ? 'web' : 'app',
             ]);
             
         } catch (\Exception $e) {
@@ -329,15 +352,15 @@ class SessionManagementService
                 }
             }
             
-            // Device ID must match - if it doesn't, the token is from a different device
-            // This means user logged in from a new device, so old device's token should be rejected
+            // NEW LOGIC: Allow different platforms (web and app) simultaneously
+            // But reject if same platform but different device
             if ($currentDeviceId !== $deviceId) {
                 // Check if this is a web session (both might be web but different sessions)
                 $isWebToken = (!$deviceId || $deviceId === 'web_default' || strpos($deviceId, 'web_') === 0);
                 $isWebCurrent = strpos($currentDeviceId, 'web_') === 0;
                 
                 if ($isWebToken && $isWebCurrent) {
-                    // Both are web sessions - check token timestamp instead
+                    // Both are web sessions but different device IDs - check timestamp
                     // If token is old, reject it (user logged in from another browser)
                     // We'll check timestamp below
                     Log::debug("Web session device ID mismatch, checking timestamp", [
@@ -345,15 +368,41 @@ class SessionManagementService
                         'token_device_id' => $deviceId,
                         'current_device_id' => $currentDeviceId,
                     ]);
-                } else {
-                    // Different device types (mobile vs web) or different mobile devices
-                    // Reject immediately
-                    Log::warning("Token rejected - device ID mismatch", [
+                } elseif (!$isWebToken && !$isWebCurrent) {
+                    // Both are app sessions but different device IDs - check timestamp
+                    // If token is old, reject it (user logged in from another app device)
+                    Log::debug("App session device ID mismatch, checking timestamp", [
                         'user_id' => $user->id,
                         'token_device_id' => $deviceId,
                         'current_device_id' => $currentDeviceId,
                     ]);
-                    return false;
+                } else {
+                    // Different platforms (web vs app) - allow both simultaneously
+                    // Check if token is from a valid platform session
+                    $platformDeviceKey = $isWebToken 
+                        ? "user_current_web_device_{$user->id}" 
+                        : "user_current_app_device_{$user->id}";
+                    $platformDeviceId = Cache::get($platformDeviceKey);
+                    
+                    if ($platformDeviceId === $deviceId) {
+                        // Token is from valid platform session - allow it
+                        Log::debug("Allowing token from different platform", [
+                            'user_id' => $user->id,
+                            'token_device_id' => $deviceId,
+                            'current_device_id' => $currentDeviceId,
+                            'platform_device_id' => $platformDeviceId,
+                        ]);
+                        // Continue to timestamp check below
+                    } else {
+                        // Token is from invalid platform session - reject
+                        Log::warning("Token rejected - invalid platform session", [
+                            'user_id' => $user->id,
+                            'token_device_id' => $deviceId,
+                            'current_device_id' => $currentDeviceId,
+                            'platform_device_id' => $platformDeviceId,
+                        ]);
+                        return false;
+                    }
                 }
             }
             
@@ -389,8 +438,43 @@ class SessionManagementService
                 return false;
             }
             
+            // NEW LOGIC: Check platform-specific timestamp
+            // Allow both web and app tokens if they're from their respective platforms
+            $isWebToken = (!$deviceId || $deviceId === 'web_default' || strpos($deviceId, 'web_') === 0);
+            $isWebCurrent = strpos($currentDeviceId, 'web_') === 0;
+            
+            // If token is from same platform as current device, use platform-specific timestamp
+            if ($isWebToken && $isWebCurrent) {
+                // Both are web - check web-specific timestamp
+                $platformTimestampKey = "user_token_timestamp_{$user->id}_{$currentDeviceId}";
+                $lastValidTimestamp = Cache::get($platformTimestampKey);
+            } elseif (!$isWebToken && !$isWebCurrent) {
+                // Both are app - check app-specific timestamp
+                $platformTimestampKey = "user_token_timestamp_{$user->id}_{$currentDeviceId}";
+                $lastValidTimestamp = Cache::get($platformTimestampKey);
+            } else {
+                // Different platforms (web vs app) - allow both simultaneously
+                // Check if token is from a valid platform session
+                $platformTimestampKey = "user_token_timestamp_{$user->id}_{$deviceId}";
+                $lastValidTimestamp = Cache::get($platformTimestampKey);
+                
+                // If no timestamp for this device, allow it (might be from other platform)
+                if (!$lastValidTimestamp) {
+                    Log::debug("Allowing token from different platform", [
+                        'user_id' => $user->id,
+                        'token_device_id' => $deviceId,
+                        'current_device_id' => $currentDeviceId,
+                        'is_web_token' => $isWebToken,
+                        'is_web_current' => $isWebCurrent,
+                    ]);
+                    return true;
+                }
+            }
+            
             // Use current device's timestamp for validation
-            $lastValidTimestamp = $currentDeviceTimestamp;
+            if (!$lastValidTimestamp) {
+                $lastValidTimestamp = $currentDeviceTimestamp;
+            }
             
             if (!$lastValidTimestamp) {
                 // No timestamp for this device, might be from before device tracking
@@ -510,13 +594,24 @@ class SessionManagementService
             $cacheKey = "user_active_session_{$user->id}_{$deviceId}";
             $sessionInfo = Cache::get($cacheKey);
             
-            // If not found, try to get from current device mapping
+            // If not found, try to get from platform-specific device mapping
             if (!$sessionInfo) {
-                $userDeviceKey = "user_current_device_{$user->id}";
-                $currentDeviceId = Cache::get($userDeviceKey);
-                if ($currentDeviceId) {
-                    $cacheKey = "user_active_session_{$user->id}_{$currentDeviceId}";
-                    $sessionInfo = Cache::get($cacheKey);
+                // Check web platform first (for web sessions)
+                if ($sessionId || strpos($deviceId, 'web_') === 0) {
+                    $webDeviceKey = "user_current_web_device_{$user->id}";
+                    $currentWebDeviceId = Cache::get($webDeviceKey);
+                    if ($currentWebDeviceId) {
+                        $cacheKey = "user_active_session_{$user->id}_{$currentWebDeviceId}";
+                        $sessionInfo = Cache::get($cacheKey);
+                    }
+                } else {
+                    // Check app platform (for app sessions)
+                    $appDeviceKey = "user_current_app_device_{$user->id}";
+                    $currentAppDeviceId = Cache::get($appDeviceKey);
+                    if ($currentAppDeviceId) {
+                        $cacheKey = "user_active_session_{$user->id}_{$currentAppDeviceId}";
+                        $sessionInfo = Cache::get($cacheKey);
+                    }
                 }
             }
             

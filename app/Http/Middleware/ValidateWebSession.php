@@ -54,8 +54,9 @@ class ValidateWebSession
             // Get active session info
             $activeSessionInfo = $sessionService->getActiveSessionInfo($user, $currentSessionId);
             
-            // Check last login timestamp - if a new login happened, old sessions should be invalid
-            $lastLoginKey = "user_last_login_{$user->id}";
+            // Check last WEB login timestamp - only invalidate if new web login happened
+            // App logins should not affect web sessions
+            $lastLoginKey = "user_last_web_login_{$user->id}";
             $lastLoginTimestamp = Cache::get($lastLoginKey);
             
             // If there's a last login timestamp, check if current session is from before it

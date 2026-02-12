@@ -35,14 +35,14 @@ class LoginForm extends Component
         
         if (!$user) {
             $this->addError('email', 'The provided email address is not registered.');
-            \Log::warning('Login failed - email not found: ' . $this->email);
+            Log::warning('Login failed - email not found: ' . $this->email);
             return;
         }
 
         // Check if password is correct
         if (!Hash::check($this->password, $user->password)) {
             $this->addError('password', 'The Entered password is incorrect.');
-            \Log::warning('Login failed - incorrect password for: ' . $this->email);
+            Log::warning('Login failed - incorrect password for: ' . $this->email);
             return;
         }
 
@@ -63,7 +63,7 @@ class LoginForm extends Component
             if (!$hasActiveSubscription && !$hasPaidInvoice) {
                 // User needs to complete payment first
                 $this->addError('email', 'Please complete your payment first. You will be redirected to the payment page after login.');
-                \Log::warning('Login failed - basecamp user has not paid: ' . $this->email);
+                Log::warning('Login failed - basecamp user has not paid: ' . $this->email);
                 
                 // Auto-login temporarily to redirect to billing page
                 Auth::login($user);
@@ -77,23 +77,25 @@ class LoginForm extends Component
         // Check if user status is not active
         if (!in_array($user->status, ['active_verified', 'active_unverified'])) {
             $this->addError('email', 'Your account is not activated yet, please check your email and follow the instruction to verify your account.');
-            \Log::warning('Login failed - account not activated: ' . $this->email);
+            Log::warning('Login failed - account not activated: ' . $this->email);
             return;
         }
 
         // Attempt login
         if (Auth::attempt(['email' => $this->email, 'password' => $this->password], $this->remember)) {
-            \Log::info('Login successful for: ' . $this->email);
+            Log::info('Login successful for: ' . $this->email);
             
-            // ✅ Invalidate ALL previous sessions BEFORE regenerating
-            // This ensures that even if user has multiple tabs open, all will be logged out
+            // ✅ Invalidate only previous WEB sessions BEFORE regenerating
+            // This ensures that even if user has multiple web tabs open, all will be logged out
+            // But app sessions remain active (allow web + app simultaneously)
             try {
                 $sessionService = new SessionManagementService();
-                // Delete all sessions for this user
-                $sessionService->invalidateAllSessions($user);
-                Log::info("All sessions invalidated for user {$user->id} before new login");
+                $newSessionId = session()->getId();
+                // Invalidate previous web sessions only (not app sessions)
+                $sessionService->invalidatePreviousSessions($user, null, $newSessionId);
+                Log::info("Previous web sessions invalidated for user {$user->id} before new login");
             } catch (\Exception $e) {
-                Log::warning('Failed to invalidate previous sessions on web login', [
+                Log::warning('Failed to invalidate previous web sessions on login', [
                     'user_id' => $user->id,
                     'error' => $e->getMessage(),
                 ]);
@@ -108,7 +110,7 @@ class LoginForm extends Component
                 $sessionService = new SessionManagementService();
                 $newSessionId = session()->getId();
                 $sessionService->storeActiveSession($user, $newSessionId);
-                Log::info("New session stored immediately after regeneration for user {$user->id}", [
+                Log::info("New web session stored immediately after regeneration for user {$user->id}", [
                     'session_id' => $newSessionId,
                 ]);
             } catch (\Exception $e) {
@@ -124,7 +126,7 @@ class LoginForm extends Component
         }
 
         // Fallback error
-        \Log::warning('Login failed for: ' . $this->email);
+        Log::warning('Login failed for: ' . $this->email);
         $this->addError('email', 'These credentials do not match our records.');
     }
 
