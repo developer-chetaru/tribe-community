@@ -116,9 +116,11 @@ class LoginForm extends Component
                     'user_id' => $user->id,
                     'error' => $e->getMessage(),
                 ]);
+                // Don't block login if session storage fails - just log it
             }
             
-            return redirect()->intended('/dashboard');
+            // Use Livewire's redirect method for proper redirect handling
+            return $this->redirect('/dashboard');
         }
 
         // Fallback error
