@@ -599,6 +599,14 @@ class Summary extends Component
                     1       => 'avarege-user.svg',
                     default => 'sad-index.svg',
                 };
+                
+                // Add emoji based on mood_value to match calendar display
+                $emoji = match($entry->mood_value) {
+                    3       => '😊', // Happy
+                    2       => '😐', // Okay/Average
+                    1       => '😢', // Sad (down face emoji)
+                    default => '😐',
+                };
 
                 $entriesWithStatus[] = [
                     'date'        => $entryDateStr, // Use entry's date in its stored timezone
@@ -606,6 +614,7 @@ class Summary extends Component
                     'mood_value'  => $entry->mood_value,
                     'description' => $entry->description ?? 'No message added.',
                     'image'       => $image,
+                    'emoji'       => $emoji,
                     'status'      => 'Present',
                 ];
                 
@@ -675,6 +684,14 @@ class Summary extends Component
                         1       => 'avarege-user.svg',
                         default => 'sad-index.svg',
                     };
+                    
+                    // Add emoji based on mood_value to match calendar display
+                    $emoji = match($foundEntry->mood_value) {
+                        3       => '😊', // Happy
+                        2       => '😐', // Okay/Average
+                        1       => '😢', // Sad (down face emoji)
+                        default => '😐',
+                    };
 
                     $entriesWithStatus[] = [
                         'date'        => $entryDateStr,
@@ -682,6 +699,7 @@ class Summary extends Component
                         'mood_value'  => $foundEntry->mood_value,
                         'description' => $foundEntry->description ?? 'No message added.',
                         'image'       => $image,
+                        'emoji'       => $emoji,
                         'status'      => 'Present',
                     ];
                     

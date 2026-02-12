@@ -173,7 +173,11 @@
                         </div>
                     @else
                         <div class="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden">
-                            <img src="{{ asset('images/' . $item['image']) }}" alt="Sentiment" class="w-full h-full object-cover">
+                            @if(isset($item['emoji']))
+                                <span class="text-2xl">{{ $item['emoji'] }}</span>
+                            @else
+                                <img src="{{ asset('images/' . $item['image']) }}" alt="Sentiment" class="w-full h-full object-cover">
+                            @endif
                         </div>
                     @endif
                 </div>
