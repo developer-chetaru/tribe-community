@@ -10,6 +10,7 @@ use App\Models\Organisation;
 use App\Models\SubscriptionRecord;
 use App\Services\SubscriptionService;
 use App\Services\Billing\StripeService;
+use App\Services\StripePaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -381,9 +382,12 @@ class StripeCheckoutController extends Controller
         try {
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
             
+            // Get enabled payment methods from Stripe API
+            $paymentMethods = StripePaymentService::getEnabledPaymentMethods();
+            
             if ($user->hasRole('basecamp')) {
                 $checkoutParams = [
-                    'payment_method_types' => ['card'],
+                    'payment_method_types' => $paymentMethods,
                     'line_items' => [[
                         'price_data' => [
                             'currency' => 'gbp',
@@ -413,7 +417,7 @@ class StripeCheckoutController extends Controller
                 $customerEmail = $user->email ?? $organisation->admin_email ?? $organisation->users()->first()?->email;
                 
                 $checkoutParams = [
-                    'payment_method_types' => ['card'],
+                    'payment_method_types' => $paymentMethods,
                     'line_items' => [[
                         'price_data' => [
                             'currency' => 'gbp',

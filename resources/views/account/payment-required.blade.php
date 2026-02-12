@@ -60,10 +60,63 @@
                         <input type="hidden" name="invoice_id" value="{{ $unpaidInvoice->id }}">
                         <input type="hidden" name="user_id" value="{{ $user->id }}">
                         <button type="submit" 
+                                id="payNowButton"
                                 class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-150 ease-in-out">
-                            Pay Now
+                            <span id="payNowText">Pay Now</span>
+                            <span id="payNowLoading" class="hidden">Loading...</span>
                         </button>
                     </form>
+                    
+                    <script>
+                        document.getElementById('paymentForm').addEventListener('submit', function(e) {
+                            e.preventDefault();
+                            
+                            const form = this;
+                            const button = document.getElementById('payNowButton');
+                            const buttonText = document.getElementById('payNowText');
+                            const buttonLoading = document.getElementById('payNowLoading');
+                            
+                            // Disable button and show loading
+                            button.disabled = true;
+                            buttonText.classList.add('hidden');
+                            buttonLoading.classList.remove('hidden');
+                            
+                            // Submit form via fetch
+                            fetch(form.action, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded',
+                                    'X-Requested-With': 'XMLHttpRequest',
+                                    'X-CSRF-TOKEN': document.querySelector('input[name="_token"]').value
+                                },
+                                body: new URLSearchParams(new FormData(form))
+                            })
+                            .then(response => {
+                                if (!response.ok) {
+                                    throw new Error('Network response was not ok');
+                                }
+                                return response.json();
+                            })
+                            .then(data => {
+                                if (data.success && data.redirect_url) {
+                                    // Redirect to Stripe checkout
+                                    window.location.href = data.redirect_url;
+                                } else {
+                                    throw new Error(data.error || 'Failed to create checkout session');
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Error:', error);
+                                // Re-enable button
+                                button.disabled = false;
+                                buttonText.classList.remove('hidden');
+                                buttonLoading.classList.add('hidden');
+                                
+                                // Show error message
+                                alert('Failed to create payment session. Please try again.');
+                            });
+                        });
+                    </script>
                 @else
                     {{-- Fallback to billing page --}}
                     <a href="{{ $isBasecampUser ? route('basecamp.billing') : route('billing') }}" 

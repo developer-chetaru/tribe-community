@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\SubscriptionRecord;
+use App\Services\StripePaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -530,11 +531,14 @@ class BasecampBillingController extends Controller
 
             Stripe::setApiKey(config('services.stripe.secret'));
 
+            // Get enabled payment methods from Stripe API
+            $paymentMethods = StripePaymentService::getEnabledPaymentMethods();
+
             // Create payment intent
             $paymentIntent = PaymentIntent::create([
                 'amount' => (int)($invoice->total_amount * 100), // Convert to cents
                 'currency' => 'gbp',
-                'payment_method_types' => ['card'],
+                'payment_method_types' => $paymentMethods,
                 'metadata' => [
                     'invoice_id' => $invoice->id,
                     'user_id' => $user->id,

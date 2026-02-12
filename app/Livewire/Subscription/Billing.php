@@ -12,6 +12,7 @@ use App\Models\PaymentRecord;
 use App\Models\Organisation;
 use App\Services\SubscriptionService;
 use App\Services\Billing\StripeService;
+use App\Services\StripePaymentService;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
@@ -855,11 +856,14 @@ class Billing extends Component
             
             $user = \Illuminate\Support\Facades\Auth::user();
             
+            // Get enabled payment methods from Stripe API
+            $paymentMethods = StripePaymentService::getEnabledPaymentMethods();
+            
             // For basecamp users, handle differently
             if ($user->hasRole('basecamp')) {
                 // Create Checkout Session for basecamp user
                 $checkoutParams = [
-                    'payment_method_types' => ['card'],
+                    'payment_method_types' => $paymentMethods,
                     'line_items' => [[
                         'price_data' => [
                             'currency' => 'gbp',
@@ -949,7 +953,7 @@ class Billing extends Component
             // Create Checkout Session
             // Note: We can't use both 'customer' and 'customer_email' - use only 'customer' if customer exists
             $checkoutParams = [
-                'payment_method_types' => ['card'],
+                'payment_method_types' => $paymentMethods,
                 'line_items' => [[
                     'price_data' => [
                         'currency' => 'gbp',

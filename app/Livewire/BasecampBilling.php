@@ -9,6 +9,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Services\Billing\StripeService;
 use App\Services\OneSignalService;
+use App\Services\StripePaymentService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\DB;
@@ -286,9 +287,12 @@ class BasecampBilling extends Component
                 return null;
             }
             
+            // Get enabled payment methods from Stripe API
+            $paymentMethods = StripePaymentService::getEnabledPaymentMethods();
+            
             // Create Checkout Session
             $checkoutParams = [
-                'payment_method_types' => ['card'],
+                'payment_method_types' => $paymentMethods,
                 'line_items' => [[
                     'price_data' => [
                         'currency' => 'gbp',
@@ -353,12 +357,15 @@ class BasecampBilling extends Component
                 return;
             }
             
+            // Get enabled payment methods from Stripe API
+            $paymentMethods = StripePaymentService::getEnabledPaymentMethods();
+            
             // Create payment intent - use total_amount (includes VAT) from invoice
             $amountToCharge = $this->selectedInvoice->total_amount ?? ($this->monthlyPrice * 1.20); // Include VAT
             $paymentIntent = \Stripe\PaymentIntent::create([
                 'amount' => (int)($amountToCharge * 100), // Convert to cents
                 'currency' => 'gbp',
-                'payment_method_types' => ['card'],
+                'payment_method_types' => $paymentMethods,
                 'metadata' => [
                     'invoice_id' => $this->selectedInvoice->id,
                     'user_id' => $this->userId,

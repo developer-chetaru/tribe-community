@@ -7,6 +7,7 @@ use App\Models\SubscriptionRecord;
 use App\Models\PaymentRecord;
 use App\Models\Invoice;
 use App\Services\SubscriptionService;
+use App\Services\StripePaymentService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Stripe\Stripe;
@@ -233,12 +234,15 @@ class GracePeriodBanner extends Component
             // Create Stripe checkout session
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
             
+            // Get enabled payment methods from Stripe API
+            $paymentMethods = StripePaymentService::getEnabledPaymentMethods();
+            
             if ($this->isBasecamp) {
                 // Basecamp user - create checkout session
                 $monthlyPriceInCents = round($this->invoice->total_amount * 100);
                 
                 $session = \Stripe\Checkout\Session::create([
-                    'payment_method_types' => ['card'],
+                    'payment_method_types' => $paymentMethods,
                     'customer_email' => $user->email,
                     'line_items' => [[
                         'price_data' => [
@@ -283,7 +287,7 @@ class GracePeriodBanner extends Component
                 $customerEmail = $user->email ?? $organisation->admin_email ?? $organisation->users()->first()?->email;
                 
                 $checkoutParams = [
-                    'payment_method_types' => ['card'],
+                    'payment_method_types' => $paymentMethods,
                     'line_items' => [[
                         'price_data' => [
                             'currency' => 'gbp',

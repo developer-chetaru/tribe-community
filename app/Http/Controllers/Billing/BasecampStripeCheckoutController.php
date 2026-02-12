@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use Carbon\Carbon;
 use App\Services\OneSignalService;
+use App\Services\StripePaymentService;
 use Stripe\Stripe;
 use Stripe\Checkout\Session;
 
@@ -177,12 +178,15 @@ class BasecampStripeCheckoutController extends Controller
             // Set Stripe key
             Stripe::setApiKey(config('services.stripe.secret'));
             
+            // Get enabled payment methods from Stripe API
+            $paymentMethods = StripePaymentService::getEnabledPaymentMethods();
+            
             // Monthly price: £12.00 = 1200 pence
             $monthlyPriceInCents = round($invoice->total_amount * 100); // £12.00 = 1200 pence
             
             // Create checkout session with MONTHLY billing interval
             $session = Session::create([
-                'payment_method_types' => ['card'],
+                'payment_method_types' => $paymentMethods,
                 'customer_email' => $user->email,
                 'line_items' => [[
                     'price_data' => [

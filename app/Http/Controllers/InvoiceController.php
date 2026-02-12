@@ -8,6 +8,7 @@ use App\Models\Payment;
 use App\Models\PaymentRecord;
 use App\Services\Billing\StripeService;
 use App\Services\SubscriptionService;
+use App\Services\StripePaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -255,11 +256,14 @@ class InvoiceController extends Controller
                 }
             }
             
+            // Get enabled payment methods from Stripe API
+            $paymentMethods = StripePaymentService::getEnabledPaymentMethods();
+            
             // Create Checkout Session
             // For public payments, use customer_email to pre-fill email field
             // Don't use customer parameter when using customer_email (Stripe doesn't allow both)
             $checkoutParams = [
-                'payment_method_types' => ['card'],
+                'payment_method_types' => $paymentMethods,
                 'line_items' => [[
                     'price_data' => [
                         'currency' => 'gbp',
