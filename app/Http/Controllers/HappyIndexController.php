@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\HptmLearningChecklist;
 use App\Models\HptmLearningType;
 use App\Services\OneSignalService;
+use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -152,6 +153,28 @@ class HappyIndexController extends Controller
         $user->lastHIDate = $userDate; // Store date in user's timezone
         $user->updated_at = $userNow->utc();
         $user->save();
+        
+        // Log activity
+        try {
+            $moodLabels = [1 => 'Bad', 2 => 'Okay', 3 => 'Good'];
+            $moodLabel = $moodLabels[$moodValue] ?? 'Unknown';
+            
+            ActivityLogService::log(
+                'user',
+                'updated',
+                "User filled sentiment index: {$moodLabel} (Mood Value: {$moodValue})",
+                $user,
+                null,
+                [
+                    'sentiment_mood_value' => $moodValue,
+                    'sentiment_mood_label' => $moodLabel,
+                    'description' => $description,
+                    'ei_score' => $user->EIScore,
+                ]
+            );
+        } catch (\Exception $e) {
+            Log::warning('Failed to log sentiment fill activity: ' . $e->getMessage());
+        }
         
         Log::info('HappyIndex created with user timezone', [
             'user_id' => $userId,

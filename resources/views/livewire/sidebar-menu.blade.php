@@ -314,6 +314,20 @@
 
     <span x-show="$store.sidebar.open" x-transition class="text-sm">Send Notification</span>
 </a>
+    
+    <a href="{{ route('admin.activity-log') }}"
+   class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
+   :class="[
+       $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
+       window.location.pathname === '{{ route('admin.activity-log', [], false) }}' ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700'
+   ]">
+    
+    <svg class="h-5 w-5" :class="window.location.pathname === '{{ route('admin.activity-log', [], false) }}' ? 'text-red-600' : 'text-gray-700'" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+    </svg>
+
+    <span x-show="$store.sidebar.open" x-transition class="text-sm">Activity Log</span>
+</a>
      
   @endhasanyrole
 @hasanyrole('super_admin')

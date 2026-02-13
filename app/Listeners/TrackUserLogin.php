@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 use App\Services\OneSignalService;
 use App\Services\SubscriptionService;
 use App\Services\SessionManagementService;
+use App\Services\ActivityLogService;
 
 class TrackUserLogin
 {
@@ -29,6 +30,13 @@ class TrackUserLogin
             \Log::info("First login_at saved for user: " . $user->id);
         }
         $user->last_login_at = now();
+        
+        // Log activity
+        try {
+            ActivityLogService::logLogin($user);
+        } catch (\Exception $e) {
+            Log::warning('Failed to log login activity: ' . $e->getMessage());
+        }
         
         // COMMENTED OUT: Automatic timezone detection from IP
         // Timezone should be set from user profile instead
