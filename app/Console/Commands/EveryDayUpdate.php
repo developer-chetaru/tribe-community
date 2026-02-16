@@ -225,7 +225,26 @@ class EveryDayUpdate extends Command
               return in_array($today, $workingDays);
           }
 
-          // Basecamp users (no organisation): notify every day
+          // Basecamp users (no organisation): check user's working days
+          $dayFieldMap = [
+              'Mon' => 'working_monday',
+              'Tue' => 'working_tuesday',
+              'Wed' => 'working_wednesday',
+              'Thu' => 'working_thursday',
+              'Fri' => 'working_friday',
+              'Sat' => 'HI_include_saturday',
+              'Sun' => 'HI_include_sunday',
+          ];
+          
+          $dayField = $dayFieldMap[$today] ?? null;
+          if ($dayField) {
+              // Check if this day is a working day for the user
+              // Default: Monday-Friday = true, Saturday-Sunday = false
+              $isWorkingDay = $user->$dayField ?? ($today !== 'Sat' && $today !== 'Sun');
+              return (bool)$isWorkingDay;
+          }
+          
+          // Fallback: if day not found, default to true (working day)
           return true;
       });
 
@@ -723,6 +742,26 @@ protected function sendMonthlyEmail()
                     return in_array($todayShort, $workingDays);
                 }
 
+                // Basecamp users: check user's working days
+                $dayFieldMap = [
+                    'Mon' => 'working_monday',
+                    'Tue' => 'working_tuesday',
+                    'Wed' => 'working_wednesday',
+                    'Thu' => 'working_thursday',
+                    'Fri' => 'working_friday',
+                    'Sat' => 'HI_include_saturday',
+                    'Sun' => 'HI_include_sunday',
+                ];
+                
+                $dayField = $dayFieldMap[$todayShort] ?? null;
+                if ($dayField) {
+                    // Check if this day is a working day for the user
+                    // Default: Monday-Friday = true, Saturday-Sunday = false
+                    $isWorkingDay = $user->$dayField ?? ($todayShort !== 'Sat' && $todayShort !== 'Sun');
+                    return (bool)$isWorkingDay;
+                }
+                
+                // Fallback: if day not found, default to true (working day)
                 return true;
             });
 

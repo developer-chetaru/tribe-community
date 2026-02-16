@@ -564,8 +564,34 @@ class OneSignalService
                 $organisation = null;
             }
 
-            // Basecamp users: working every day
+            // Basecamp users: check user's working days
             if (!$organisation) {
+                // Get user's timezone safely
+                $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+                
+                // Get today's day name (Mon, Tue, Wed, etc.) in user's timezone
+                $todayName = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone)->format('D');
+                
+                // Map day names to user fields
+                $dayFieldMap = [
+                    'Mon' => 'working_monday',
+                    'Tue' => 'working_tuesday',
+                    'Wed' => 'working_wednesday',
+                    'Thu' => 'working_thursday',
+                    'Fri' => 'working_friday',
+                    'Sat' => 'HI_include_saturday',
+                    'Sun' => 'HI_include_sunday',
+                ];
+                
+                $dayField = $dayFieldMap[$todayName] ?? null;
+                if ($dayField) {
+                    // Check if this day is a working day for the user
+                    // Default: Monday-Friday = true, Saturday-Sunday = false
+                    $isWorkingDay = $user->$dayField ?? ($todayName !== 'Sat' && $todayName !== 'Sun');
+                    return (bool)$isWorkingDay;
+                }
+                
+                // Fallback: if day not found, default to true (working day)
                 return true;
             }
 
