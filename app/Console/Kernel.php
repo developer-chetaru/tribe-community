@@ -13,6 +13,7 @@ class Kernel extends ConsoleKernel
 {
     protected $commands = [
         \App\Console\Commands\GenerateAllWeeklySummaries::class,
+        \App\Console\Commands\GenerateWeeklySummariesForMonth::class,
         \App\Console\Commands\GenerateAllMonthlySummaries::class,
         \App\Console\Commands\ProcessMonthlyBilling::class,
         \App\Console\Commands\ProcessDailyBilling::class,

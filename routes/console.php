@@ -42,6 +42,36 @@ Schedule::command('notification:send --only=weeklySummary')
         ->hourly()
         ->withoutOverlapping();
 
+// Weekly summary for month - runs on weekends (Saturday and Sunday) to generate all missing weekly summaries
+// This ensures all weeks in the current month get summaries generated, not just the current week
+Schedule::call(function () {
+    $month = now()->month;
+    $year = now()->year;
+    \Illuminate\Support\Facades\Artisan::call('weekly:generate-for-month', [
+        '--month' => $month,
+        '--year' => $year,
+    ]);
+})
+        ->saturdays()
+        ->at('02:00')
+        ->timezone('UTC')
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/weekly_summary.log'));
+
+Schedule::call(function () {
+    $month = now()->month;
+    $year = now()->year;
+    \Illuminate\Support\Facades\Artisan::call('weekly:generate-for-month', [
+        '--month' => $month,
+        '--year' => $year,
+    ]);
+})
+        ->sundays()
+        ->at('02:00')
+        ->timezone('UTC')
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/weekly_summary.log'));
+
 // Update has_working_today tag for users at midnight (00:00) in their timezone
 Schedule::command('onesignal:update-working-day-status --time=00:00')
         ->hourly() // Changed from dailyAt to hourly for timezone-based filtering
