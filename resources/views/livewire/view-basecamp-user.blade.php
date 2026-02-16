@@ -196,57 +196,110 @@
                 <h4 class="text-lg font-semibold text-gray-800 mb-4">Engagement Details</h4>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {{-- Total Engagement Score --}}
-                    <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
-                        <div class="flex items-center justify-between mb-2">
+                    <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 border border-blue-200">
+                        <div class="flex items-center justify-between mb-1">
                             <span class="text-sm font-medium text-gray-700">Total Engagement</span>
-                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
                             </svg>
                         </div>
-                        <p class="text-2xl font-bold text-blue-900">{{ number_format($hptmData['engagement']['totalScore'] ?? 0, 2) }}</p>
-                        <p class="text-xs text-gray-600 mt-1">EI + HPTM Score</p>
+                        <p class="text-xl font-bold text-blue-900">{{ number_format($hptmData['engagement']['totalScore'] ?? 0, 2) }}</p>
+                        <p class="text-xs text-gray-600">EI + HPTM Score</p>
+                        <div class="mt-1.5 pt-1.5 border-t border-blue-200">
+                            <p class="text-xs text-gray-600 leading-tight">
+                                <strong>Formula:</strong> EI Score + HPTM Score<br>
+                                <span class="text-gray-500">
+                                    <span class="font-bold text-blue-700">{{ number_format($hptmData['engagement']['eiScore'] ?? 0, 2) }}</span> + 
+                                    <span class="font-bold text-purple-700">{{ number_format($hptmData['engagement']['hptmScore'] ?? 0, 2) }}</span> = 
+                                    <span class="font-bold text-blue-900 text-sm">{{ number_format($hptmData['engagement']['totalScore'] ?? 0, 2) }}</span>
+                                </span>
+                                <div class="mt-1 bg-blue-50 rounded p-1 text-xs">
+                                    <p class="mb-0 text-gray-600">
+                                        <strong>Example:</strong> <span class="font-bold text-blue-700">250</span> (EI) + <span class="font-bold text-purple-700">0</span> (HPTM) = <span class="font-bold text-blue-900">250</span>
+                                    </p>
+                                </div>
+                            </p>
+                        </div>
                     </div>
 
                     {{-- EI Score --}}
-                    <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
-                        <div class="flex items-center justify-between mb-2">
+                    <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 border border-green-200">
+                        <div class="flex items-center justify-between mb-1">
                             <span class="text-sm font-medium text-gray-700">EI Score</span>
-                            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
                         </div>
-                        <p class="text-2xl font-bold text-green-900">{{ number_format($hptmData['engagement']['eiScore'] ?? 0, 2) }}</p>
-                        <p class="text-xs text-gray-600 mt-1">Emotional Intelligence</p>
+                        <p class="text-xl font-bold text-green-900">{{ number_format($hptmData['engagement']['eiScore'] ?? 0, 2) }}</p>
+                        <p class="text-xs text-gray-600">Emotional Intelligence</p>
+                        <div class="mt-1.5 pt-1.5 border-t border-green-200">
+                            <p class="text-xs text-gray-600 leading-tight">
+                                <strong>How it works:</strong><br>
+                                <span class="text-gray-500">
+                                    +<span class="font-bold text-green-700 text-sm">250</span> points per sentiment submission<br>
+                                    Current: <span class="font-bold text-green-700">{{ number_format(($hptmData['engagement']['eiScore'] ?? 0) / 250, 0) }}</span> submission(s) = 
+                                    <span class="font-bold text-green-700">{{ number_format($hptmData['engagement']['eiScore'] ?? 0, 2) }}</span> points
+                                </span>
+                                <div class="mt-1 bg-green-50 rounded p-1 text-xs">
+                                    <p class="mb-0 text-gray-600">
+                                        <strong>Example:</strong> 1 submission × <span class="font-bold text-green-700">250</span> = <span class="font-bold text-green-700">250</span>
+                                    </p>
+                                </div>
+                            </p>
+                        </div>
                     </div>
 
                     {{-- HPTM Score --}}
-                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border border-purple-200">
-                        <div class="flex items-center justify-between mb-2">
+                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 border border-purple-200">
+                        <div class="flex items-center justify-between mb-1">
                             <span class="text-sm font-medium text-gray-700">HPTM Score</span>
-                            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
                             </svg>
                         </div>
-                        <p class="text-2xl font-bold text-purple-900">{{ number_format($hptmData['engagement']['hptmScore'] ?? 0, 2) }}</p>
-                        <p class="text-xs text-gray-600 mt-1">High Performance Team</p>
+                        <p class="text-xl font-bold text-purple-900">{{ number_format($hptmData['engagement']['hptmScore'] ?? 0, 2) }}</p>
+                        <p class="text-xs text-gray-600">High Performance Team</p>
+                        <div class="mt-1.5 pt-1.5 border-t border-purple-200">
+                            <p class="text-xs text-gray-600 leading-tight">
+                                <strong>Formula:</strong><br>
+                                <span class="text-gray-500">Raw Score = Learning Score + Evaluation Score<br>
+                                Current: {{ number_format($hptmData['totalRawScore'] ?? 0, 0) }} points</span>
+                            </p>
+                        </div>
                     </div>
 
                     {{-- Engagement Index (Basecamp Users Only) --}}
-                    <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-sm font-medium text-gray-700">Engagement Index</span>
-                            <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-2.5 border border-orange-200">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs font-medium text-gray-700">Engagement Index</span>
+                            <svg class="w-3.5 h-3.5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                             </svg>
                         </div>
-                        <p class="text-2xl font-bold text-orange-900">{{ number_format($hptmData['engagement']['engagementIndex'] ?? 0, 2) }}</p>
-                        <p class="text-xs text-gray-600 mt-1">Today's Activity</p>
-                        <div class="mt-2 text-xs text-gray-500">
-                            <p class="font-semibold mb-1">Available Components:</p>
-                            <ul class="list-disc list-inside space-y-0.5">
-                                <li>Happy Index (Sentiment): 0-200</li>
-                            </ul>
-                            <p class="text-xs text-gray-400 mt-2 italic">Note: Other components are not available for Basecamp users.</p>
+                        <p class="text-xl font-bold text-orange-900">{{ number_format($hptmData['engagement']['engagementIndex'] ?? 0, 2) }}</p>
+                        <p class="text-xs text-gray-600">Today's Activity</p>
+                        
+                        {{-- Detailed Breakdown --}}
+                        <div class="mt-1.5 pt-1.5 border-t border-orange-200">
+                            <p class="text-xs font-semibold text-gray-700 mb-0.5">Why {{ number_format($hptmData['engagement']['engagementIndex'] ?? 0, 2) }}?</p>
+                            <div class="text-xs text-gray-600 leading-tight">
+                                <p class="mb-0.5"><strong>Breakdown:</strong></p>
+                                <div class="bg-orange-50 rounded p-1.5 mt-1 mb-1">
+                                    <p class="mb-0.5"><strong>✅ Happy Index (Sentiment):</strong> <span class="text-green-700 font-bold">200</span></p>
+                                    <p class="text-gray-500 text-xs mb-0">You submitted sentiment today</p>
+                                </div>
+                                <div class="bg-gray-50 rounded p-1.5 mb-1">
+                                    <p class="mb-0"><strong>Dot Report:</strong> <span class="text-gray-400">0</span> <span class="text-xs text-gray-400">(Not available)</span></p>
+                                </div>
+                                <div class="bg-gray-50 rounded p-1.5 mb-1">
+                                    <p class="mb-0"><strong>Team Role:</strong> <span class="text-gray-400">0</span> <span class="text-xs text-gray-400">(Not available)</span></p>
+                                </div>
+                                <div class="bg-gray-50 rounded p-1.5 mb-1">
+                                    <p class="mb-0"><strong>Other Components:</strong> <span class="text-gray-400">0</span> <span class="text-xs text-gray-400">(Not available for Basecamp)</span></p>
+                                </div>
+                                <p class="mt-1 mb-0 font-semibold text-gray-700">Total: <span class="text-orange-700">{{ number_format($hptmData['engagement']['engagementIndex'] ?? 0, 2) }}</span></p>
+                                <p class="text-gray-500 italic mt-0.5 text-xs leading-tight">Note: Sentiment submission = 200 points (mood value doesn't affect score)</p>
+                            </div>
                         </div>
                     </div>
                 </div>

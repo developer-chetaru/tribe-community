@@ -3,7 +3,8 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
-use App\Helpers\CommonHelper; 
+use App\Helpers\CommonHelper;
+use Carbon\Carbon; 
 class EngagementReportService
 {
     public function individualUserEngageDotReport($perArray = [], $date = false)
@@ -372,18 +373,35 @@ class EngagementReportService
                 $happyIndexCount = ($moodCount / $noOfDays2);
             }
         } else {
+            // Get user's timezone to properly check date
+            $user = DB::table('users')->where('id', $userId)->first();
+            $userTimezone = $user && $user->timezone ? $user->timezone : 'Europe/London';
+            if (!in_array($userTimezone, timezone_identifiers_list())) {
+                $userTimezone = 'Europe/London';
+            }
 
             $moodCountQuery = DB::table('happy_indexes')
-                ->select('happy_indexes.id')
+                ->select('happy_indexes.id', 'happy_indexes.created_at')
                 ->leftjoin('users', 'users.id', 'happy_indexes.user_id')
                 ->where('happy_indexes.user_id', $userId)
-                ->where('users.status', 'Active')
+                ->whereIn('users.status', ['Active', 'active_verified', 'active_unverified'])
                 ->where('happy_indexes.status', 'Active');
-            if (! empty($date)) { //This is from engagement index cron
-                $moodCountQuery->whereDate('happy_indexes.created_at', $date);
+            
+            if (! empty($date)) {
+                // Convert date to UTC range for proper timezone comparison
+                // Use createFromFormat to ensure correct timezone handling
+                $targetDate = Carbon::createFromFormat('Y-m-d', $date, $userTimezone)->startOfDay();
+                $startUTC = $targetDate->copy()->utc();
+                $endUTC = $targetDate->copy()->endOfDay()->utc();
+                $moodCountQuery->whereBetween('happy_indexes.created_at', [$startUTC, $endUTC]);
             } else {
-                $moodCountQuery->whereDate('happy_indexes.created_at', Carbon::today());
+                // Use today in user's timezone
+                $todayInUserTz = Carbon::now($userTimezone)->startOfDay();
+                $startUTC = $todayInUserTz->copy()->utc();
+                $endUTC = $todayInUserTz->copy()->endOfDay()->utc();
+                $moodCountQuery->whereBetween('happy_indexes.created_at', [$startUTC, $endUTC]);
             }
+            
             if (! empty($orgId)) {
                 $moodCountQuery->where('users.orgId', $orgId);
             }
@@ -397,7 +415,7 @@ class EngagementReportService
                     ->select('happy_indexes.created_at')
                     ->leftjoin('users', 'users.id', 'happy_indexes.user_id')
                     ->where('happy_indexes.user_id', $userId)
-                    ->where('users.status', 'Active')
+                    ->whereIn('users.status', ['Active', 'active_verified', 'active_unverified'])
                     ->where('happy_indexes.status', 'Active');
                 if (! empty($date)) { //This is from engagement index cron
                     $query->whereDate('happy_indexes.created_at', '<=', $date);

@@ -49,14 +49,17 @@ class ViewBasecampUser extends Component
         // Total = EI Score + HPTM Score (no base value added)
         $totalEngagementScore = $eiScore + $hptmScore;
         
-        // Calculate engagement index for today
+        // Calculate engagement index for today (in user's timezone)
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($this->user);
+        $userTodayDate = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone)->toDateString();
+        
         $userDataArr = [
             'orgId' => $this->user->orgId,
             'userId' => $userId,
             'HI_include_saturday' => $this->user->HI_include_saturday ?? 0,
             'HI_include_sunday' => $this->user->HI_include_sunday ?? 0,
         ];
-        $engagementIndex = $engagementService->getUserEngagementIndexForLastDay($userDataArr, now()->toDateString());
+        $engagementIndex = $engagementService->getUserEngagementIndexForLastDay($userDataArr, $userTodayDate);
         
         $this->hptmData['engagement'] = [
             'totalScore' => $totalEngagementScore,
