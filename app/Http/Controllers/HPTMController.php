@@ -139,6 +139,14 @@ class HPTMController extends Controller
                 "organisationName"  => optional($user->organisation)->name,
                 "role"              => $roleName,
               	"created_at"        => $user->created_at ? $user->created_at->toIso8601String() : null,
+                // Working days (for Basecamp users only - users without orgId)
+                'working_monday'    => $user->orgId ? null : (bool)($user->working_monday ?? true),
+                'working_tuesday'   => $user->orgId ? null : (bool)($user->working_tuesday ?? true),
+                'working_wednesday' => $user->orgId ? null : (bool)($user->working_wednesday ?? true),
+                'working_thursday'  => $user->orgId ? null : (bool)($user->working_thursday ?? true),
+                'working_friday'    => $user->orgId ? null : (bool)($user->working_friday ?? true),
+                'HI_include_saturday' => $user->orgId ? null : (bool)($user->HI_include_saturday ?? false),
+                'HI_include_sunday'   => $user->orgId ? null : (bool)($user->HI_include_sunday ?? false),
             ];
 
             $resultArray['cotTeamRoleMap']    = '';
@@ -1240,7 +1248,7 @@ class HPTMController extends Controller
                 ], 401);
             }
 
-            // Validate input (added country_code)
+            // Validate input (added country_code and working days)
             $validated = $request->validate([
                 'first_name'   => 'sometimes|string|max:255',
                 'last_name'    => 'sometimes|string|max:255',
@@ -1248,6 +1256,14 @@ class HPTMController extends Controller
                 'country_code' => 'sometimes|string|min:1',
                 'timezone'     => ['sometimes', 'string', 'max:50', \Illuminate\Validation\Rule::in(timezone_identifiers_list())],
                 'profileImage' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+                // Working days (for Basecamp users only - users without orgId)
+                'working_monday'    => 'sometimes|boolean',
+                'working_tuesday'   => 'sometimes|boolean',
+                'working_wednesday' => 'sometimes|boolean',
+                'working_thursday'  => 'sometimes|boolean',
+                'working_friday'    => 'sometimes|boolean',
+                'HI_include_saturday' => 'sometimes|boolean',
+                'HI_include_sunday'   => 'sometimes|boolean',
             ]);
 
             if (isset($validated['first_name'])) {
@@ -1270,6 +1286,31 @@ class HPTMController extends Controller
                 $user->timezone = $validated['timezone'];
             }
 
+            // Update working days (only for Basecamp users - users without orgId)
+            if (!$user->orgId) {
+                if (isset($validated['working_monday'])) {
+                    $user->working_monday = $validated['working_monday'];
+                }
+                if (isset($validated['working_tuesday'])) {
+                    $user->working_tuesday = $validated['working_tuesday'];
+                }
+                if (isset($validated['working_wednesday'])) {
+                    $user->working_wednesday = $validated['working_wednesday'];
+                }
+                if (isset($validated['working_thursday'])) {
+                    $user->working_thursday = $validated['working_thursday'];
+                }
+                if (isset($validated['working_friday'])) {
+                    $user->working_friday = $validated['working_friday'];
+                }
+                if (isset($validated['HI_include_saturday'])) {
+                    $user->HI_include_saturday = $validated['HI_include_saturday'];
+                }
+                if (isset($validated['HI_include_sunday'])) {
+                    $user->HI_include_sunday = $validated['HI_include_sunday'];
+                }
+            }
+
             // Handle profile image upload
             if ($request->hasFile('profileImage')) {
                 $image = $request->file('profileImage');
@@ -1284,21 +1325,34 @@ class HPTMController extends Controller
 
             $user->save();
 
+            $responseData = [
+                'id'            => $user->id,
+                'first_name'    => $user->first_name,
+                'last_name'     => $user->last_name,
+                'email'         => $user->email,
+                'phone'         => $user->phone,
+                'country_code'  => $user->country_code,
+                'timezone'      => \App\Helpers\TimezoneHelper::getUserTimezone($user),
+                'profileImage'  => $user->profile_photo_path 
+                                        ? url('storage/' . $user->profile_photo_path) 
+                                        : null,
+            ];
+
+            // Add working days to response (only for Basecamp users)
+            if (!$user->orgId) {
+                $responseData['working_monday'] = (bool)($user->working_monday ?? true);
+                $responseData['working_tuesday'] = (bool)($user->working_tuesday ?? true);
+                $responseData['working_wednesday'] = (bool)($user->working_wednesday ?? true);
+                $responseData['working_thursday'] = (bool)($user->working_thursday ?? true);
+                $responseData['working_friday'] = (bool)($user->working_friday ?? true);
+                $responseData['HI_include_saturday'] = (bool)($user->HI_include_saturday ?? false);
+                $responseData['HI_include_sunday'] = (bool)($user->HI_include_sunday ?? false);
+            }
+
             return response()->json([
                 'status'  => true,
                 'message' => 'Profile updated successfully',
-                'data'    => [
-                    'id'            => $user->id,
-                    'first_name'    => $user->first_name,
-                    'last_name'     => $user->last_name,
-                    'email'         => $user->email,
-                    'phone'         => $user->phone,
-                    'country_code'  => $user->country_code,
-                    'timezone'      => \App\Helpers\TimezoneHelper::getUserTimezone($user),
-                    'profileImage'  => $user->profile_photo_path 
-                                        ? url('storage/' . $user->profile_photo_path) 
-                                        : null,
-                ],
+                'data'    => $responseData,
             ]);
 
         } catch (\Exception $e) {
