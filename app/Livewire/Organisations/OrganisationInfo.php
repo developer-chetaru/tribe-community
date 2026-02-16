@@ -4,6 +4,7 @@ namespace App\Livewire\Organisations;
 
 use Livewire\Component;
 use App\Models\Organisation;
+use App\Services\ActivityLogService;
 use Livewire\WithFileUploads;
 
 class OrganisationInfo extends Component
@@ -82,6 +83,19 @@ class OrganisationInfo extends Component
             $user = auth()->user();
             $user->orgId = $organisation->id;
             $user->save();
+
+            // Log activity
+            try {
+                ActivityLogService::logOrganisationCreated($organisation, [
+                    'name' => $organisation->name,
+                    'phone' => $organisation->phone,
+                    'industry' => $organisation->industry,
+                    'revenue' => $organisation->revenue,
+                    'founded_year' => $organisation->founded_year,
+                ]);
+            } catch (\Exception $e) {
+                \Log::warning('Failed to log organisation creation activity: ' . $e->getMessage());
+            }
 
             session()->flash('success', 'Organisation created successfully.');
 

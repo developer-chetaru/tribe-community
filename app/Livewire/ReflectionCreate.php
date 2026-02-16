@@ -5,6 +5,7 @@ namespace App\Livewire;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use App\Models\Reflection;
+use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\Auth;
 
 class ReflectionCreate extends Component
@@ -60,7 +61,7 @@ class ReflectionCreate extends Component
         //     $this->image->storeAs('public/hptm_files', $imageName);
         // }
 
-        Reflection::create([
+        $reflection = Reflection::create([
             'userId' => Auth::id(),
             'orgId' => Auth::user()->orgId,
             'topic' => $this->topic,
@@ -68,6 +69,24 @@ class ReflectionCreate extends Component
             // 'image' => $imageName,
             'status' => 'new',
         ]);
+
+        // Log activity
+        try {
+            ActivityLogService::log(
+                'reflection',
+                'created',
+                "Created reflection: {$this->topic}",
+                $reflection,
+                null,
+                [
+                    'topic' => $this->topic,
+                    'message' => substr($this->message, 0, 100), // First 100 chars
+                    'status' => 'new',
+                ]
+            );
+        } catch (\Exception $e) {
+            \Log::warning('Failed to log reflection creation activity: ' . $e->getMessage());
+        }
 
         $this->alertType = 'success';
         $this->alertMessage = 'Reflection created successfully!';

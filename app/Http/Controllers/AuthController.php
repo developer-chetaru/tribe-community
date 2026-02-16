@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Mail;
 use App\Services\OneSignalService;
 use App\Services\SessionManagementService;
+use App\Services\ActivityLogService;
 use App\Mail\VerifyUserEmail;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;

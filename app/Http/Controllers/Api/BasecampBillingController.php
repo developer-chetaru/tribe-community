@@ -758,6 +758,13 @@ class BasecampBillingController extends Controller
                     'user_id' => $user->id,
                 ]);
 
+                // Log activity
+                try {
+                    \App\Services\ActivityLogService::logPayment($payment, $invoice);
+                } catch (\Exception $e) {
+                    Log::warning('Failed to log payment activity: ' . $e->getMessage());
+                }
+
                 return $payment;
             });
 

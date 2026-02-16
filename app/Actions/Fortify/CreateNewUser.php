@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
 use App\Services\OneSignalService;
+use App\Services\ActivityLogService;
 use TijsVerkoyen\CssToInlineStyles\CssToInlineStyles;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -103,6 +104,18 @@ class CreateNewUser implements CreatesNewUsers
         // For basecamp users, don't send activation email yet
         // Email will be sent after payment is completed
         // For non-basecamp users, send email immediately (if needed in future)
+
+        // Log activity
+        try {
+            ActivityLogService::logUserCreated($user, [
+                'email' => $user->email,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'role' => 'basecamp',
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('Failed to log user creation activity: ' . $e->getMessage());
+        }
 
         return $user;
     }

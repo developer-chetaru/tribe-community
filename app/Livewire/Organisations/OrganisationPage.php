@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Password; 
 use App\Services\BrevoService;
+use App\Services\ActivityLogService;
 use Illuminate\Validation\Rule;
 use App\Services\OneSignalService;
 
@@ -263,6 +264,19 @@ public $otherIndustry;
             $org = \App\Models\Organisation::find($this->organisationId);
 
             if ($org) {
+                // Capture old values for logging
+                $oldValues = [
+                    'name' => $org->name,
+                    'phone' => $org->phone,
+                    'country_code' => $org->country_code,
+                    'turnover' => $org->turnover,
+                    'industry_id' => $org->industry_id,
+                    'working_days' => $org->working_days,
+                    'profile_visibility' => $org->profile_visibility,
+                    'url' => $org->url,
+                    'founded_year' => $org->founded_year,
+                ];
+
                 $org->update([
                     'name'               => $this->organisationName,
                     'phone'              => $this->phoneNumber,
@@ -275,6 +289,24 @@ public $otherIndustry;
                     'founded_year'       => $this->founded_year,
                     'image'              => $image ?? $org->image,
                 ]);
+
+                // Log activity
+                try {
+                    $newValues = [
+                        'name' => $org->name,
+                        'phone' => $org->phone,
+                        'country_code' => $org->country_code,
+                        'turnover' => $org->turnover,
+                        'industry_id' => $org->industry_id,
+                        'working_days' => $org->working_days,
+                        'profile_visibility' => $org->profile_visibility,
+                        'url' => $org->url,
+                        'founded_year' => $org->founded_year,
+                    ];
+                    ActivityLogService::logOrganisationUpdated($org, $oldValues, $newValues);
+                } catch (\Exception $e) {
+                    \Log::warning('Failed to log organisation update activity: ' . $e->getMessage());
+                }
             }
         } else {
             $org = \App\Models\Organisation::create([
@@ -292,6 +324,18 @@ public $otherIndustry;
             ]);
 
             $this->organisationId = $org->id;
+
+            // Log activity
+            try {
+                ActivityLogService::logOrganisationCreated($org, [
+                    'name' => $org->name,
+                    'phone' => $org->phone,
+                    'turnover' => $org->turnover,
+                    'industry_id' => $org->industry_id,
+                ]);
+            } catch (\Exception $e) {
+                \Log::warning('Failed to log organisation creation activity: ' . $e->getMessage());
+            }
         }
 
         $this->otherIndustry = null;

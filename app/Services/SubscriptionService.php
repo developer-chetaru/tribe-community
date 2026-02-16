@@ -6,6 +6,7 @@ use App\Models\SubscriptionRecord;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Organisation;
+use App\Services\ActivityLogService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -129,6 +130,13 @@ class SubscriptionService
         ]);
 
         Log::info("Invoice generated for subscription {$subscription->id}: {$invoice->invoice_number} - Users: {$actualUserCount}, Amount: {$totalAmount}");
+
+        // Log activity
+        try {
+            ActivityLogService::logInvoiceCreated($invoice);
+        } catch (\Exception $e) {
+            Log::warning('Failed to log invoice creation activity: ' . $e->getMessage());
+        }
 
         return $invoice;
     }

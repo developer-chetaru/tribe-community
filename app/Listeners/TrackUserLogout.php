@@ -4,6 +4,7 @@ namespace App\Listeners;
 
 use Illuminate\Auth\Events\Logout;
 use App\Services\OneSignalService;
+use App\Services\ActivityLogService;
 
 class TrackUserLogout
 {
@@ -58,5 +59,12 @@ class TrackUserLogout
 
         $saved = $user->save();
         \Log::info("Logout event triggered for user: {$user->id}, time_spent updated: {$seconds} sec, fcmToken cleared: " . ($fcmTokenCleared ? "yes" : "no") . ", save: " . ($saved ? "success" : "fail"));
+        
+        // Log activity
+        try {
+            ActivityLogService::logLogout($user);
+        } catch (\Exception $e) {
+            \Log::warning('Failed to log logout activity: ' . $e->getMessage());
+        }
     }
 }

@@ -9,6 +9,7 @@ use App\Models\Organisation;
 use App\Models\AllDepartment;
 use App\Models\Office;
 use App\Services\BrevoService;
+use App\Services\ActivityLogService;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Department;
 
@@ -90,6 +91,17 @@ public function mount($id)
     ]);
 
     $user = User::findOrFail($this->staffId);
+    
+    // Capture old values for logging
+    $oldValues = [
+        'first_name' => $user->first_name,
+        'last_name' => $user->last_name,
+        'email' => $user->email,
+        'phone' => $user->phone,
+        'country_code' => $user->country_code,
+        'officeId' => $user->officeId,
+        'departmentId' => $user->departmentId,
+    ];
 
     $department = Department::firstOrCreate(
         [
@@ -139,6 +151,22 @@ public function mount($id)
   
     $brevo = new BrevoService();
     $brevo->addContact($user->email, $user->first_name, $user->last_name);
+
+    // Log activity
+    try {
+        $newValues = [
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'country_code' => $user->country_code,
+            'officeId' => $user->officeId,
+            'departmentId' => $user->departmentId,
+        ];
+        ActivityLogService::logUserUpdated($user, $oldValues, $newValues);
+    } catch (\Exception $e) {
+        \Log::warning('Failed to log staff update activity: ' . $e->getMessage());
+    }
 
     session()->flash('success', 'Staff updated successfully');
 }

@@ -410,6 +410,28 @@ public function deselectAllUsers($ids)
                 'updated_at'   => now(),
             ]);
 
+            // Log activity
+            try {
+                $recipientCount = count($userIds ?? []);
+                \App\Services\ActivityLogService::log(
+                    'notification',
+                    'created',
+                    "Sent notification: {$this->title} to {$recipientCount} recipient(s)",
+                    null,
+                    null,
+                    [
+                        'notification_id' => $sendNotificationId,
+                        'title' => $this->title,
+                        'recipient_count' => $recipientCount,
+                        'organisation_id' => $orgId,
+                        'office_id' => $officeId,
+                        'department_id' => $departmentId,
+                    ]
+                );
+            } catch (\Exception $e) {
+                \Log::warning('Failed to log notification activity: ' . $e->getMessage());
+            }
+
             // ✅ Step 2: Extract clean user IDs
             $userIds = collect($this->selectStaff ?? [])
                 ->map(function ($item) {

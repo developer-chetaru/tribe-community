@@ -121,6 +121,22 @@ $user->notify(new CustomResetPasswordNotification($token, $organisation->name, $
             ]);
         }
 		
+        // Log activity
+        try {
+            ActivityLogService::logUserCreated($user, [
+                'email' => $user->email,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'organisation_id' => $organisation->id,
+                'organisation_name' => $organisation->name,
+                'department_id' => $departmentId,
+                'office_id' => $this->office,
+                'role' => 'organisation_user',
+            ]);
+        } catch (\Exception $e) {
+            \Log::warning('Failed to log staff creation activity: ' . $e->getMessage());
+        }
+		
         // reset form fields
         $this->reset(['first_name', 'last_name', 'email', 'department', 'office', 'phone','country_code']);
 
