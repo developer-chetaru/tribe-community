@@ -28,7 +28,7 @@
         <button wire:click="switchTab('active')"
             class="pb-4 text-[14px] sm:text-[20px] font-bold relative transition-all duration-300
             {{ $activeTab === 'active' ? 'text-[#EB1C24]' : 'text-gray-500 hover:text-gray-900' }}">
-            Verify Users
+            Verified Users
 
             @if ($activeTab === 'active')
                 <span class="absolute left-0 right-0 -bottom-[2px] h-1 bg-[#ff2323] rounded-full"></span>
@@ -39,7 +39,7 @@
         <button wire:click="switchTab('inactive')"
             class="pb-4 text-[14px] sm:text-[20px] font-bold relative transition-all duration-300
             {{ $activeTab === 'inactive' ? 'text-[#EB1C24]' : 'text-gray-500 hover:text-gray-900' }}">
-            Unverify Users
+            Unverified Users
 
             @if ($activeTab === 'inactive')
                 <span class="absolute left-0 right-0 -bottom-[2px] h-1 bg-[#EB1C24] rounded-full"></span>
@@ -110,17 +110,26 @@
                     <div class="flex gap-2 justify-center">
                         {{-- VIEW BUTTON --}}
                         <button type="button" 
-                                wire:click.prevent="viewUser({{ $user->id }})"
+                                wire:click="viewUser({{ $user->id }})"
                                 wire:loading.attr="disabled"
+                                wire:target="viewUser({{ $user->id }})"
                                 class="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium
                                         hover:bg-blue-600 transition duration-200 ease-in-out
                                         focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-                                        disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                        disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer relative"
                                 title="View User">
-                            <svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                            </svg>
+                            <span wire:loading.remove wire:target="viewUser({{ $user->id }})">
+                                <svg class="w-4 h-4 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                </svg>
+                            </span>
+                            <span wire:loading wire:target="viewUser({{ $user->id }})" class="inline-block">
+                                <svg class="animate-spin h-4 w-4 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                                </svg>
+                            </span>
                         </button>
 
                         {{-- EDIT BUTTON --}}
@@ -163,222 +172,6 @@
     <div class="mt-12 flex justify-center">
         {{ $users->links('components.pagination') }} 
     </div>
-
-    {{-- VIEW USER MODAL --}}
-    @if($showViewModal && $viewingUser)
-    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-         x-data="{ show: @entangle('showViewModal') }"
-         x-show="show"
-         x-cloak
-         x-transition:enter="ease-out duration-300"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="ease-in duration-200"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0">
-        <div class="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto"
-             x-show="show"
-             x-cloak
-             x-transition:enter="ease-out duration-300"
-             x-transition:enter-start="opacity-0 scale-95"
-             x-transition:enter-end="opacity-100 scale-100"
-             x-transition:leave="ease-in duration-200"
-             x-transition:leave-start="opacity-100 scale-100"
-             x-transition:leave-end="opacity-0 scale-95"
-             @click.away="$wire.closeViewModal()">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-2xl font-bold text-gray-900">User Details</h3>
-                <button type="button" 
-                        wire:click.prevent="closeViewModal"
-                        class="text-gray-400 hover:text-gray-600 transition cursor-pointer">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-            
-            <div class="space-y-4">
-                {{-- Profile Photo --}}
-                <div class="flex justify-center mb-6">
-                    <div class="w-32 h-32 rounded-full bg-red-50 flex items-center justify-center 
-                                 text-2xl font-bold text-[#ff2323] overflow-hidden shadow-md ring-4 ring-red-100">
-                        @if ($viewingUser->profile_photo_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($viewingUser->profile_photo_path))
-                            <img src="{{ asset('storage/' . $viewingUser->profile_photo_path) }}"
-                                 class="w-full h-full object-cover rounded-full"
-                                 alt="{{ $viewingUser->first_name }} {{ $viewingUser->last_name }}">
-                        @else
-                            @php
-                                $first = strtoupper(substr($viewingUser->first_name ?? '', 0, 1));
-                                $last  = strtoupper(substr($viewingUser->last_name ?? '', 0, 1));
-                            @endphp
-                            <span>{{ $first }}{{ $last }}</span>
-                        @endif
-                    </div>
-                </div>
-
-                {{-- User Information --}}
-                <div class="grid grid-cols-1 gap-4">
-                    <div>
-                        <label class="text-sm font-semibold text-gray-600">Name</label>
-                        <p class="text-gray-900 font-medium">{{ $viewingUser->first_name }} {{ $viewingUser->last_name }}</p>
-                    </div>
-                    <div>
-                        <label class="text-sm font-semibold text-gray-600">Email</label>
-                        <p class="text-gray-900">{{ $viewingUser->email }}</p>
-                    </div>
-                    @if($viewingUser->phone)
-                    <div>
-                        <label class="text-sm font-semibold text-gray-600">Phone</label>
-                        <p class="text-gray-900">{{ $viewingUser->country_code ?? '' }}{{ $viewingUser->phone }}</p>
-                    </div>
-                    @endif
-                    {{-- Account Status --}}
-                    <div>
-                        <label class="text-sm font-semibold text-gray-600">Account Status</label>
-                        <div class="mt-1">
-                            @php
-                                $accountStatus = $viewingUser->status;
-                                $accountStatusText = '';
-                                $accountStatusClass = '';
-                                
-                                // Determine account status
-                                if (in_array($accountStatus, ['active_verified', 'active_unverified', 'pending_payment', 'suspended', 'cancelled', 'inactive'])) {
-                                    switch($accountStatus) {
-                                        case 'active_verified':
-                                        case 'active_unverified':
-                                            $accountStatusText = 'Active ✓';
-                                            $accountStatusClass = 'bg-green-100 text-green-800 border border-green-300';
-                                            break;
-                                        case 'pending_payment':
-                                            $accountStatusText = 'Pending Payment 💳';
-                                            $accountStatusClass = 'bg-yellow-100 text-yellow-800 border border-yellow-300';
-                                            break;
-                                        case 'suspended':
-                                            $accountStatusText = 'Suspended 🚫';
-                                            $accountStatusClass = 'bg-red-100 text-red-800 border border-red-300';
-                                            break;
-                                        case 'cancelled':
-                                            $accountStatusText = 'Cancelled ❌';
-                                            $accountStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
-                                            break;
-                                        case 'inactive':
-                                            $accountStatusText = 'Inactive ⏸';
-                                            $accountStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
-                                            break;
-                                        default:
-                                            $accountStatusText = 'Unknown';
-                                            $accountStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
-                                    }
-                                } elseif ($accountStatus === true || $accountStatus === '1' || $accountStatus === 1) {
-                                    $accountStatusText = 'Active (Legacy) ✓';
-                                    $accountStatusClass = 'bg-blue-100 text-blue-800 border border-blue-300';
-                                } elseif ($accountStatus === false || $accountStatus === '0' || $accountStatus === 0 || $accountStatus === null) {
-                                    $accountStatusText = 'Inactive ⏸';
-                                    $accountStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
-                                } else {
-                                    $accountStatusText = 'Not Set';
-                                    $accountStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
-                                }
-                            @endphp
-                            <span class="px-3 py-1.5 rounded-full text-sm font-semibold {{ $accountStatusClass }} inline-block">
-                                {{ $accountStatusText }}
-                            </span>
-                        </div>
-                    </div>
-
-                    {{-- Email Verification Status --}}
-                    <div>
-                        <label class="text-sm font-semibold text-gray-600">Email Status</label>
-                        <div class="mt-1">
-                            @php
-                                $emailVerified = $viewingUser->email_verified_at !== null;
-                                $emailStatusText = $emailVerified ? 'Verified ✓' : 'Not Verified ⚠';
-                                $emailStatusClass = $emailVerified 
-                                    ? 'bg-green-100 text-green-800 border border-green-300' 
-                                    : 'bg-orange-100 text-orange-800 border border-orange-300';
-                            @endphp
-                            <span class="px-3 py-1.5 rounded-full text-sm font-semibold {{ $emailStatusClass }} inline-block">
-                                {{ $emailStatusText }}
-                            </span>
-                            @if($emailVerified && $viewingUser->email_verified_at)
-                                <p class="text-xs text-gray-500 mt-1">Verified on {{ $viewingUser->email_verified_at->format('M d, Y') }}</p>
-                            @else
-                                <p class="text-xs text-gray-500 mt-1">Email verification pending</p>
-                            @endif
-                        </div>
-                    </div>
-
-                    {{-- Payment/Subscription Status --}}
-                    <div>
-                        <label class="text-sm font-semibold text-gray-600">Payment Status</label>
-                        <div class="mt-1">
-                            @php
-                                $subscription = \App\Models\SubscriptionRecord::where('user_id', $viewingUser->id)
-                                    ->orderBy('created_at', 'desc')
-                                    ->first();
-                                
-                                if ($subscription) {
-                                    $paymentStatus = $subscription->status;
-                                    switch($paymentStatus) {
-                                        case 'active':
-                                            $paymentStatusText = 'Active ✓';
-                                            $paymentStatusClass = 'bg-green-100 text-green-800 border border-green-300';
-                                            $paymentDescription = 'Subscription is active';
-                                            if ($subscription->current_period_end) {
-                                                $paymentDescription .= ' until ' . $subscription->current_period_end->format('M d, Y');
-                                            }
-                                            break;
-                                        case 'past_due':
-                                            $paymentStatusText = 'Past Due ⚠';
-                                            $paymentStatusClass = 'bg-yellow-100 text-yellow-800 border border-yellow-300';
-                                            $paymentDescription = 'Payment is overdue';
-                                            break;
-                                        case 'suspended':
-                                            $paymentStatusText = 'Suspended 🚫';
-                                            $paymentStatusClass = 'bg-red-100 text-red-800 border border-red-300';
-                                            $paymentDescription = 'Subscription is suspended';
-                                            break;
-                                        case 'cancelled':
-                                            $paymentStatusText = 'Cancelled ❌';
-                                            $paymentStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
-                                            $paymentDescription = 'Subscription has been cancelled';
-                                            break;
-                                        default:
-                                            $paymentStatusText = ucfirst(str_replace('_', ' ', $paymentStatus));
-                                            $paymentStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
-                                            $paymentDescription = 'Subscription status: ' . $paymentStatus;
-                                    }
-                                } else {
-                                    $paymentStatusText = 'No Subscription';
-                                    $paymentStatusClass = 'bg-gray-100 text-gray-800 border border-gray-300';
-                                    $paymentDescription = 'No subscription record found';
-                                }
-                            @endphp
-                            <span class="px-3 py-1.5 rounded-full text-sm font-semibold {{ $paymentStatusClass }} inline-block">
-                                {{ $paymentStatusText }}
-                                </span>
-                            <p class="text-xs text-gray-500 mt-1">{{ $paymentDescription ?? '' }}</p>
-                        </div>
-                    </div>
-                    @if($viewingUser->created_at)
-                    <div>
-                        <label class="text-sm font-semibold text-gray-600">Joined</label>
-                        <p class="text-gray-900">{{ $viewingUser->created_at->format('M d, Y') }}</p>
-                    </div>
-                    @endif
-                </div>
-            </div>
-
-            <div class="mt-6 flex justify-end">
-                <button type="button" 
-                        wire:click.prevent="closeViewModal"
-                        class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition duration-200 cursor-pointer">
-                    Close
-                </button>
-            </div>
-        </div>
-    </div>
-    @endif
 
     {{-- DELETE CONFIRMATION MODAL --}}
     @if($showDeleteModal)

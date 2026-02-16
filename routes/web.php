@@ -371,6 +371,7 @@ Route::middleware([
         
         // Basecamp User Management
         Route::get('/basecampuser', BaseCampUser::class)->name('basecampuser');
+        Route::get('/basecampuser/view/{id}', \App\Livewire\ViewBasecampUser::class)->name('basecampuser.view');
         Route::get('/basecampuser/edit/{id}', UpdateBasecampUser::class)->name('basecampuser.edit');
         
         // Admin Notification Features

@@ -18,8 +18,6 @@ class BaseCampUser extends Component
     public $showDeleteModal = false;
     public $deleteUserId = null;
     public $deleteUserName = null;
-    public $showViewModal = false;
-    public $viewingUser = null;
 
     protected $paginationTheme = 'tailwind';
 
@@ -102,13 +100,7 @@ class BaseCampUser extends Component
 
     public function viewUser($userId)
     {
-        try {
-            $this->viewingUser = User::findOrFail($userId);
-            $this->showViewModal = true;
-        } catch (\Exception $e) {
-            session()->flash('message', 'User not found: ' . $e->getMessage());
-            session()->flash('type', 'error');
-        }
+        return redirect()->route('basecampuser.view', ['id' => $userId]);
     }
 
     public function closeViewModal()

@@ -20,6 +20,7 @@ class Userhptm extends Component
   	public $activePrincipleId;
     public $allSelectedByType = [];
     public $learningCheckListsFlat = [];
+    public $hptmScore = 0; // Real-time score property
 
 public function mount($activePrincipleId = null)
 {
@@ -195,9 +196,10 @@ public function mount($activePrincipleId = null)
                 ->get();
 
             $learningCheckListArr = [];
-            $allRead = true; // assume all are read initially
+            $allRead = true; // assume all are read initially (if no checklists, consider as read)
             $seenChecklists = []; // Track unique checklists to avoid duplicates
 
+            // Always add learning type to array, even if empty (so it shows on UI)
             foreach ($checklists as $check) {
                 // Create a unique key based on title, output, description, link, and document
                 // This prevents showing the same checklist multiple times
@@ -304,8 +306,10 @@ public function mount($activePrincipleId = null)
         }
         
         $principleArray['hptmScore'] = $calculatedScore;
+        $this->hptmScore = $calculatedScore; // Update real-time property
     } else {
         $principleArray['hptmScore'] = 0;
+        $this->hptmScore = 0;
     }
 
     $this->principleArray = $principleArray;
@@ -424,6 +428,10 @@ public function mount($activePrincipleId = null)
             ]);
             $user->refresh();
             $userScore = $user->hptmScore ?? 0;
+            
+            // Update real-time score property
+            $this->hptmScore = $userScore;
+            $this->principleArray['hptmScore'] = $userScore;
             
             // Dispatch score update
             $this->dispatch('score-updated', hptmScore: $userScore);
@@ -688,6 +696,10 @@ public function changeReadStatusOfUserChecklist($checklistId, $readStatus)
     // Get updated user score for display (only hptmScore, not including evaluation score)
     $user->refresh();
     $userScore = $user->hptmScore ?? 0;
+    
+    // Update real-time score property
+    $this->hptmScore = $userScore;
+    $this->principleArray['hptmScore'] = $userScore;
 
     // Refresh learning checklists for all affected principles (where related checklists exist)
     $affectedPrincipleIds = HptmLearningChecklist::whereIn('id', $relatedChecklists)

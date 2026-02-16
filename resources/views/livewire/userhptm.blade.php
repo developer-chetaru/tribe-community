@@ -16,11 +16,16 @@
 <div class="w-full bg-white rounded-md p-5">
     <div class="flex items-center mb-6 flex-wrap sm:flex-nowrap">
         <h2 class="text-[14px] sm:text-[24px] font-semibold text-[#EB1C24]">The {{ $principleArray['count'] ?? 5 }} HPTM Principles</h2>
-        <button class="ml-2 sm:ml-6 bg-[#FFEFF0] border border-[#FF9AA0] rounded-md flex items-center py-2 px-4 text-[#EB1C24] text-[13px] sm:text-[16px] " style="line-height: normal;"> 
-            HPTM <span class="text-black ml-2">
-    {{ $principleArray['hptmScore'] ?? 0 }}
-</span>
-
+        <button class="ml-2 sm:ml-6 bg-[#FFEFF0] border border-[#FF9AA0] rounded-md flex items-center py-2 px-4 text-[#EB1C24] text-[13px] sm:text-[16px] " style="line-height: normal;" wire:key="hptm-score-btn-{{ $hptmScore }}"> 
+            HPTM <span class="text-black ml-2" wire:key="score-display-{{ $hptmScore }}">
+                {{ $hptmScore }}
+            </span>
+            <span wire:loading wire:target="toggleChecklistStatus,toggleAllChecks" class="ml-2">
+                <svg class="animate-spin h-4 w-4 text-[#EB1C24]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                </svg>
+            </span>
         </button>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
