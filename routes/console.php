@@ -52,6 +52,7 @@ Schedule::call(function () {
         '--year' => $year,
     ]);
 })
+        ->name('weekly-summary-saturday')
         ->saturdays()
         ->at('02:00')
         ->timezone('UTC')
@@ -66,6 +67,7 @@ Schedule::call(function () {
         '--year' => $year,
     ]);
 })
+        ->name('weekly-summary-sunday')
         ->sundays()
         ->at('02:00')
         ->timezone('UTC')

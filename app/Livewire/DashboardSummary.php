@@ -305,7 +305,10 @@ class DashboardSummary extends Component
     {
         $reloadProperties = ['selectedOffice','selectedDepartment','month','year'];
         if (in_array($propertyName, $reloadProperties)) {
+            // Prevent scroll to top by using dispatch instead of direct loadData
             $this->loadData();
+            // Dispatch event to maintain scroll position
+            $this->dispatch('filter-updated', property: $propertyName);
         }
     }
 public function updatedSelectedDepartment($value)

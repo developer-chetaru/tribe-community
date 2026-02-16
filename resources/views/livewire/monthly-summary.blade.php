@@ -1,4 +1,4 @@
-<div class="flex flex-wrap border border-gray-100 rounded-md w-full">
+<div class="flex flex-wrap border border-gray-100 rounded-md w-full" wire:key="monthly-summary-{{ auth()->id() }}" wire:ignore.self>
     <div class="flex px-3 py-2 bg-white w-full min-h-[65px]">
         <h3 class="text-lg sm:text-2xl text-[#EB1C24] font-bold mb-1 sm:mb-0 flex items-center gap-2">Monthly Summary</h3>
     </div>

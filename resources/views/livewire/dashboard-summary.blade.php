@@ -1,5 +1,26 @@
 <div>
 <script>
+    // Maintain scroll position when filters change
+    document.addEventListener('livewire:init', () => {
+        let scrollPosition = 0;
+        
+        // Save scroll position before Livewire updates
+        Livewire.hook('morph.updating', ({ component, cleanup }) => {
+            scrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+        });
+        
+        // Restore scroll position after Livewire updates
+        Livewire.hook('morph.updated', ({ component }) => {
+            // Use setTimeout to ensure DOM is fully updated
+            setTimeout(() => {
+                window.scrollTo({
+                    top: scrollPosition,
+                    behavior: 'instant' // Use 'instant' instead of 'auto' to prevent smooth scroll
+                });
+            }, 10);
+        });
+    });
+    
     // Listen for HappyIndex debug events
     document.addEventListener('livewire:init', () => {
         Livewire.on('happyindex-debug', (data) => {
@@ -245,7 +266,7 @@
         @endhasanyrole
 
         <!-- Month -->
-        <select wire:model.live="month" class="border border-gray-100 rounded-sm py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#808080] focus:ring-red-500 focus:border-red-500">
+        <select wire:model.live="month" wire:loading.class="opacity-50" class="border border-gray-100 rounded-sm py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#808080] focus:ring-red-500 focus:border-red-500">
             @php
                 $currentYear = now()->year;
                 $currentMonth = now()->month;
@@ -263,7 +284,7 @@
 
 
         <!-- Year -->
-        <select wire:model.live="year" class="border border-gray-100 rounded-sm py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#808080] focus:ring-red-500 focus:border-red-500">
+        <select wire:model.live="year" wire:loading.class="opacity-50" class="border border-gray-100 rounded-sm py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#808080] focus:ring-red-500 focus:border-red-500">
             @foreach($orgYearList ?? [] as $y)
                 <option value="{{ $y }}" {{ $y == ($this->year ?? date('Y')) ? 'selected' : '' }}>{{ $y }}</option>
             @endforeach

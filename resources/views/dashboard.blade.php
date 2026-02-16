@@ -295,11 +295,172 @@
                 </button>
             </div> -->
         </div>
-        @livewire('dashboard-summary')
-        <div class="grid items-start grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-            @livewire('weekly-summary')
-            @livewire('monthly-summary')
+        <div id="dashboard-summary-container">
+            @livewire('dashboard-summary')
         </div>
+        <div class="grid items-start grid-cols-1 md:grid-cols-2 gap-3 mt-3" id="summary-sections-container" data-livewire-ignore>
+            <div id="weekly-summary-wrapper" data-livewire-ignore>
+                @livewire('weekly-summary')
+            </div>
+            <div id="monthly-summary-wrapper" data-livewire-ignore>
+                @livewire('monthly-summary')
+            </div>
+        </div>
+        
+        <script>
+            // Prevent page scroll to top and component hiding when filters change
+            (function() {
+                let savedScrollPosition = 0;
+                let isFilterUpdate = false;
+                
+                // Function to ensure summary components remain visible
+                const ensureComponentsVisible = () => {
+                    const summaryContainer = document.getElementById('summary-sections-container');
+                    const weeklyWrapper = document.getElementById('weekly-summary-wrapper');
+                    const monthlyWrapper = document.getElementById('monthly-summary-wrapper');
+                    
+                    if (summaryContainer) {
+                        summaryContainer.style.display = 'grid';
+                        summaryContainer.style.visibility = 'visible';
+                        summaryContainer.style.opacity = '1';
+                        summaryContainer.style.height = 'auto';
+                    }
+                    if (weeklyWrapper) {
+                        weeklyWrapper.style.display = 'block';
+                        weeklyWrapper.style.visibility = 'visible';
+                        weeklyWrapper.style.height = 'auto';
+                    }
+                    if (monthlyWrapper) {
+                        monthlyWrapper.style.display = 'block';
+                        monthlyWrapper.style.visibility = 'visible';
+                        monthlyWrapper.style.height = 'auto';
+                    }
+                };
+                
+                // Mark elements to be ignored by Livewire
+                const markElementsAsIgnored = () => {
+                    const summaryContainer = document.getElementById('summary-sections-container');
+                    const weeklyWrapper = document.getElementById('weekly-summary-wrapper');
+                    const monthlyWrapper = document.getElementById('monthly-summary-wrapper');
+                    
+                    [summaryContainer, weeklyWrapper, monthlyWrapper].forEach(el => {
+                        if (el) {
+                            el.setAttribute('wire:ignore', '');
+                            el.__livewire_ignore = true;
+                            el.__livewire_replace = false;
+                        }
+                    });
+                };
+                
+                // Initialize on DOM ready
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', () => {
+                        markElementsAsIgnored();
+                        ensureComponentsVisible();
+                    });
+                } else {
+                    markElementsAsIgnored();
+                    ensureComponentsVisible();
+                }
+                
+                // Livewire hooks
+                document.addEventListener('livewire:init', () => {
+                    markElementsAsIgnored();
+                    ensureComponentsVisible();
+                    
+                    // Save scroll position before any Livewire update
+                    Livewire.hook('morph.updating', ({ component, el, skip }) => {
+                        savedScrollPosition = window.pageYOffset || document.documentElement.scrollTop;
+                        
+                        // Check if this is a filter update from dashboard-summary
+                        const componentName = component?.__instance?.name || component?.name || '';
+                        const wireId = el?.closest('[wire\\:id]')?.getAttribute('wire:id') || '';
+                        isFilterUpdate = componentName === 'dashboard-summary' || wireId.includes('dashboard-summary');
+                        
+                        // Skip morphing if trying to update summary sections
+                        const summaryContainer = document.getElementById('summary-sections-container');
+                        if (summaryContainer && (el === summaryContainer || el.closest('#summary-sections-container'))) {
+                            skip();
+                            return;
+                        }
+                        
+                        // Ensure summary components remain visible before update
+                        if (isFilterUpdate) {
+                            markElementsAsIgnored();
+                            ensureComponentsVisible();
+                        }
+                    });
+                    
+                    // Restore scroll position and ensure components are visible after update
+                    Livewire.hook('morph.updated', ({ component, el }) => {
+                        // Always ensure summary components are visible after any update
+                        markElementsAsIgnored();
+                        ensureComponentsVisible();
+                        
+                        if (isFilterUpdate && savedScrollPosition > 0) {
+                            // Use multiple attempts to ensure scroll position is restored
+                            requestAnimationFrame(() => {
+                                window.scrollTo({
+                                    top: savedScrollPosition,
+                                    behavior: 'instant'
+                                });
+                                
+                                // Double-check after a short delay
+                                setTimeout(() => {
+                                    const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+                                    if (Math.abs(currentScroll - savedScrollPosition) > 10) {
+                                        window.scrollTo({
+                                            top: savedScrollPosition,
+                                            behavior: 'instant'
+                                        });
+                                    }
+                                    
+                                    // Final check for component visibility
+                                    markElementsAsIgnored();
+                                    ensureComponentsVisible();
+                                }, 100);
+                            });
+                        }
+                        isFilterUpdate = false;
+                    });
+                    
+                    // Listen for filter updates from DashboardSummary
+                    Livewire.on('filter-updated', () => {
+                        // Ensure components are visible
+                        markElementsAsIgnored();
+                        ensureComponentsVisible();
+                        
+                        // Ensure scroll position is maintained
+                        setTimeout(() => {
+                            const currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+                            if (currentScroll === 0 && savedScrollPosition > 0) {
+                                window.scrollTo({
+                                    top: savedScrollPosition,
+                                    behavior: 'instant'
+                                });
+                            }
+                            markElementsAsIgnored();
+                            ensureComponentsVisible();
+                        }, 50);
+                    });
+                });
+                
+                // Watch for any DOM changes and re-apply protection
+                const observer = new MutationObserver(() => {
+                    markElementsAsIgnored();
+                    ensureComponentsVisible();
+                });
+                
+                if (document.body) {
+                    observer.observe(document.body, {
+                        childList: true,
+                        subtree: true,
+                        attributes: true,
+                        attributeFilter: ['style', 'class']
+                    });
+                }
+            })();
+        </script>
     </div>
 @endif
 </x-app-layout>
