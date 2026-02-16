@@ -32,6 +32,20 @@ class UpdateProfileInformationForm extends BaseUpdateProfileInformationForm
         } else {
             $this->state['country_code'] = $userCountryCode ?? '+44';
         }
+        
+        // Add working days to state for basecamp users (users without orgId) - default: Monday-Friday = true, Saturday-Sunday = false
+        $user = Auth::user();
+        if (!$user->orgId) {
+            // Set defaults: Monday-Friday = true, Saturday-Sunday = false
+            // Only use user's existing values if they're explicitly set (not null)
+            $this->state['working_monday'] = ($user->working_monday !== null) ? (bool)$user->working_monday : true;
+            $this->state['working_tuesday'] = ($user->working_tuesday !== null) ? (bool)$user->working_tuesday : true;
+            $this->state['working_wednesday'] = ($user->working_wednesday !== null) ? (bool)$user->working_wednesday : true;
+            $this->state['working_thursday'] = ($user->working_thursday !== null) ? (bool)$user->working_thursday : true;
+            $this->state['working_friday'] = ($user->working_friday !== null) ? (bool)$user->working_friday : true;
+            $this->state['HI_include_saturday'] = ($user->HI_include_saturday !== null) ? (bool)$user->HI_include_saturday : false;
+            $this->state['HI_include_sunday'] = ($user->HI_include_sunday !== null) ? (bool)$user->HI_include_sunday : false;
+        }
     }
 
     /**

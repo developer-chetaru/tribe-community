@@ -837,9 +837,6 @@
       </div>
 @endif
 
-
-        
-
     </x-slot>
 
     <x-slot name="actions">

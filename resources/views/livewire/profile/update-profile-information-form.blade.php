@@ -829,8 +829,66 @@
       </div>
 @endif
 
-
-        
+        {{-- Working Days Selection (Basecamp Users Only - Users without orgId) --}}
+        @php
+            $userOrgId = $this->user->orgId ?? null;
+            $showWorkingDays = ($userOrgId === null || $userOrgId === '' || $userOrgId === 0);
+        @endphp
+        @if($showWorkingDays)
+        <div class="col-span-6 sm:col-span-6 mt-6">
+            <label class="block text-sm font-bold text-gray-900 mb-3">Working Days</label>
+            <div class="flex flex-wrap gap-2">
+                {{-- Monday --}}
+                <button type="button"
+                        wire:click="$set('state.working_monday', {{ !($this->state['working_monday'] ?? false) ? 'true' : 'false' }})"
+                        class="px-4 py-2 rounded-md text-sm font-medium transition-colors {{ ($this->state['working_monday'] ?? false) ? 'bg-red-600 text-white' : 'bg-white text-gray-900 border border-gray-300 hover:bg-gray-50' }}">
+                    Mon
+                </button>
+                
+                {{-- Tuesday --}}
+                <button type="button"
+                        wire:click="$set('state.working_tuesday', {{ !($this->state['working_tuesday'] ?? false) ? 'true' : 'false' }})"
+                        class="px-4 py-2 rounded-md text-sm font-medium transition-colors {{ ($this->state['working_tuesday'] ?? false) ? 'bg-red-600 text-white' : 'bg-white text-gray-900 border border-gray-300 hover:bg-gray-50' }}">
+                    Tue
+                </button>
+                
+                {{-- Wednesday --}}
+                <button type="button"
+                        wire:click="$set('state.working_wednesday', {{ !($this->state['working_wednesday'] ?? false) ? 'true' : 'false' }})"
+                        class="px-4 py-2 rounded-md text-sm font-medium transition-colors {{ ($this->state['working_wednesday'] ?? false) ? 'bg-red-600 text-white' : 'bg-white text-gray-900 border border-gray-300 hover:bg-gray-50' }}">
+                    Wed
+                </button>
+                
+                {{-- Thursday --}}
+                <button type="button"
+                        wire:click="$set('state.working_thursday', {{ !($this->state['working_thursday'] ?? false) ? 'true' : 'false' }})"
+                        class="px-4 py-2 rounded-md text-sm font-medium transition-colors {{ ($this->state['working_thursday'] ?? false) ? 'bg-red-600 text-white' : 'bg-white text-gray-900 border border-gray-300 hover:bg-gray-50' }}">
+                    Thu
+                </button>
+                
+                {{-- Friday --}}
+                <button type="button"
+                        wire:click="$set('state.working_friday', {{ !($this->state['working_friday'] ?? false) ? 'true' : 'false' }})"
+                        class="px-4 py-2 rounded-md text-sm font-medium transition-colors {{ ($this->state['working_friday'] ?? false) ? 'bg-red-600 text-white' : 'bg-white text-gray-900 border border-gray-300 hover:bg-gray-50' }}">
+                    Fri
+                </button>
+                
+                {{-- Saturday --}}
+                <button type="button"
+                        wire:click="$set('state.HI_include_saturday', {{ !($this->state['HI_include_saturday'] ?? false) ? 'true' : 'false' }})"
+                        class="px-4 py-2 rounded-md text-sm font-medium transition-colors {{ ($this->state['HI_include_saturday'] ?? false) ? 'bg-red-600 text-white' : 'bg-white text-gray-900 border border-gray-300 hover:bg-gray-50' }}">
+                    Sat
+                </button>
+                
+                {{-- Sunday --}}
+                <button type="button"
+                        wire:click="$set('state.HI_include_sunday', {{ !($this->state['HI_include_sunday'] ?? false) ? 'true' : 'false' }})"
+                        class="px-4 py-2 rounded-md text-sm font-medium transition-colors {{ ($this->state['HI_include_sunday'] ?? false) ? 'bg-red-600 text-white' : 'bg-white text-gray-900 border border-gray-300 hover:bg-gray-50' }}">
+                    Sun
+                </button>
+            </div>
+        </div>
+        @endif
 
     </x-slot>
 

@@ -18,7 +18,7 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
      */
     public function update(User $user, array $input): void
     {
-        Validator::make($input, [
+        $rules = [
             'first_name' => ['required', 'string', 'max:255'],
             'last_name'  => ['required', 'string', 'max:255'],
             'email'      => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
@@ -26,7 +26,20 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
             'phone'      => ['nullable', 'string', 'max:20'],
             'timezone'   => ['nullable', 'string', 'max:50', Rule::in(timezone_identifiers_list())],
             'photo'      => ['nullable', 'mimes:jpg,jpeg,png', 'max:1024'],
-        ])->validateWithBag('updateProfileInformation');
+        ];
+        
+        // Add working days validation for basecamp users (users without orgId)
+        if (!$user->orgId) {
+            $rules['working_monday'] = ['nullable', 'boolean'];
+            $rules['working_tuesday'] = ['nullable', 'boolean'];
+            $rules['working_wednesday'] = ['nullable', 'boolean'];
+            $rules['working_thursday'] = ['nullable', 'boolean'];
+            $rules['working_friday'] = ['nullable', 'boolean'];
+            $rules['HI_include_saturday'] = ['nullable', 'boolean'];
+            $rules['HI_include_sunday'] = ['nullable', 'boolean'];
+        }
+        
+        Validator::make($input, $rules)->validateWithBag('updateProfileInformation');
 
         // Handle profile photo upload
         if (isset($input['photo'])) {
@@ -39,14 +52,27 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
             $this->updateVerifiedUser($user, $input);
         } else {
             // Update basic info
-            $user->forceFill([
+            $updateData = [
                 'first_name' => $input['first_name'],
                 'last_name'  => $input['last_name'],
                 'email'      => $input['email'],
               	'country_code' => $input['country_code'] ?? '+44',
                 'phone'      => $input['phone'] ?? null,
                 'timezone'   => $input['timezone'] ?? null,
-            ])->save();
+            ];
+            
+            // Add working days for basecamp users (users without orgId)
+            if (!$user->orgId) {
+                $updateData['working_monday'] = $input['working_monday'] ?? true;
+                $updateData['working_tuesday'] = $input['working_tuesday'] ?? true;
+                $updateData['working_wednesday'] = $input['working_wednesday'] ?? true;
+                $updateData['working_thursday'] = $input['working_thursday'] ?? true;
+                $updateData['working_friday'] = $input['working_friday'] ?? true;
+                $updateData['HI_include_saturday'] = $input['HI_include_saturday'] ?? false;
+                $updateData['HI_include_sunday'] = $input['HI_include_sunday'] ?? false;
+            }
+            
+            $user->forceFill($updateData)->save();
         }
         
         // Update OneSignal tags after profile update (especially for timezone)
