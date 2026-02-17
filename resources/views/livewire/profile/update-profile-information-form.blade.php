@@ -19,7 +19,7 @@
         {{-- Profile Photo Upload --}}
         @if (Laravel\Jetstream\Jetstream::managesProfilePhotos())
         <div class="flex justify-center mb-6 col-span-6 sm:col-span-6">
-          <div x-data="{ photoPreview: null }" class="relative">
+          <div x-data="{ photoPreview: null, photoError: null }" class="relative">
 
             {{-- Current Profile Photo / New Preview --}}
             <template x-if="photoPreview">
@@ -63,21 +63,108 @@
                 @endif
             </div>
 
-            {{-- File Input --}}
-            <input id="photo" type="file" class="hidden" wire:model="photo"
+            {{-- File Input (NO wire:model - we'll handle upload manually after validation) --}}
+            <input id="photo" type="file" class="hidden" accept="image/jpeg,image/jpg,image/png,.jpg,.jpeg,.png"
                    x-on:change="
-                                const file = $event.target.files[0];
-                                if (file) {
-                                const reader = new FileReader();
-                                reader.onload = (e) => { photoPreview = e.target.result; };
-                                reader.readAsDataURL(file);
+                                const fileInput = $event.target;
+                                const file = fileInput.files[0];
+                                
+                                // Clear previous error
+                                photoError = null;
+                                
+                                if (!file) {
+                                    return;
                                 }
+                                
+                                // Get file extension immediately - validate FIRST (SYNCHRONOUSLY)
+                                const fileName = file.name.toLowerCase();
+                                const fileExtension = fileName.split('.').pop();
+                                
+                                // List of invalid extensions - check FIRST before anything else
+                                const invalidExtensions = ['zip', 'rar', '7z', 'tar', 'gz', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'sql', 'deb', 'html', 'txt', 'csv', 'xml', 'json', 'exe', 'dmg', 'pkg', 'msi'];
+                                
+                                // IMMEDIATE validation - prevent invalid files (BEFORE any upload)
+                                if (invalidExtensions.includes(fileExtension)) {
+                                    // Set error immediately
+                                    photoError = '❌ Invalid file type! Please select only image files (JPG, JPEG, or PNG). Zip files and other file types are not allowed.';
+                                    fileInput.value = '';
+                                    photoPreview = null;
+                                    // Clear Livewire immediately
+                                    $wire.set('photo', null);
+                                    // Stop here - don't proceed
+                                    return false;
+                                }
+                                
+                                // Validate file type and extension
+                                const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+                                const allowedExtensions = ['jpg', 'jpeg', 'png'];
+                                
+                                const isValidType = allowedTypes.includes(file.type);
+                                const isValidExtension = allowedExtensions.includes(fileExtension);
+                                
+                                if (!isValidType && !isValidExtension) {
+                                    // Set error immediately
+                                    photoError = '❌ Invalid file type! Please select only image files (JPG, JPEG, or PNG).';
+                                    fileInput.value = '';
+                                    photoPreview = null;
+                                    // Clear Livewire immediately
+                                    $wire.set('photo', null);
+                                    // Stop here - don't proceed
+                                    return false;
+                                }
+                                
+                                // File is valid - clear any previous errors
+                                photoError = null;
+                                
+                                // Only upload to Livewire if validation passes
+                                $wire.upload('photo', file, (uploadedFilename) => {
+                                    // Success - file uploaded to Livewire
+                                    photoError = null;
+                                }, (error) => {
+                                    // Error during upload
+                                    photoError = '❌ Error uploading file. Please try again.';
+                                    fileInput.value = '';
+                                    photoPreview = null;
+                                }, (event) => {
+                                    // Upload progress (optional)
+                                });
+                                
+                                // Show preview only if valid
+                                const reader = new FileReader();
+                                reader.onload = (e) => { 
+                                    photoPreview = e.target.result;
+                                };
+                                reader.onerror = () => {
+                                    photoError = '❌ Error reading file! Please select a valid image file.';
+                                    fileInput.value = '';
+                                    photoPreview = null;
+                                    $wire.set('photo', null);
+                                };
+                                reader.readAsDataURL(file);
                                 ">
+
+            {{-- Immediate Validation Error - Show immediately when file is selected --}}
+            <template x-if="photoError !== null && photoError !== ''">
+              <div x-transition:enter="transition ease-out duration-200"
+                   x-transition:enter-start="opacity-0 transform scale-95"
+                   x-transition:enter-end="opacity-100 transform scale-100"
+                   class="mt-3 mb-2">
+                <div class="bg-red-50 border-2 border-red-300 rounded-md p-3 text-center shadow-sm">
+                  <span class="text-red-700 text-sm font-semibold block" x-text="photoError"></span>
+                </div>
+              </div>
+            </template>
 
           </div>
 
-          {{-- Error --}}
-          @error('photo') <span class="text-red-600 text-sm mt-1">{{ $message }}</span> @enderror
+          {{-- Livewire Backend Error (fallback) --}}
+          @error('photo') 
+            <div class="mt-3 mb-2">
+              <div class="bg-red-50 border border-red-200 rounded-md p-3 text-center">
+                <span class="text-red-700 text-sm font-semibold">{{ $message }}</span>
+              </div>
+            </div>
+          @enderror
         </div>
         @endif
 
