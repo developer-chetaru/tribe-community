@@ -68,7 +68,7 @@
                             <template x-for="option in ['all','this_week','last_7_days','previous_week','this_month','previous_month','custom']" :key="option">
                                 <label :class="type === option ? 'bg-red-50 border border-red-100' : 'hover:bg-gray-50'" class="flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-colors duration-200 group">
                                     <input type="radio" :value="option" class="w-4 h-4 text-[#EB1C24] focus:ring-[#EB1C24] focus:ring-2 border-gray-300" x-model="type">
-                                    <span :class="type === option ? 'text-[#EB1C24] font-semibold' : 'text-sm font-medium text-gray-700 group-hover:text-gray-900'" class="flex-1" x-text="option.replace('_',' ').replace(/\b\w/g, l => l.toUpperCase())"></span>
+                                    <span :class="type === option ? 'text-[#EB1C24] font-semibold' : 'text-sm font-medium text-gray-700 group-hover:text-gray-900'" class="flex-1" x-text="option.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())"></span>
                                     <span x-show="type === option" class="ml-auto text-[#EB1C24]">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
