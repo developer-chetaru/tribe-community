@@ -164,7 +164,7 @@
         <img :src="mood.src"
              class="w-12 h-12 mb-2 cursor-pointer"
              alt=""
-             @click="selectedImage = mood.src; selectedText = mood.text; showDatePicker = false; $wire.moodStatus = mood.value; $wire.set('moodStatus', mood.value); open = true;">
+             @click="selectedImage = mood.src; selectedText = mood.text; showDatePicker = false; $wire.set('moodStatus', mood.value); $wire.moodStatus = mood.value; setTimeout(() => { open = true; }, 100);">
     </span>
 </template>
   </div>
@@ -177,7 +177,7 @@
 @endif
     <div x-show="open" x-cloak x-transition.opacity class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
         <div class="bg-white rounded-lg p-6 w-80 relative" style="margin: 0 auto;">
-            <button @click="open = false" class="absolute top-2 right-2 text-gray-500">&times;</button>
+            <button @click="open = false; selectedImage = ''; selectedText = ''; $wire.moodStatus = null; $wire.moodNote = null;" class="absolute top-2 right-2 text-gray-500">&times;</button>
 <template x-if="showDatePicker">
   <div>
     <p class="text-red-500 mb-4 text-center">Please select the dates you aim to be back at work</p>
@@ -209,17 +209,32 @@
       <template x-if="!showDatePicker">
         <div>
             <div class="flex justify-center mb-4">
-                <img :src="selectedImage" class="w-20 h-20" alt="selected mood">
+                <template x-if="selectedImage && selectedImage !== 'undefined'">
+                    <img :src="selectedImage" class="w-20 h-20" alt="selected mood">
+                </template>
+                <template x-if="!selectedImage || selectedImage === 'undefined'">
+                    <span class="text-4xl">😊</span>
+                </template>
             </div>
             <p class="text-center mb-4" x-text="selectedText"></p>
             {{-- Hidden input to ensure Livewire tracks moodStatus --}}
-            <input type="hidden" wire:model="moodStatus" />
+            <input type="hidden" wire:model.live="moodStatus" />
             <textarea
-                wire:model="moodNote"
+                wire:model.defer="moodNote"
                 class="w-full p-2 border border-gray-300 rounded mb-2
                        focus:ring-red-500 focus:border-red-500"
                 placeholder="Write a few words about your day..."
             ></textarea>
+            @if(session()->has('error'))
+                <div class="mb-2 p-2 bg-red-100 border border-red-400 text-red-700 rounded text-sm">
+                    {{ session('error') }}
+                </div>
+            @endif
+            @if(session()->has('success'))
+                <div class="mb-2 p-2 bg-green-100 border border-green-400 text-green-700 rounded text-sm">
+                    {{ session('success') }}
+                </div>
+            @endif
             @error('moodNote')
                 <p class="text-red-500 text-sm mb-2">{{ $message }}</p>
             @enderror
@@ -515,7 +530,12 @@
             <div class="flex flex-col items-center mb-4">
                 <h2 class="text-2xl font-semibold text-gray-800 mb-2">Day <span x-text="modalData.day"></span> Sentiment</h2>
                 <p class="text-lg font-medium text-gray-700 mb-2">Score: <span x-text="modalData.score"></span></p>
-                <img :src="'{{ asset('images') }}/' + modalData.img" class="w-16 h-16 mb-2" alt="mood">
+                <template x-if="modalData.img && modalData.img !== '-' && modalData.img !== 'undefined'">
+                    <img :src="'{{ asset('images') }}/' + modalData.img" class="w-16 h-16 mb-2" alt="mood">
+                </template>
+                <template x-if="!modalData.img || modalData.img === '-' || modalData.img === 'undefined'">
+                    <span class="text-gray-400 text-sm mb-2">-</span>
+                </template>
                 <p class="text-gray-600 text-center px-4">
                     <span x-text="modalData.desc || 'No description available'"></span>
                 </p>

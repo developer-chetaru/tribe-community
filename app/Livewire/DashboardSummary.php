@@ -543,14 +543,36 @@ public function updatedSelectedDepartment($value)
             return;
         }
 
-        // Check if user is on leave
-        if ($user->onLeave) {
-            Log::warning('User on leave - cannot submit HappyIndex', [
+        // Get user's timezone safely using helper
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+        
+        // Check if user is on leave today (use actual leave records, not just the flag)
+        // Also auto-disable the onLeave flag if leave period has ended
+        $today = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone)->startOfDay();
+        $isOnLeaveToday = UserLeave::where('user_id', $userId)
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
+            ->where('leave_status', 1)
+            ->exists();
+        
+        // Auto-disable onLeave flag if leave period has ended
+        if ($user->onLeave && !$isOnLeaveToday) {
+            $user->onLeave = 0;
+            $user->save();
+            Log::info('Auto-disabled onLeave flag - leave period ended', [
                 'user_id' => $userId,
-                'onLeave' => $user->onLeave,
+                'today' => $today->toDateString(),
+            ]);
+        }
+            
+        if ($isOnLeaveToday) {
+            Log::warning('User on leave today - cannot submit HappyIndex', [
+                'user_id' => $userId,
+                'onLeave_flag' => $user->onLeave,
+                'onLeaveToday' => $isOnLeaveToday,
             ]);
             $this->dispatch('close-leave-modal');
-            session()->flash('error', 'You are currently on leave.');
+            session()->flash('error', 'You are currently on leave. Please disable leave status to submit sentiment.');
             return;
         }
 
@@ -810,11 +832,19 @@ public function updatedSelectedDepartment($value)
             // Show success message
             session()->flash('success', "Sentiment submitted successfully! Today's EI Score: $todayEIScore");
             
-            // Dispatch event to close modal
+            // Update component state
+            $this->userGivenFeedback = true;
+            $this->moodStatus = null;
+            $this->moodNote = null;
+            
+            // Dispatch event to close modal first
             $this->dispatch('close-leave-modal');
             
+            // Reload data to show updated calendar
+            $this->loadData();
+            
             // Refresh the page to show updated data
-            return $this->redirect(route('dashboard'), navigate: true);
+            return $this->redirect(route('dashboard'), navigate: false);
         } catch (\Exception $e) {
             Log::error('HappyIndex save failed with exception', [
                 'user_id' => $userId ?? null,
