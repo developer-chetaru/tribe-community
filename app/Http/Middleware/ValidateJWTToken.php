@@ -47,9 +47,29 @@ class ValidateJWTToken
                         $tokenIat = $payload->get('iat');
                         $tokenAge = now()->timestamp - $tokenIat;
                         
-                        // CRITICAL: Allow tokens issued within last 5 seconds (grace period for login)
+                        // CRITICAL: Allow tokens issued within last 30 seconds (grace period for login)
                         // This prevents newly issued tokens from being rejected during login
-                        if ($tokenAge <= 5) {
+                        if ($tokenAge <= 30) {
+                            // Also check if this is the current device - if yes, always allow
+                            $isWebToken = (!$user->deviceId || $user->deviceId === 'web_default' || strpos($user->deviceId, 'web_') === 0);
+                            if ($isWebToken) {
+                                $platformDeviceKey = "user_current_web_device_{$user->id}";
+                            } else {
+                                $platformDeviceKey = "user_current_app_device_{$user->id}";
+                            }
+                            $currentDeviceId = \Illuminate\Support\Facades\Cache::get($platformDeviceKey);
+                            
+                            // If token is from current device and within grace period, allow it
+                            if ($currentDeviceId === $user->deviceId) {
+                                Log::debug("Allowing token - current device and within grace period", [
+                                    'user_id' => $user->id,
+                                    'token_age' => $tokenAge,
+                                    'device_id' => $user->deviceId,
+                                ]);
+                                return $next($request);
+                            }
+                            
+                            // Even if not current device, allow if within grace period (might be during login)
                             Log::debug("Allowing token - issued very recently (within grace period)", [
                                 'user_id' => $user->id,
                                 'token_age' => $tokenAge,
