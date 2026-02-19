@@ -8,10 +8,12 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
     <link rel="icon" type="image/png" href="{{ asset('images/favicon-icon.png') }}">
     
-    <!-- Custom Styles (no build required) -->
+    <!-- Compiled CSS (static file, no Vite required) -->
+    <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+    
+    <!-- Custom Styles -->
     <style>
         [x-cloak] { display: none !important; }
-        body { font-family: "Figtree", sans-serif !important; }
     </style>
 
     @livewireStyles
