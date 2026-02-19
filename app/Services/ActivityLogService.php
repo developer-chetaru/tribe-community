@@ -126,7 +126,30 @@ class ActivityLogService
             $data['new_values'] = $newValues;
         }
 
-        return ActivityLog::create($data);
+        try {
+            $activityLog = ActivityLog::create($data);
+            
+            // Log success for debugging
+            \Log::debug('Activity logged successfully', [
+                'activity_id' => $activityLog->id,
+                'module' => $module,
+                'action' => $action,
+                'user_id' => $user?->id,
+                'user_name' => $userName,
+            ]);
+            
+            return $activityLog;
+        } catch (\Exception $e) {
+            \Log::error('Failed to create activity log', [
+                'module' => $module,
+                'action' => $action,
+                'user_id' => $user?->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'data' => $data,
+            ]);
+            throw $e;
+        }
     }
 
     /**

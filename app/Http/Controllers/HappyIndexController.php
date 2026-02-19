@@ -159,7 +159,7 @@ class HappyIndexController extends Controller
             $moodLabels = [1 => 'Bad', 2 => 'Okay', 3 => 'Good'];
             $moodLabel = $moodLabels[$moodValue] ?? 'Unknown';
             
-            ActivityLogService::log(
+            $activityLog = ActivityLogService::log(
                 'user',
                 'updated',
                 "User filled sentiment index: {$moodLabel} (Mood Value: {$moodValue})",
@@ -173,8 +173,16 @@ class HappyIndexController extends Controller
                 ],
                 $user // Pass user explicitly for API calls
             );
+            
+            Log::info('Sentiment activity logged successfully', [
+                'activity_id' => $activityLog->id,
+                'user_id' => $user->id,
+                'mood_value' => $moodValue,
+            ]);
         } catch (\Exception $e) {
-            Log::warning('Failed to log sentiment fill activity: ' . $e->getMessage(), [
+            Log::error('Failed to log sentiment fill activity', [
+                'user_id' => $user->id,
+                'mood_value' => $moodValue,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
