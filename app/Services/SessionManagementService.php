@@ -85,21 +85,27 @@ class SessionManagementService
                     }
                 }
                 
-                // CRITICAL: Set invalidation timestamp to current token's iat
-                // This ensures ALL tokens issued before this are rejected
-                // Tokens with iat <= invalidationTimestamp will be rejected
-                // Current token has iat = invalidationTimestamp, so it will be allowed by current device check
-                $invalidationTimestamp = $tokenIat;
-                $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
-                Cache::put($appInvalidationKey, $invalidationTimestamp, now()->addDays(30));
-                
-                // CRITICAL: Set current device's valid timestamp (same as token iat)
-                // This ensures the current token is marked as valid
+                // CRITICAL: Set current device's valid timestamp FIRST (before invalidation)
+                // This ensures the current token is marked as valid immediately
                 $currentDeviceTimestampKey = "user_token_timestamp_{$user->id}_{$deviceId}";
                 Cache::put($currentDeviceTimestampKey, $tokenIat, now()->addDays(30));
                 
-                // Store current app device mapping
+                // Store current app device mapping IMMEDIATELY
                 Cache::put($appDeviceKey, $deviceId, now()->addDays(30));
+                
+                // CRITICAL: Set invalidation timestamp to be 1 second BEFORE current token's iat
+                // This ensures ALL tokens issued before this login are rejected IMMEDIATELY
+                // Current token (iat = tokenIat) will pass because it's > invalidationTimestamp
+                // Previous tokens (iat < tokenIat) will be rejected because they're < invalidationTimestamp
+                $invalidationTimestamp = $tokenIat - 1;
+                $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
+                Cache::put($appInvalidationKey, $invalidationTimestamp, now()->addDays(30));
+                
+                // Force cache to be written immediately (if using Redis/Memcached)
+                // This ensures invalidation is effective immediately
+                if (config('cache.default') !== 'file') {
+                    Cache::store()->put($appInvalidationKey, $invalidationTimestamp, now()->addDays(30));
+                }
                 
                 // ALWAYS invalidate previous app device if it exists (even if same device)
                 // This ensures only one app session is active at a time
@@ -387,9 +393,10 @@ class SessionManagementService
                     $tokenIat = $payload->get('iat');
                     $tokenAge = now()->timestamp - $tokenIat;
                     
-                    // If token is from current device and issued within last 60 seconds, always allow
+                    // If token is from current device and issued within last 30 seconds, always allow
                     // This covers the login scenario where token is just issued
-                    if ($tokenAge <= 60) {
+                    // Reduced from 60 to 30 seconds to prevent multiple device logins
+                    if ($tokenAge <= 30) {
                         Log::debug("Token allowed - current device and recently issued", [
                             'user_id' => $user->id,
                             'token_device_id' => $deviceId,
@@ -404,8 +411,9 @@ class SessionManagementService
                     $currentDeviceTimestamp = Cache::get($currentDeviceTimestampKey);
                     
                     if ($currentDeviceTimestamp) {
-                        // Allow if token is close to device timestamp (30 second grace)
-                        if ($tokenIat >= ($currentDeviceTimestamp - 30)) {
+                        // Allow if token is close to device timestamp (10 second grace)
+                        // Reduced grace period to prevent multiple device logins
+                        if ($tokenIat >= ($currentDeviceTimestamp - 10)) {
                             Log::debug("Token allowed - current device and valid timestamp", [
                                 'user_id' => $user->id,
                                 'token_device_id' => $deviceId,
@@ -413,14 +421,35 @@ class SessionManagementService
                                 'current_device_timestamp' => $currentDeviceTimestamp,
                             ]);
                             return true;
+                        } else {
+                            // Token is too old even for current device - might be from previous login
+                            Log::warning("Token rejected - current device but token is too old", [
+                                'user_id' => $user->id,
+                                'token_device_id' => $deviceId,
+                                'token_iat' => $tokenIat,
+                                'current_device_timestamp' => $currentDeviceTimestamp,
+                                'age_difference' => $currentDeviceTimestamp - $tokenIat,
+                            ]);
+                            return false;
                         }
                     } else {
-                        // No timestamp set - allow current device token
-                        Log::debug("Token allowed - current device but no timestamp set", [
-                            'user_id' => $user->id,
-                            'token_device_id' => $deviceId,
-                        ]);
-                        return true;
+                        // No timestamp set - might be fresh login, allow if very recent
+                        if ($tokenAge <= 10) {
+                            Log::debug("Token allowed - current device but no timestamp set (very recent)", [
+                                'user_id' => $user->id,
+                                'token_device_id' => $deviceId,
+                                'token_age' => $tokenAge,
+                            ]);
+                            return true;
+                        } else {
+                            // Token is old and no timestamp - reject to be safe
+                            Log::warning("Token rejected - current device but old token with no timestamp", [
+                                'user_id' => $user->id,
+                                'token_device_id' => $deviceId,
+                                'token_age' => $tokenAge,
+                            ]);
+                            return false;
+                        }
                     }
                 } catch (\Exception $e) {
                     // If we can't decode, but it's current device, allow it
@@ -444,53 +473,34 @@ class SessionManagementService
                         $payload = JWTAuth::setToken($token)->getPayload();
                         $tokenIat = $payload->get('iat');
                         
-                        // If token was issued before the invalidation timestamp, reject it
-                        // UNLESS it's the current device and very recent (within 10 seconds)
-                        if ($tokenIat < $appInvalidationTimestamp) {
-                            // Allow current device if token is very recent (might be during login)
-                            if ($currentDeviceId === $deviceId) {
-                                $tokenAge = now()->timestamp - $tokenIat;
-                                if ($tokenAge <= 10) {
-                                    Log::debug("App token allowed - current device and very recent (during login)", [
-                                        'user_id' => $user->id,
-                                        'token_device_id' => $deviceId,
-                                        'token_iat' => $tokenIat,
-                                        'token_age' => $tokenAge,
-                                        'invalidation_timestamp' => $appInvalidationTimestamp,
-                                    ]);
-                                    // Allow it - continue to other checks
-                                } else {
-                                    Log::warning("App token rejected - issued before global invalidation (current device but old)", [
-                                        'user_id' => $user->id,
-                                        'token_device_id' => $deviceId,
-                                        'token_iat' => $tokenIat,
-                                        'token_age' => $tokenAge,
-                                        'invalidation_timestamp' => $appInvalidationTimestamp,
-                                    ]);
-                                    return false;
-                                }
-                            } else {
-                                Log::warning("App token rejected - issued before global invalidation", [
-                                    'user_id' => $user->id,
-                                    'token_device_id' => $deviceId,
-                                    'current_device_id' => $currentDeviceId,
-                                    'token_iat' => $tokenIat,
-                                    'invalidation_timestamp' => $appInvalidationTimestamp,
-                                ]);
-                                return false;
-                            }
-                        } else if ($tokenIat === $appInvalidationTimestamp) {
-                            // Token issued at same time as invalidation - only allow if current device
-                            if ($currentDeviceId !== $deviceId) {
-                                Log::warning("App token rejected - same timestamp but not current device", [
-                                    'user_id' => $user->id,
-                                    'token_device_id' => $deviceId,
-                                    'current_device_id' => $currentDeviceId,
-                                    'token_iat' => $tokenIat,
-                                    'invalidation_timestamp' => $appInvalidationTimestamp,
-                                ]);
-                                return false;
-                            }
+                        // If token was issued before or at the invalidation timestamp, reject it IMMEDIATELY
+                        // Invalidation timestamp is set to tokenIat - 1, so:
+                        // - Current token (iat = tokenIat) will pass: tokenIat > (tokenIat - 1) ✓
+                        // - Previous tokens (iat < tokenIat) will fail: oldIat <= (tokenIat - 1) ✗
+                        if ($tokenIat <= $appInvalidationTimestamp) {
+                            // This token was issued before the new login - reject it IMMEDIATELY
+                            Log::warning("App token rejected - issued before or at global invalidation", [
+                                'user_id' => $user->id,
+                                'token_device_id' => $deviceId,
+                                'current_device_id' => $currentDeviceId,
+                                'token_iat' => $tokenIat,
+                                'invalidation_timestamp' => $appInvalidationTimestamp,
+                                'is_current_device' => $currentDeviceId === $deviceId,
+                            ]);
+                            return false;
+                        }
+                        
+                        // Token passed invalidation check (tokenIat > invalidationTimestamp)
+                        // But still need to verify it's from current device
+                        if ($currentDeviceId !== $deviceId) {
+                            // Not current device - reject it
+                            Log::warning("App token rejected - not current device", [
+                                'user_id' => $user->id,
+                                'token_device_id' => $deviceId,
+                                'current_device_id' => $currentDeviceId,
+                                'token_iat' => $tokenIat,
+                            ]);
+                            return false;
                         }
                     } catch (\Exception $e) {
                         Log::warning("Failed to decode token for app invalidation check", [
@@ -732,22 +742,35 @@ class SessionManagementService
     {
         try {
             $deviceId = $user->deviceId ?? 'web_default';
+            $isWebSession = (!$deviceId || $deviceId === 'web_default' || strpos($deviceId, 'web_') === 0);
             
+            // Only clear the current device's session, not all sessions
             $cacheKey = "user_active_session_{$user->id}_{$deviceId}";
             $tokenTimestampKey = "user_token_timestamp_{$user->id}_{$deviceId}";
-            $userDeviceKey = "user_current_device_{$user->id}";
             
             Cache::forget($cacheKey);
             Cache::forget($tokenTimestampKey);
-            Cache::forget($userDeviceKey);
             
-            // Also clear old format keys for backward compatibility
+            // Clear platform-specific device mapping only for this device
+            if ($isWebSession) {
+                $platformDeviceKey = "user_current_web_device_{$user->id}";
+            } else {
+                $platformDeviceKey = "user_current_app_device_{$user->id}";
+            }
+            
+            // Only clear if this device is the current device
+            $currentDeviceId = Cache::get($platformDeviceKey);
+            if ($currentDeviceId === $deviceId) {
+                Cache::forget($platformDeviceKey);
+            }
+            
+            // Also clear old format keys for backward compatibility (only for this device)
             $oldCacheKey = "user_active_session_{$user->id}";
             $oldTokenTimestampKey = "user_token_timestamp_{$user->id}";
             Cache::forget($oldCacheKey);
             Cache::forget($oldTokenTimestampKey);
             
-            Log::info("Session tracking cleared for user {$user->id} on device {$deviceId}");
+            Log::info("Session tracking cleared for user {$user->id} on device {$deviceId} (platform: " . ($isWebSession ? 'web' : 'app') . ")");
         } catch (\Exception $e) {
             Log::error("Failed to clear session tracking for user {$user->id}", [
                 'error' => $e->getMessage(),
