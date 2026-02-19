@@ -405,37 +405,35 @@ class SessionManagementService
             // Middleware should have set it correctly based on request header
             $deviceId = $user->deviceId ?? 'web_default';
             
-            // If deviceId is from database and looks like web, but we're checking app token,
-            // try to get app device ID from cache instead
+            // CRITICAL: Determine if this is a web or app token
+            // Web tokens: deviceId starts with 'web_' or is 'web_default'
+            // App tokens: any other deviceId
             $isWebToken = (!$deviceId || $deviceId === 'web_default' || strpos($deviceId, 'web_') === 0);
             
-            // Check platform-specific current device FIRST
+            // CRITICAL: For app tokens, ALWAYS check cache first to get correct device ID
+            // Web login might have overwritten database deviceId, but cache has the real app deviceId
+            if (!$isWebToken) {
+                $appDeviceKey = "user_current_app_device_{$user->id}";
+                $cachedAppDeviceId = Cache::get($appDeviceKey);
+                
+                // If we have a cached app device ID, use it (it's the source of truth)
+                if ($cachedAppDeviceId && strpos($cachedAppDeviceId, 'web_') !== 0) {
+                    $deviceId = $cachedAppDeviceId;
+                    Log::debug("Using cached app device ID (web login safe)", [
+                        'user_id' => $user->id,
+                        'original_device_id' => $user->deviceId,
+                        'cached_app_device_id' => $cachedAppDeviceId,
+                    ]);
+                }
+            }
+            
+            // Check platform-specific current device
             if ($isWebToken) {
                 $platformDeviceKey = "user_current_web_device_{$user->id}";
             } else {
                 $platformDeviceKey = "user_current_app_device_{$user->id}";
             }
             $currentDeviceId = Cache::get($platformDeviceKey);
-            
-            // CRITICAL: If deviceId looks like web but we have an app device in cache,
-            // use the app device ID from cache instead (web login might have overwritten database)
-            // Also check if there's an app device in cache even if currentDeviceId is null
-            $appDeviceKey = "user_current_app_device_{$user->id}";
-            $cachedAppDeviceId = Cache::get($appDeviceKey);
-            
-            if ($isWebToken && $cachedAppDeviceId && strpos($cachedAppDeviceId, 'web_') !== 0) {
-                // This is actually an app device, not web - use cached app device ID
-                $deviceId = $cachedAppDeviceId;
-                $isWebToken = false;
-                $platformDeviceKey = $appDeviceKey;
-                $currentDeviceId = $cachedAppDeviceId;
-                Log::debug("Corrected device ID - using app device from cache (web login detected)", [
-                    'user_id' => $user->id,
-                    'original_device_id' => $user->deviceId,
-                    'corrected_device_id' => $deviceId,
-                    'cached_app_device_id' => $cachedAppDeviceId,
-                ]);
-            }
             
             // CRITICAL: If this is the current device, ALWAYS allow it (for app tokens)
             // This ensures that tokens from the current app device are never rejected by web login
@@ -446,32 +444,20 @@ class SessionManagementService
                     $tokenIat = $payload->get('iat');
                     $tokenAge = now()->timestamp - $tokenIat;
                     
-                    // For app tokens from current device, check invalidation timestamp first
-                    // This ensures that if a new app login happened, old tokens are rejected
+                    // CRITICAL: For app tokens from current device, ALWAYS allow
+                    // Web login should NEVER affect app tokens
+                    // Only new APP login should invalidate old app tokens (checked later)
                     if (!$isWebToken) {
-                        // Check if there's an invalidation timestamp
-                        $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
-                        $appInvalidationTimestamp = Cache::get($appInvalidationKey);
-                        
-                        if ($appInvalidationTimestamp && $tokenIat <= $appInvalidationTimestamp) {
-                            // Token was issued before a new app login - reject it
-                            Log::warning("App token rejected - current device but issued before new app login", [
-                                'user_id' => $user->id,
-                                'token_device_id' => $deviceId,
-                                'token_iat' => $tokenIat,
-                                'invalidation_timestamp' => $appInvalidationTimestamp,
-                            ]);
-                            return false;
-                        }
-                        
-                        // Token is valid - allow it
-                        Log::debug("App token allowed - current device and valid", [
+                        // This is an app token from current device - allow it immediately
+                        // Don't check invalidation here - that's checked later for non-current devices
+                        Log::debug("App token allowed - current device (web login safe)", [
                             'user_id' => $user->id,
                             'token_device_id' => $deviceId,
                             'token_iat' => $tokenIat,
                             'token_age' => $tokenAge,
+                            'current_device_id' => $currentDeviceId,
                         ]);
-                        return true; // Current app device token is valid
+                        return true; // Current app device token is always valid (web login safe)
                     }
                     
                     // For web tokens, check timestamps
@@ -549,9 +535,9 @@ class SessionManagementService
                 }
             }
             
-            // CRITICAL: For app tokens, ALWAYS check global app invalidation timestamp
-            // This ensures ALL previous app tokens are rejected when new APP login happens
-            // BUT: Web login should NOT invalidate app tokens
+            // CRITICAL: For app tokens ONLY, check global app invalidation timestamp
+            // Web tokens should NEVER check app invalidation (they use database sessions)
+            // This ensures web login NEVER affects app tokens
             if (!$isWebToken) {
                 $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
                 $appInvalidationTimestamp = Cache::get($appInvalidationKey);
