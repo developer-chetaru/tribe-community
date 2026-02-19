@@ -69,7 +69,7 @@ class SessionManagementService
                 $appDeviceKey = "user_current_app_device_{$user->id}";
                 $previousAppDeviceId = Cache::get($appDeviceKey);
                 
-                // If there was a previous app session (even if same device), invalidate it
+                // ALWAYS invalidate previous app device if it exists and is different
                 // This ensures only one app session is active at a time
                 if ($previousAppDeviceId && $previousAppDeviceId !== $deviceId) {
                     $this->invalidateDeviceSession($user, $previousAppDeviceId);
@@ -79,12 +79,29 @@ class SessionManagementService
                     ]);
                 }
                 
+                // CRITICAL: Invalidate ALL previous app tokens by setting a global invalidation timestamp
+                // This ensures that ANY token issued before this login is rejected
+                $invalidationTimestamp = now()->addSecond()->timestamp;
+                $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
+                Cache::put($appInvalidationKey, $invalidationTimestamp, now()->addDays(30));
+                
                 // Also invalidate all JWT tokens issued before this login for app platform
                 // This ensures that even if device ID is same, old tokens are invalidated
                 $this->invalidateAllAppTokens($user, $deviceId);
                 
                 // Store current app device mapping
                 Cache::put($appDeviceKey, $deviceId, now()->addDays(30));
+                
+                // Store current device's valid timestamp (current time)
+                $currentDeviceTimestampKey = "user_token_timestamp_{$user->id}_{$deviceId}";
+                Cache::put($currentDeviceTimestampKey, now()->timestamp, now()->addDays(30));
+                
+                Log::info("App login: All previous app tokens invalidated", [
+                    'user_id' => $user->id,
+                    'current_device_id' => $deviceId,
+                    'previous_device_id' => $previousAppDeviceId,
+                    'invalidation_timestamp' => $invalidationTimestamp,
+                ]);
                 
                 // DO NOT invalidate web sessions - allow both web and app simultaneously
             }
@@ -332,10 +349,45 @@ class SessionManagementService
     {
         try {
             $deviceId = $user->deviceId ?? 'web_default';
+            $isWebToken = (!$deviceId || $deviceId === 'web_default' || strpos($deviceId, 'web_') === 0);
             
-            // Check if device ID matches current active device
-            $userDeviceKey = "user_current_device_{$user->id}";
-            $currentDeviceId = Cache::get($userDeviceKey);
+            // CRITICAL: For app tokens, check global app invalidation timestamp FIRST
+            if (!$isWebToken) {
+                $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
+                $appInvalidationTimestamp = Cache::get($appInvalidationKey);
+                
+                if ($appInvalidationTimestamp) {
+                    try {
+                        $payload = JWTAuth::setToken($token)->getPayload();
+                        $tokenIat = $payload->get('iat');
+                        
+                        // If token was issued before the invalidation timestamp, reject it
+                        if ($tokenIat < $appInvalidationTimestamp) {
+                            Log::warning("App token rejected - issued before global invalidation", [
+                                'user_id' => $user->id,
+                                'token_device_id' => $deviceId,
+                                'token_iat' => $tokenIat,
+                                'invalidation_timestamp' => $appInvalidationTimestamp,
+                            ]);
+                            return false;
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning("Failed to decode token for app invalidation check", [
+                            'user_id' => $user->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                        return false;
+                    }
+                }
+            }
+            
+            // Check platform-specific current device
+            if ($isWebToken) {
+                $platformDeviceKey = "user_current_web_device_{$user->id}";
+            } else {
+                $platformDeviceKey = "user_current_app_device_{$user->id}";
+            }
+            $currentDeviceId = Cache::get($platformDeviceKey);
             
             // If no device mapping exists, allow for backward compatibility
             if (!$currentDeviceId) {
@@ -361,7 +413,6 @@ class SessionManagementService
             // But reject if same platform but different device
             if ($currentDeviceId !== $deviceId) {
                 // Check if this is a web session (both might be web but different sessions)
-                $isWebToken = (!$deviceId || $deviceId === 'web_default' || strpos($deviceId, 'web_') === 0);
                 $isWebCurrent = strpos($currentDeviceId, 'web_') === 0;
                 
                 if ($isWebToken && $isWebCurrent) {
@@ -374,40 +425,25 @@ class SessionManagementService
                         'current_device_id' => $currentDeviceId,
                     ]);
                 } elseif (!$isWebToken && !$isWebCurrent) {
-                    // Both are app sessions but different device IDs - check timestamp
-                    // If token is old, reject it (user logged in from another app device)
-                    Log::debug("App session device ID mismatch, checking timestamp", [
+                    // Both are app sessions but different device IDs - reject immediately
+                    // This means user logged in from another app device
+                    Log::warning("App token rejected - different device ID", [
                         'user_id' => $user->id,
                         'token_device_id' => $deviceId,
                         'current_device_id' => $currentDeviceId,
                     ]);
+                    return false;
                 } else {
                     // Different platforms (web vs app) - allow both simultaneously
-                    // Check if token is from a valid platform session
-                    $platformDeviceKey = $isWebToken 
-                        ? "user_current_web_device_{$user->id}" 
-                        : "user_current_app_device_{$user->id}";
-                    $platformDeviceId = Cache::get($platformDeviceKey);
-                    
-                    if ($platformDeviceId === $deviceId) {
-                        // Token is from valid platform session - allow it
-                        Log::debug("Allowing token from different platform", [
-                            'user_id' => $user->id,
-                            'token_device_id' => $deviceId,
-                            'current_device_id' => $currentDeviceId,
-                            'platform_device_id' => $platformDeviceId,
-                        ]);
-                        // Continue to timestamp check below
-                    } else {
-                        // Token is from invalid platform session - reject
-                        Log::warning("Token rejected - invalid platform session", [
-                            'user_id' => $user->id,
-                            'token_device_id' => $deviceId,
-                            'current_device_id' => $currentDeviceId,
-                            'platform_device_id' => $platformDeviceId,
-                        ]);
-                        return false;
-                    }
+                    // Token is from different platform, which is allowed
+                    Log::debug("Allowing token from different platform", [
+                        'user_id' => $user->id,
+                        'token_device_id' => $deviceId,
+                        'current_device_id' => $currentDeviceId,
+                        'is_web_token' => $isWebToken,
+                        'is_web_current' => $isWebCurrent,
+                    ]);
+                    // Continue to timestamp check below
                 }
             }
             
@@ -447,6 +483,38 @@ class SessionManagementService
             // Allow both web and app tokens if they're from their respective platforms
             $isWebToken = (!$deviceId || $deviceId === 'web_default' || strpos($deviceId, 'web_') === 0);
             $isWebCurrent = strpos($currentDeviceId, 'web_') === 0;
+            
+            // CRITICAL: For app tokens, check global app invalidation timestamp first
+            if (!$isWebToken) {
+                // This is an app token - check global app invalidation timestamp
+                $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
+                $appInvalidationTimestamp = Cache::get($appInvalidationKey);
+                
+                if ($appInvalidationTimestamp) {
+                    // Get token's issued at time
+                    try {
+                        $payload = JWTAuth::setToken($token)->getPayload();
+                        $tokenIat = $payload->get('iat');
+                        
+                        // If token was issued before the invalidation timestamp, reject it
+                        if ($tokenIat < $appInvalidationTimestamp) {
+                            Log::warning("App token rejected - issued before global invalidation", [
+                                'user_id' => $user->id,
+                                'token_device_id' => $deviceId,
+                                'token_iat' => $tokenIat,
+                                'invalidation_timestamp' => $appInvalidationTimestamp,
+                            ]);
+                            return false;
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning("Failed to decode token for app invalidation check", [
+                            'user_id' => $user->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                        return false;
+                    }
+                }
+            }
             
             // If token is from same platform as current device, use platform-specific timestamp
             if ($isWebToken && $isWebCurrent) {
