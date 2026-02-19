@@ -468,7 +468,7 @@ class EngagementReportService
                     }
 
                     $numberDaysArr = ['start_date' => $firstDate, 'currentDate' => $currentDate, 'HI_include_saturday' => $HI_include_saturday, 'HI_include_sunday' => $HI_include_sunday];
-                    $days          = CommonHelper::calculateNumberOfDaysWithSatSunConcept($leaveDaysArr);
+                    $days          = CommonHelper::calculateNumberOfDaysWithSatSunConcept($numberDaysArr);
 
 
                     if ($totalLeaveDays > $days) {
