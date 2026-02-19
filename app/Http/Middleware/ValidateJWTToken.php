@@ -30,15 +30,31 @@ class ValidateJWTToken
                     // Get device ID from request header or user model
                     $requestDeviceId = $request->header('X-Device-Id') ?? $user->deviceId ?? null;
                     
-                    // If device ID is provided in request but doesn't match user's device ID, update it
-                    if ($requestDeviceId && $requestDeviceId !== $user->deviceId) {
+                    // CRITICAL: For app tokens, prioritize request header device ID
+                    // Web login might have overwritten user's deviceId in database
+                    // So we need to check cache-based device mapping instead
+                    $isWebToken = (!$requestDeviceId || $requestDeviceId === 'web_default' || strpos($requestDeviceId, 'web_') === 0);
+                    
+                    if (!$isWebToken && $requestDeviceId) {
+                        // This is an app token - use request device ID, don't update database
+                        // Database might have web deviceId from web login
+                        $user->deviceId = $requestDeviceId;
+                        Log::debug("Using request device ID for app token validation", [
+                            'user_id' => $user->id,
+                            'request_device_id' => $requestDeviceId,
+                            'db_device_id' => $user->getOriginal('deviceId'),
+                        ]);
+                    } else if ($requestDeviceId && $requestDeviceId !== $user->deviceId) {
+                        // For web tokens or if no device ID in request, update user model
                         Log::warning("Device ID mismatch in request vs user model", [
                             'user_id' => $user->id,
                             'request_device_id' => $requestDeviceId,
                             'user_device_id' => $user->deviceId,
                         ]);
-                        // Update user's device ID to match request
-                        $user->deviceId = $requestDeviceId;
+                        // Only update if it's a web token (app tokens handled above)
+                        if ($isWebToken) {
+                            $user->deviceId = $requestDeviceId;
+                        }
                     }
                     
                     // Get token's issued at time first

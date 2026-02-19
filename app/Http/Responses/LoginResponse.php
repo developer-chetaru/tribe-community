@@ -52,18 +52,25 @@ class LoginResponse implements LoginResponseContract
                 $sessionId = $request->session()->getId();
                 $sessionService = new SessionManagementService();
                 
-                // Set device info for web session
-                $user->update([
-                    'deviceType' => 'web',
-                    'deviceId' => 'web_' . $sessionId,
-                ]);
+                // CRITICAL: Don't update user's deviceId in database for web sessions
+                // This preserves the app deviceId so app tokens remain valid
+                // Web sessions are tracked separately in cache only
+                $webDeviceId = 'web_' . $sessionId;
                 
-                // Invalidate previous web sessions (same platform)
-                $sessionService->invalidatePreviousSessions($user, null, $sessionId);
+                // Create a temporary user object with web device info for session management
+                // But don't save it to database - only use for cache operations
+                $tempUser = clone $user;
+                $tempUser->deviceType = 'web';
+                $tempUser->deviceId = $webDeviceId;
+                
+                // Invalidate previous web sessions (same platform only)
+                $sessionService->invalidatePreviousSessions($tempUser, null, $sessionId);
                 
                 Log::info("Web login: Previous web sessions invalidated", [
                     'user_id' => $user->id,
                     'session_id' => $sessionId,
+                    'web_device_id' => $webDeviceId,
+                    'preserved_app_device_id' => $user->deviceId,
                 ]);
             } catch (\Exception $e) {
                 Log::warning('Failed to invalidate previous web sessions on login', [
