@@ -29,19 +29,66 @@ class MonthlySummary extends Component
 
     public function updatedSelectedYear($value)
     {
+        // Ensure year is cast to int
+        $this->selectedYear = (int) $value;
+        
+        // Store the current month before recalculating (cast to int)
+        $previousMonth = (int) $this->selectedMonth;
+        
+        // Recalculate valid months for the new year
         $this->calculateValidMonthsAndYears();
-
-        // Ensure selectedMonth is within validMonths
+        
+        // Ensure selectedMonth is within validMonths after year change
         $validMonthValues = array_column($this->validMonths, 'value');
-        if (!in_array($this->selectedMonth, $validMonthValues)) {
-            $this->selectedMonth = max($validMonthValues);
+        if (!empty($validMonthValues)) {
+            // Try to preserve the same month if it's valid for the new year
+            if (!in_array($previousMonth, $validMonthValues)) {
+                // If previous month is not valid, set to last valid month (most recent)
+                $this->selectedMonth = (int) max($validMonthValues);
+            } else {
+                // Preserve the same month if it's valid
+                $this->selectedMonth = $previousMonth;
+            }
         }
-
+        
+        // Debug logging
+        \Illuminate\Support\Facades\Log::info('MonthlySummary updatedSelectedYear', [
+            'user_id' => Auth::id(),
+            'previousMonth' => $previousMonth,
+            'newYear' => $this->selectedYear,
+            'selectedMonth' => $this->selectedMonth,
+            'validMonths' => $validMonthValues,
+        ]);
+        
         $this->loadSummariesFromDatabase();
     }
 
     public function updatedSelectedMonth($value)
     {
+        // Ensure month is cast to int
+        $this->selectedMonth = (int) $value;
+        
+        // Ensure year is also int (in case it's a string)
+        $this->selectedYear = (int) $this->selectedYear;
+        
+        // Recalculate valid months to ensure consistency
+        $this->calculateValidMonthsAndYears();
+        
+        // Verify the selected month is still valid
+        $validMonthValues = array_column($this->validMonths, 'value');
+        if (!empty($validMonthValues) && !in_array($this->selectedMonth, $validMonthValues)) {
+            // If month is not valid, set to first valid month
+            $this->selectedMonth = (int) min($validMonthValues);
+        }
+        
+        // Debug logging
+        \Illuminate\Support\Facades\Log::info('MonthlySummary updatedSelectedMonth', [
+            'user_id' => Auth::id(),
+            'selectedYear' => $this->selectedYear,
+            'selectedMonth' => $this->selectedMonth,
+            'validMonths' => $validMonthValues,
+        ]);
+        
         $this->loadSummariesFromDatabase();
     }
 
@@ -50,24 +97,47 @@ class MonthlySummary extends Component
         $user = Auth::user();
         if (!$user) return;
 
+        // Ensure year and month are integers
+        $year = (int) $this->selectedYear;
+        $month = (int) $this->selectedMonth;
+
+        // Debug logging
+        \Illuminate\Support\Facades\Log::info('MonthlySummary loadSummariesFromDatabase called', [
+            'user_id' => $user->id,
+            'selectedYear' => $year,
+            'selectedMonth' => $month,
+        ]);
+
         // Get user's registration date safely
         $userRegistrationDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), \App\Helpers\TimezoneHelper::DEFAULT_TIMEZONE)->startOfDay();
         
         // Get the selected month's start date
-        $selectedMonthStart = Carbon::create($this->selectedYear, $this->selectedMonth, 1)->startOfMonth();
+        $selectedMonthStart = Carbon::create($year, $month, 1)->startOfMonth();
         
         // Skip if the selected month occurred before user's registration
         if ($selectedMonthStart->lt($userRegistrationDate)) {
             $this->monthlySummaries = [];
+            \Illuminate\Support\Facades\Log::info('MonthlySummary: Month before user registration', [
+                'user_id' => $user->id,
+                'selectedMonthStart' => $selectedMonthStart->format('Y-m-d'),
+                'userRegistrationDate' => $userRegistrationDate->format('Y-m-d'),
+            ]);
             return;
         }
 
         $summary = MonthlySummaryModel::where('user_id', $user->id)
-            ->where('year', $this->selectedYear)
-            ->where('month', $this->selectedMonth)
+            ->where('year', $year)
+            ->where('month', $month)
             ->first();
 
         $this->monthlySummaries = $summary ? [$summary] : [];
+        
+        \Illuminate\Support\Facades\Log::info('MonthlySummary: Summary loaded', [
+            'user_id' => $user->id,
+            'year' => $year,
+            'month' => $month,
+            'found' => $summary ? 'yes' : 'no',
+        ]);
     }
 
     public function generateMonthlySummary($userId = null, $year = null, $month = null)

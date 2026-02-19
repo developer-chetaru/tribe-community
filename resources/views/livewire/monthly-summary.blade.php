@@ -1,4 +1,4 @@
-<div class="flex flex-wrap border border-gray-100 rounded-md w-full" wire:key="monthly-summary-{{ auth()->id() }}" wire:ignore.self>
+<div class="flex flex-wrap border border-gray-100 rounded-md w-full" wire:key="monthly-summary-{{ auth()->id() }}-{{ $selectedMonth }}-{{ $selectedYear }}">
     <div class="flex px-3 py-2 bg-white w-full min-h-[65px]">
         <h3 class="text-lg sm:text-2xl text-[#EB1C24] font-bold mb-1 sm:mb-0 flex items-center gap-2">Monthly Summary</h3>
     </div>
@@ -7,13 +7,15 @@
       
             <!-- Filters -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 my-4">
-                <select wire:model="selectedMonth" wire:change="loadSummariesFromDatabase" class="border border-gray-200 rounded-md py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#333] w-full">
+                <select wire:model.live="selectedMonth"
+                        class="border border-gray-200 rounded-md py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#333] focus:ring-red-500 focus:border-red-500 w-full">
                     @foreach($validMonths as $m)
                         <option value="{{ $m['value'] }}">{{ $m['name'] }}</option>
                     @endforeach
                 </select>
 
-                <select wire:model="selectedYear" wire:change="loadSummariesFromDatabase" class="border border-gray-200 rounded-md py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#333] w-full">
+                <select wire:model.live="selectedYear"
+                        class="border border-gray-200 rounded-md py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#333] focus:ring-red-500 focus:border-red-500 w-full">
                     @foreach($validYears as $y)
                         <option value="{{ $y }}">{{ $y }}</option>
                     @endforeach
