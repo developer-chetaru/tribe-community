@@ -36,7 +36,7 @@
             
             <!-- Title -->
             <div class="flex justify-between items-center mb-6">
-                <h2 class="text-[#EB1C24] font-medium text-[24px]">User Details</h2>
+                <h2 class="text-[#EB1C24] font-medium text-[24px]">{{ $first_name }} {{ $last_name }} Details</h2>
             </div>
 
             <!-- Profile Photo -->
