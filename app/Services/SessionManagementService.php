@@ -374,7 +374,12 @@ class SessionManagementService
     public function isTokenValid($token, User $user)
     {
         try {
+            // CRITICAL: Get device ID from user model (set by middleware)
+            // Middleware should have set it correctly based on request header
             $deviceId = $user->deviceId ?? 'web_default';
+            
+            // If deviceId is from database and looks like web, but we're checking app token,
+            // try to get app device ID from cache instead
             $isWebToken = (!$deviceId || $deviceId === 'web_default' || strpos($deviceId, 'web_') === 0);
             
             // Check platform-specific current device FIRST
@@ -384,6 +389,26 @@ class SessionManagementService
                 $platformDeviceKey = "user_current_app_device_{$user->id}";
             }
             $currentDeviceId = Cache::get($platformDeviceKey);
+            
+            // CRITICAL: If deviceId looks like web but we have an app device in cache,
+            // use the app device ID from cache instead (web login might have overwritten database)
+            // Also check if there's an app device in cache even if currentDeviceId is null
+            $appDeviceKey = "user_current_app_device_{$user->id}";
+            $cachedAppDeviceId = Cache::get($appDeviceKey);
+            
+            if ($isWebToken && $cachedAppDeviceId && strpos($cachedAppDeviceId, 'web_') !== 0) {
+                // This is actually an app device, not web - use cached app device ID
+                $deviceId = $cachedAppDeviceId;
+                $isWebToken = false;
+                $platformDeviceKey = $appDeviceKey;
+                $currentDeviceId = $cachedAppDeviceId;
+                Log::debug("Corrected device ID - using app device from cache (web login detected)", [
+                    'user_id' => $user->id,
+                    'original_device_id' => $user->deviceId,
+                    'corrected_device_id' => $deviceId,
+                    'cached_app_device_id' => $cachedAppDeviceId,
+                ]);
+            }
             
             // CRITICAL: If this is the current device, ALWAYS allow it
             // This ensures that tokens from the current device are never rejected

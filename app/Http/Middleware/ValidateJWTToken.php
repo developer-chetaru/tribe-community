@@ -35,6 +35,20 @@ class ValidateJWTToken
                     // So we need to check cache-based device mapping instead
                     $isWebToken = (!$requestDeviceId || $requestDeviceId === 'web_default' || strpos($requestDeviceId, 'web_') === 0);
                     
+                    // If no device ID in request, try to get from cache (app device might be cached)
+                    if (!$requestDeviceId) {
+                        $appDeviceKey = "user_current_app_device_{$user->id}";
+                        $cachedAppDeviceId = \Illuminate\Support\Facades\Cache::get($appDeviceKey);
+                        if ($cachedAppDeviceId && strpos($cachedAppDeviceId, 'web_') !== 0) {
+                            $requestDeviceId = $cachedAppDeviceId;
+                            $isWebToken = false;
+                            Log::debug("Using cached app device ID (no header provided)", [
+                                'user_id' => $user->id,
+                                'cached_app_device_id' => $cachedAppDeviceId,
+                            ]);
+                        }
+                    }
+                    
                     if (!$isWebToken && $requestDeviceId) {
                         // This is an app token - use request device ID, don't update database
                         // Database might have web deviceId from web login
