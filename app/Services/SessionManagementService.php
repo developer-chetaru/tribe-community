@@ -93,11 +93,13 @@ class SessionManagementService
                 // Store current app device mapping IMMEDIATELY
                 Cache::put($appDeviceKey, $deviceId, now()->addDays(30));
                 
-                // CRITICAL: Set invalidation timestamp to be 1 second BEFORE current token's iat
-                // This ensures ALL tokens issued before this login are rejected IMMEDIATELY
-                // Current token (iat = tokenIat) will pass because it's > invalidationTimestamp
-                // Previous tokens (iat < tokenIat) will be rejected because they're < invalidationTimestamp
-                $invalidationTimestamp = $tokenIat - 1;
+                // CRITICAL: Set invalidation timestamp to ensure ALL previous tokens are rejected
+                // Use the earlier of (tokenIat - 1) or (now - 2) to ensure:
+                // 1. All tokens before tokenIat are invalidated
+                // 2. Current token passes (its iat should be >= now - 2)
+                // 3. All previous tokens are rejected (their iat < invalidationTimestamp)
+                $now = now()->timestamp;
+                $invalidationTimestamp = min($tokenIat - 1, $now - 2);
                 $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
                 Cache::put($appInvalidationKey, $invalidationTimestamp, now()->addDays(30));
                 
@@ -107,13 +109,38 @@ class SessionManagementService
                     Cache::store()->put($appInvalidationKey, $invalidationTimestamp, now()->addDays(30));
                 }
                 
-                // ALWAYS invalidate previous app device if it exists (even if same device)
+                Log::info("App login invalidation timestamp set", [
+                    'user_id' => $user->id,
+                    'device_id' => $deviceId,
+                    'token_iat' => $tokenIat,
+                    'invalidation_timestamp' => $invalidationTimestamp,
+                    'now' => $now,
+                ]);
+                
+                // CRITICAL: ALWAYS invalidate previous app device if it exists
                 // This ensures only one app session is active at a time
                 if ($previousAppDeviceId && $previousAppDeviceId !== $deviceId) {
                     $this->invalidateDeviceSession($user, $previousAppDeviceId);
                     Log::info("Previous app session invalidated for user {$user->id}", [
                         'previous_app_device_id' => $previousAppDeviceId,
                         'new_app_device_id' => $deviceId,
+                    ]);
+                }
+                
+                // CRITICAL: Ensure invalidation timestamp is set correctly
+                // It should be tokenIat - 1 to invalidate all tokens issued before this login
+                // But make sure it's not in the future
+                $now = now()->timestamp;
+                if ($invalidationTimestamp >= $now) {
+                    // If somehow invalidation timestamp is >= now, set it to now - 1
+                    $invalidationTimestamp = $now - 1;
+                    Cache::put($appInvalidationKey, $invalidationTimestamp, now()->addDays(30));
+                    if (config('cache.default') !== 'file') {
+                        Cache::store()->put($appInvalidationKey, $invalidationTimestamp, now()->addDays(30));
+                    }
+                    Log::info("Corrected invalidation timestamp for user {$user->id}", [
+                        'original_timestamp' => $tokenIat - 1,
+                        'corrected_timestamp' => $invalidationTimestamp,
                     ]);
                 }
                 
@@ -419,15 +446,32 @@ class SessionManagementService
                     $tokenIat = $payload->get('iat');
                     $tokenAge = now()->timestamp - $tokenIat;
                     
-                    // For app tokens from current device, always allow (web login shouldn't affect them)
+                    // For app tokens from current device, check invalidation timestamp first
+                    // This ensures that if a new app login happened, old tokens are rejected
                     if (!$isWebToken) {
-                        Log::debug("App token allowed - current device (web login safe)", [
+                        // Check if there's an invalidation timestamp
+                        $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
+                        $appInvalidationTimestamp = Cache::get($appInvalidationKey);
+                        
+                        if ($appInvalidationTimestamp && $tokenIat <= $appInvalidationTimestamp) {
+                            // Token was issued before a new app login - reject it
+                            Log::warning("App token rejected - current device but issued before new app login", [
+                                'user_id' => $user->id,
+                                'token_device_id' => $deviceId,
+                                'token_iat' => $tokenIat,
+                                'invalidation_timestamp' => $appInvalidationTimestamp,
+                            ]);
+                            return false;
+                        }
+                        
+                        // Token is valid - allow it
+                        Log::debug("App token allowed - current device and valid", [
                             'user_id' => $user->id,
                             'token_device_id' => $deviceId,
                             'token_iat' => $tokenIat,
                             'token_age' => $tokenAge,
                         ]);
-                        return true; // Current app device token is always valid
+                        return true; // Current app device token is valid
                     }
                     
                     // For web tokens, check timestamps
