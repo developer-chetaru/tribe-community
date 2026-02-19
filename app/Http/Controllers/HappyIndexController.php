@@ -170,10 +170,14 @@ class HappyIndexController extends Controller
                     'sentiment_mood_label' => $moodLabel,
                     'description' => $description,
                     'ei_score' => $user->EIScore,
-                ]
+                ],
+                $user // Pass user explicitly for API calls
             );
         } catch (\Exception $e) {
-            Log::warning('Failed to log sentiment fill activity: ' . $e->getMessage());
+            Log::warning('Failed to log sentiment fill activity: ' . $e->getMessage(), [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
         }
         
         Log::info('HappyIndex created with user timezone', [

@@ -64,6 +64,7 @@ class ActivityLogService
      * @param mixed $subject
      * @param array|null $oldValues
      * @param array|null $newValues
+     * @param mixed $user Optional user object (useful for API calls where Auth::user() might be null)
      * @return ActivityLog
      */
     public static function log(
@@ -72,16 +73,37 @@ class ActivityLogService
         ?string $description = null,
         $subject = null,
         ?array $oldValues = null,
-        ?array $newValues = null
+        ?array $newValues = null,
+        $user = null
     ): ActivityLog {
-        $user = Auth::user();
+        // Try to get user from parameter, then Auth, then from subject if it's a User model
+        if (!$user) {
+            $user = Auth::user();
+        }
+        
+        // If still no user and subject is a User model, use it
+        if (!$user && $subject && is_object($subject) && $subject instanceof \App\Models\User) {
+            $user = $subject;
+        }
+
+        // Get user name safely
+        $userName = 'System';
+        if ($user) {
+            if (isset($user->first_name) && isset($user->last_name)) {
+                $userName = trim($user->first_name . ' ' . $user->last_name);
+            } elseif (isset($user->name)) {
+                $userName = $user->name;
+            } elseif (method_exists($user, 'getName')) {
+                $userName = $user->getName();
+            }
+        }
 
         $data = [
             'module' => $module,
             'action' => $action,
             'description' => $description ?? self::generateDescription($module, $action, $subject),
             'user_id' => $user?->id,
-            'user_name' => $user ? ($user->first_name . ' ' . $user->last_name) : 'System',
+            'user_name' => $userName,
             'user_email' => $user?->email,
             'ip_address' => Request::ip(),
             'user_agent' => Request::userAgent(),
@@ -139,7 +161,8 @@ class ActivityLogService
             "Created user: {$user->first_name} {$user->last_name} ({$user->email})",
             $user,
             null,
-            $data
+            $data,
+            $user // Pass user explicitly
         );
     }
 
@@ -154,7 +177,8 @@ class ActivityLogService
             "Updated user: {$user->first_name} {$user->last_name} ({$user->email})",
             $user,
             $oldValues,
-            $newValues
+            $newValues,
+            $user // Pass user explicitly
         );
     }
 
@@ -167,7 +191,10 @@ class ActivityLogService
             'auth',
             'login',
             "User logged in: {$user->first_name} {$user->last_name} ({$user->email})",
-            $user
+            $user,
+            null,
+            null,
+            $user // Pass user explicitly for API calls
         );
     }
 
@@ -180,7 +207,10 @@ class ActivityLogService
             'auth',
             'logout',
             "User logged out: {$user->first_name} {$user->last_name} ({$user->email})",
-            $user
+            $user,
+            null,
+            null,
+            $user // Pass user explicitly for API calls
         );
     }
 
