@@ -79,9 +79,25 @@ class SessionManagementService
                     ]);
                 }
                 
-                // CRITICAL: Invalidate ALL previous app tokens by setting a global invalidation timestamp
-                // This ensures that ANY token issued before this login is rejected
-                $invalidationTimestamp = now()->addSecond()->timestamp;
+                // CRITICAL: Get token's issued at time if available, otherwise use current time
+                // This ensures the invalidation timestamp is AFTER the token was issued
+                $tokenIat = now()->timestamp;
+                if ($currentToken) {
+                    try {
+                        $payload = JWTAuth::setToken($currentToken)->getPayload();
+                        $tokenIat = $payload->get('iat');
+                    } catch (\Exception $e) {
+                        // If we can't decode, use current time
+                        Log::debug("Could not decode token for iat", [
+                            'user_id' => $user->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+                
+                // Set invalidation timestamp to be AFTER the current token's iat
+                // This ensures the current token remains valid
+                $invalidationTimestamp = $tokenIat + 1; // 1 second after token was issued
                 $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
                 Cache::put($appInvalidationKey, $invalidationTimestamp, now()->addDays(30));
                 
@@ -92,9 +108,10 @@ class SessionManagementService
                 // Store current app device mapping
                 Cache::put($appDeviceKey, $deviceId, now()->addDays(30));
                 
-                // Store current device's valid timestamp (current time)
+                // Store current device's valid timestamp (use token's iat, not current time)
+                // This ensures the token validation allows this token
                 $currentDeviceTimestampKey = "user_token_timestamp_{$user->id}_{$deviceId}";
-                Cache::put($currentDeviceTimestampKey, now()->timestamp, now()->addDays(30));
+                Cache::put($currentDeviceTimestampKey, $tokenIat, now()->addDays(30));
                 
                 Log::info("App login: All previous app tokens invalidated", [
                     'user_id' => $user->id,

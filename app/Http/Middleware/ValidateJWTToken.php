@@ -41,6 +41,28 @@ class ValidateJWTToken
                         $user->deviceId = $requestDeviceId;
                     }
                     
+                    // Get token's issued at time first
+                    try {
+                        $payload = JWTAuth::setToken($token)->getPayload();
+                        $tokenIat = $payload->get('iat');
+                        $tokenAge = now()->timestamp - $tokenIat;
+                        
+                        // CRITICAL: Allow tokens issued within last 5 seconds (grace period for login)
+                        // This prevents newly issued tokens from being rejected during login
+                        if ($tokenAge <= 5) {
+                            Log::debug("Allowing token - issued very recently (within grace period)", [
+                                'user_id' => $user->id,
+                                'token_age' => $tokenAge,
+                            ]);
+                            return $next($request);
+                        }
+                    } catch (\Exception $e) {
+                        // If we can't decode token, let JWT middleware handle it
+                        Log::debug("Failed to decode token for grace period check", [
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                    
                     // Check if token is from current session and device
                     $sessionService = new SessionManagementService();
                     $isValid = $sessionService->isTokenValid($token, $user);
