@@ -9,6 +9,7 @@ use App\Services\OneSignalService;
 use App\Services\SubscriptionService;
 use App\Services\SessionManagementService;
 use App\Services\ActivityLogService;
+use App\Services\LoginSessionService;
 
 class TrackUserLogin
 {
@@ -30,6 +31,19 @@ class TrackUserLogin
             \Log::info("First login_at saved for user: " . $user->id);
         }
         $user->last_login_at = now();
+        
+        // Log detailed login session
+        try {
+            $sessionService = new LoginSessionService();
+            $sessionId = session()->isStarted() ? session()->getId() : null;
+            $deviceType = $user->deviceType ?? $request->input('deviceType');
+            $deviceId = $user->deviceId ?? $request->input('deviceId');
+            $fcmToken = $user->fcmToken ?? $request->input('fcmToken');
+            
+            $sessionService->logLogin($user, $request, null, $sessionId, $deviceType, $deviceId, $fcmToken);
+        } catch (\Exception $e) {
+            Log::warning('Failed to log login session: ' . $e->getMessage());
+        }
         
         // Log activity
         try {

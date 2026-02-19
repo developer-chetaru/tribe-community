@@ -54,6 +54,7 @@ use App\Livewire\Admin\SendNotificationList;
 use App\Livewire\Admin\ManageSubscriptions;
 use App\Livewire\Admin\ManagePrompts;
 use App\Livewire\Admin\ActivityLogComponent;
+use App\Livewire\Admin\LoginSessionsComponent;
 use App\Livewire\Subscription\Billing;
 use App\Http\Controllers\PaymentGatewayController;
 use App\Livewire\User\Notifications;
@@ -378,6 +379,7 @@ Route::middleware([
         Route::get('admin/send-notification', SendNotifications::class)->name('admin.send-notification');
         Route::get('admin/send-notification-list', SendNotificationList::class)->name('admin.send-notification-list');
         Route::get('admin/activity-log', ActivityLogComponent::class)->name('admin.activity-log');
+        Route::get('admin/login-sessions', LoginSessionsComponent::class)->name('admin.login-sessions');
         
         // Subscription Management
         Route::get('/admin/subscriptions', ManageSubscriptions::class)->name('admin.subscriptions');

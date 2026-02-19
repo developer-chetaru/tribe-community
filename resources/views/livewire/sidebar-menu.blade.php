@@ -328,6 +328,20 @@
 
     <span x-show="$store.sidebar.open" x-transition class="text-sm">Activity Log</span>
 </a>
+    
+    <a href="{{ route('admin.login-sessions') }}"
+   class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
+   :class="[
+       $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
+       window.location.pathname === '{{ route('admin.login-sessions', [], false) }}' ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700'
+   ]">
+    
+    <svg class="h-5 w-5" :class="window.location.pathname === '{{ route('admin.login-sessions', [], false) }}' ? 'text-red-600' : 'text-gray-700'" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+    </svg>
+
+    <span x-show="$store.sidebar.open" x-transition class="text-sm">Login Sessions</span>
+</a>
      
   @endhasanyrole
 @hasanyrole('super_admin')

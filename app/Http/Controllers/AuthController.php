@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Mail;
 use App\Services\OneSignalService;
 use App\Services\SessionManagementService;
 use App\Services\ActivityLogService;
+use App\Services\LoginSessionService;
 use App\Mail\VerifyUserEmail;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -82,7 +83,10 @@ class AuthController extends Controller
         return response()->json(['status' => false, 'message' => 'Invalid credentials'], 401);
     }
 
-    $user = auth()->user()->load(['organisation', 'office', 'department', 'roles']);
+    $user = JWTAuth::user();
+    if ($user) {
+        $user->load(['organisation', 'office', 'department', 'roles']);
+    }
 
    
     // Check if email is verified - only enforce for basecamp users (new registrations)
@@ -167,6 +171,34 @@ class AuthController extends Controller
         $sessionService->invalidatePreviousSessions($user, $token, null);
     } catch (\Exception $e) {
         Log::warning('Failed to invalidate previous sessions on login', [
+            'user_id' => $user->id,
+            'error' => $e->getMessage(),
+        ]);
+    }
+
+    // ✅ Log detailed login session for API/mobile login
+    try {
+        $loginSessionService = new LoginSessionService();
+        // Extract token ID from JWT (if possible)
+        $tokenId = null;
+        try {
+            $payload = JWTAuth::setToken($token)->getPayload();
+            $tokenId = $payload->get('jti') ?? null;
+        } catch (\Exception $e) {
+            // Token ID extraction failed, continue without it
+        }
+        
+        $loginSessionService->logLogin(
+            $user,
+            $request,
+            $tokenId,
+            null, // No session ID for API
+            $request->deviceType,
+            $request->deviceId,
+            $request->fcmToken
+        );
+    } catch (\Exception $e) {
+        Log::warning('Failed to log API login session', [
             'user_id' => $user->id,
             'error' => $e->getMessage(),
         ]);
@@ -380,6 +412,36 @@ class AuthController extends Controller
 
             // Get user before invalidating token
             $user = JWTAuth::setToken($token)->authenticate();
+            
+            // ✅ Log detailed logout session for API/mobile logout
+            try {
+                $sessionService = new LoginSessionService();
+                // Try to extract token ID
+                $tokenId = null;
+                try {
+                    $payload = JWTAuth::setToken($token)->getPayload();
+                    $tokenId = $payload->get('jti') ?? null;
+                } catch (\Exception $e) {
+                    // Token ID extraction failed, continue without it
+                }
+                
+                $loggedOutSession = $sessionService->logLogout(null, $tokenId, $user->id);
+                
+                // If no session found, logout all active sessions as fallback
+                if (!$loggedOutSession) {
+                    Log::warning('No active session found for API logout, logging out all active sessions', [
+                        'user_id' => $user->id,
+                        'token_id' => $tokenId,
+                    ]);
+                    $sessionService->logLogoutAllActiveSessions($user->id);
+                }
+            } catch (\Exception $e) {
+                Log::warning('Failed to log API logout session', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
             
             // Clear OneSignal device token (fcmToken) from database
             if ($user && $user->fcmToken) {
