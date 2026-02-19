@@ -65,11 +65,12 @@ class SessionManagementService
                 // Delete all old web sessions from database (except current)
                 $this->invalidateAllWebSessions($user, $currentSessionId);
             } else {
-                // For app/mobile sessions: invalidate only previous app sessions
+                // For app/mobile sessions: invalidate ALL previous app sessions
                 $appDeviceKey = "user_current_app_device_{$user->id}";
                 $previousAppDeviceId = Cache::get($appDeviceKey);
                 
-                // If there was a previous app session, invalidate it
+                // If there was a previous app session (even if same device), invalidate it
+                // This ensures only one app session is active at a time
                 if ($previousAppDeviceId && $previousAppDeviceId !== $deviceId) {
                     $this->invalidateDeviceSession($user, $previousAppDeviceId);
                     Log::info("Previous app session invalidated for user {$user->id}", [
@@ -77,6 +78,10 @@ class SessionManagementService
                         'new_app_device_id' => $deviceId,
                     ]);
                 }
+                
+                // Also invalidate all JWT tokens issued before this login for app platform
+                // This ensures that even if device ID is same, old tokens are invalidated
+                $this->invalidateAllAppTokens($user, $deviceId);
                 
                 // Store current app device mapping
                 Cache::put($appDeviceKey, $deviceId, now()->addDays(30));
@@ -678,6 +683,41 @@ class SessionManagementService
         } catch (\Exception $e) {
             Log::error("Failed to invalidate device session for user {$user->id}", [
                 'device_id' => $deviceId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+    
+    /**
+     * Invalidate all app JWT tokens for a user (except current device)
+     * This ensures that when a user logs in from app, all previous app tokens are invalidated
+     * 
+     * @param User $user
+     * @param string $currentDeviceId Current device ID that should remain valid
+     * @return void
+     */
+    protected function invalidateAllAppTokens(User $user, $currentDeviceId)
+    {
+        try {
+            // Set a future timestamp for all app device tokens except current
+            // This will invalidate any token issued before this timestamp
+            $invalidationTimestamp = now()->addSecond()->timestamp;
+            
+            // Store invalidation timestamp for app platform
+            $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
+            Cache::put($appInvalidationKey, $invalidationTimestamp, now()->addDays(30));
+            
+            // Also update the current device's timestamp to current time (valid)
+            $currentDeviceTimestampKey = "user_token_timestamp_{$user->id}_{$currentDeviceId}";
+            Cache::put($currentDeviceTimestampKey, now()->timestamp, now()->addDays(30));
+            
+            Log::info("All app tokens invalidated for user {$user->id}", [
+                'current_device_id' => $currentDeviceId,
+                'invalidation_timestamp' => $invalidationTimestamp,
+            ]);
+        } catch (\Exception $e) {
+            Log::error("Failed to invalidate all app tokens for user {$user->id}", [
+                'current_device_id' => $currentDeviceId,
                 'error' => $e->getMessage(),
             ]);
         }

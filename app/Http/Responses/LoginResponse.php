@@ -5,6 +5,8 @@ namespace App\Http\Responses;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use App\Services\SessionManagementService;
+use Illuminate\Support\Facades\Log;
 
 class LoginResponse implements LoginResponseContract
 {
@@ -45,6 +47,31 @@ class LoginResponse implements LoginResponseContract
         }
 
         if ($user) {
+            // ✅ Invalidate previous web sessions when user logs in from web
+            try {
+                $sessionId = $request->session()->getId();
+                $sessionService = new SessionManagementService();
+                
+                // Set device info for web session
+                $user->update([
+                    'deviceType' => 'web',
+                    'deviceId' => 'web_' . $sessionId,
+                ]);
+                
+                // Invalidate previous web sessions (same platform)
+                $sessionService->invalidatePreviousSessions($user, null, $sessionId);
+                
+                Log::info("Web login: Previous web sessions invalidated", [
+                    'user_id' => $user->id,
+                    'session_id' => $sessionId,
+                ]);
+            } catch (\Exception $e) {
+                Log::warning('Failed to invalidate previous web sessions on login', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+            
             if ($user->hasRole('super_admin')) {
                 return redirect()->route('organisations.index');
             } elseif ($user->hasRole('organisation_user')) {
