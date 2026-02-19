@@ -16,7 +16,9 @@
     @livewireStyles
     <script src="https://cdn.tailwindcss.com/3.4.1"></script>
     <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet">
-    @vite(['resources/css/app.css'])
+    @if(file_exists(public_path('build/assets/app--g2QrfmK.css')))
+        <link rel="stylesheet" href="{{ asset('build/assets/app--g2QrfmK.css') }}">
+    @endif
 </head>
 <body class="font-sans antialiased bg-gray-100 min-h-screen flex items-center justify-center p-4">
     <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">

@@ -20,8 +20,10 @@
 <script src="https://cdn.tailwindcss.com/3.4.1"></script>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet">
 
-    <!-- Vite -->
-    @vite(['resources/css/app.css'])
+    <!-- Custom CSS -->
+    @if(file_exists(public_path('build/assets/app--g2QrfmK.css')))
+        <link rel="stylesheet" href="{{ asset('build/assets/app--g2QrfmK.css') }}">
+    @endif
 
 </head>
 <body class="font-sans antialiased" x-data="{ sidebarOpen: true }">

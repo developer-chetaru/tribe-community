@@ -5,7 +5,9 @@
     <title>Tribe365</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    @vite('resources/css/app.css')
+    @if(file_exists(public_path('build/assets/app--g2QrfmK.css')))
+        <link rel="stylesheet" href="{{ asset('build/assets/app--g2QrfmK.css') }}">
+    @endif
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
    <link rel="icon" type="image/png" href="{{ asset('images/favicon-icon.png') }}">
 
