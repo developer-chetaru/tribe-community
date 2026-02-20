@@ -81,10 +81,12 @@ public function getFreeVersionHomeDetails(array $filters = [])
     $startDateUTC = $startDate->utc();
     $endDateUTC = $endDate->utc();
     
-    // Expand range by ±1 day to account for timezone differences
-    // This ensures entries created in different timezones are included
-    $startDateUTC = $startDateUTC->subDay();
-    $endDateUTC = $endDateUTC->addDay();
+    // Expand range by ±3 days to account for all possible timezone differences
+    // This ensures entries created in any timezone are included
+    // Example: Entry created on Feb 19 11:00 AM IST (UTC+5:30) = Feb 19 5:30 AM UTC
+    // When viewing in US (UTC-8), Feb 19 might be Feb 18 9:30 PM UTC, so we need wide range
+    $startDateUTC = $startDateUTC->subDays(3);
+    $endDateUTC = $endDateUTC->addDays(3);
     
     // Fetch entries within the month range (UTC time for database query)
     $happyData = HappyIndex::whereBetween('created_at', [$startDateUTC, $endDateUTC])
@@ -329,13 +331,19 @@ public function getFreeVersionHomeDetails(array $filters = [])
         }
 
         // Hide today's data if current month & year (will be shown via todayMoodData)
+        // BUT: If there's actual entry data for today, show it (to match Daily Summary behavior)
         if ($i === $todayDay && $month == $todayMonth && $year == $todayYear) {
-            $score = null;
-            $mood_value = null;
-            // Only clear description if not on leave
-            if (!$isLeaveDay) {
-                $dayData['description'] = null;
+            // Only hide if there's no actual entry data (to match Daily Summary)
+            // If there's an entry, show it so Calendar matches Daily Summary
+            if (!isset($dateData[$i]) || ($dateData[$i]['total_users'] == 0 && $dateData[$i]['mood_value'] === null)) {
+                $score = null;
+                $mood_value = null;
+                // Only clear description if not on leave
+                if (!$isLeaveDay) {
+                    $dayData['description'] = null;
+                }
             }
+            // If there's actual entry data, keep it visible (score, mood_value, description already set above)
         }
 
         // Debug logging for specific days
