@@ -71,7 +71,21 @@ class ValidateJWTToken
                         return $next($request);
                     }
                 } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
-                    // Token is expired - let auth:api middleware handle it
+                    // Token is expired - for app tokens, be lenient and allow if it's just expired
+                    // Check if this might be an app token by checking request headers
+                    $requestDeviceId = $request->header('X-Device-Id');
+                    $isWebToken = (!$requestDeviceId || $requestDeviceId === 'web_default' || strpos($requestDeviceId, 'web_') === 0);
+                    
+                    if (!$isWebToken) {
+                        // For app tokens, even if expired, try to authenticate with refresh
+                        Log::info("App token expired but allowing (multiple app logins)", [
+                            'path' => $path,
+                            'error' => $e->getMessage(),
+                        ]);
+                        return $next($request);
+                    }
+                    
+                    // For web tokens, let auth:api middleware handle it
                     Log::debug("JWT token expired", [
                         'path' => $path,
                         'error' => $e->getMessage(),
@@ -104,7 +118,13 @@ class ValidateJWTToken
                     // CRITICAL: For app tokens, prioritize request header device ID
                     // Web login might have overwritten user's deviceId in database
                     // So we need to check cache-based device mapping instead
-                    $isWebToken = (!$requestDeviceId || $requestDeviceId === 'web_default' || strpos($requestDeviceId, 'web_') === 0);
+                    // IMPORTANT: If no device ID, assume it's an app token (more lenient)
+                    $isWebToken = false; // Default to app token (more lenient)
+                    if ($requestDeviceId && ($requestDeviceId === 'web_default' || strpos($requestDeviceId, 'web_') === 0)) {
+                        $isWebToken = true;
+                    } else if ($user->deviceId && (strpos($user->deviceId, 'web_') === 0)) {
+                        $isWebToken = true;
+                    }
                     
                     // If no device ID in request, try to get from cache (app device might be cached)
                     if (!$requestDeviceId) {
@@ -118,6 +138,15 @@ class ValidateJWTToken
                                 'cached_app_device_id' => $cachedAppDeviceId,
                             ]);
                         }
+                    }
+                    
+                    // For API requests without device ID, assume app token (more lenient)
+                    if (!$requestDeviceId && $request->is('api/*')) {
+                        $isWebToken = false;
+                        Log::debug("No device ID in API request - assuming app token", [
+                            'user_id' => $user->id,
+                            'path' => $path,
+                        ]);
                     }
                     
                     // CRITICAL: For app tokens, use request device ID for validation
@@ -203,19 +232,23 @@ class ValidateJWTToken
                     
                     // COMMENTED OUT: Multiple app login prevention - allow all app tokens
                     // For app tokens, skip ALL validation and allow immediately
+                    // IMPORTANT: This check happens BEFORE any validation logic
                     if (!$isWebToken) {
                         // App tokens are always allowed (multiple app logins allowed)
                         // No validation checks at all - just allow the request
                         Log::info("Allowing app token - multiple app logins allowed (no validation)", [
                             'user_id' => $user->id,
-                            'token_device_id' => $user->deviceId,
+                            'token_device_id' => $user->deviceId ?? 'unknown',
                             'path' => $path,
                             'is_summary' => $isSummaryEndpoint,
+                            'request_device_id' => $requestDeviceId ?? 'none',
                         ]);
                         return $next($request);
                     }
                     
+                    // COMMENTED OUT: Auto logout disabled - allow all tokens
                     // For web tokens only, do validation
+                    /*
                     $sessionService = new SessionManagementService();
                     $isValid = $sessionService->isTokenValid($token, $user);
                     
@@ -233,6 +266,15 @@ class ValidateJWTToken
                             'code' => 'SESSION_EXPIRED'
                         ], 401);
                     }
+                    */
+                    
+                    // NEW: Auto logout disabled - allow all tokens (both web and app)
+                    Log::info("Allowing token - auto logout disabled", [
+                        'user_id' => $user->id,
+                        'device_id' => $user->deviceId ?? 'unknown',
+                        'is_web_token' => $isWebToken,
+                        'path' => $path,
+                    ]);
                 }
             }
         } catch (\Exception $e) {
