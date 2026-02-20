@@ -438,7 +438,8 @@ class SessionManagementService
             // CRITICAL: If this is the current device, ALWAYS allow it (for app tokens)
             // This ensures that tokens from the current app device are never rejected by web login
             // For web tokens, we still need to check timestamps
-            if ($currentDeviceId === $deviceId) {
+            // ALSO: If no current device ID is set, allow app tokens (might be first time or cache cleared)
+            if ($currentDeviceId === $deviceId || (!$currentDeviceId && !$isWebToken)) {
                 try {
                     $payload = JWTAuth::setToken($token)->getPayload();
                     $tokenIat = $payload->get('iat');
@@ -605,8 +606,18 @@ class SessionManagementService
             }
             
             // If no device mapping exists, allow for backward compatibility
+            // IMPORTANT: For app tokens, be more lenient - allow if no device mapping
             if (!$currentDeviceId) {
-                // Check old format token timestamp (backward compatibility)
+                // For app tokens, if no device mapping exists, allow it (might be first time or cache cleared)
+                if (!$isWebToken) {
+                    Log::debug("App token allowed - no current device ID in cache (backward compatibility)", [
+                        'user_id' => $user->id,
+                        'token_device_id' => $deviceId,
+                    ]);
+                    return true;
+                }
+                
+                // For web tokens, check old format token timestamp (backward compatibility)
                 $oldTokenTimestampKey = "user_token_timestamp_{$user->id}";
                 $lastValidTimestamp = Cache::get($oldTokenTimestampKey);
                 
@@ -640,14 +651,48 @@ class SessionManagementService
                         'current_device_id' => $currentDeviceId,
                     ]);
                 } elseif (!$isWebToken && !$isWebCurrent) {
-                    // Both are app sessions but different device IDs - reject immediately
-                    // This means user logged in from another app device
-                    Log::warning("App token rejected - different device ID", [
-                        'user_id' => $user->id,
-                        'token_device_id' => $deviceId,
-                        'current_device_id' => $currentDeviceId,
-                    ]);
-                    return false;
+                    // Both are app sessions but different device IDs
+                    // Check if there was a recent app login that invalidated this token
+                    // Only reject if we're CERTAIN there was a new app login
+                    try {
+                        $payload = JWTAuth::setToken($token)->getPayload();
+                        $tokenIat = $payload->get('iat');
+                        
+                        // Check if current device has a timestamp that's newer than token
+                        $currentDeviceTimestampKey = "user_token_timestamp_{$user->id}_{$currentDeviceId}";
+                        $currentDeviceTimestamp = Cache::get($currentDeviceTimestampKey);
+                        
+                        // Only reject if current device timestamp exists AND is significantly newer (more than 60 seconds)
+                        if ($currentDeviceTimestamp && ($currentDeviceTimestamp - $tokenIat) > 60) {
+                            Log::warning("App token rejected - different device ID and current device is significantly newer", [
+                                'user_id' => $user->id,
+                                'token_device_id' => $deviceId,
+                                'current_device_id' => $currentDeviceId,
+                                'token_iat' => $tokenIat,
+                                'current_device_timestamp' => $currentDeviceTimestamp,
+                            ]);
+                            return false;
+                        } else {
+                            // Allow token - might be valid app session, just different device ID in cache
+                            Log::debug("App token allowed - different device ID but no clear new login", [
+                                'user_id' => $user->id,
+                                'token_device_id' => $deviceId,
+                                'current_device_id' => $currentDeviceId,
+                                'token_iat' => $tokenIat,
+                                'current_device_timestamp' => $currentDeviceTimestamp,
+                            ]);
+                            // Continue to timestamp check below
+                        }
+                    } catch (\Exception $e) {
+                        // If we can't decode token, be lenient and allow it
+                        Log::debug("App token allowed - decode failed, being lenient", [
+                            'user_id' => $user->id,
+                            'token_device_id' => $deviceId,
+                            'current_device_id' => $currentDeviceId,
+                            'error' => $e->getMessage(),
+                        ]);
+                        // Continue to timestamp check below
+                    }
                 } else {
                     // Different platforms (web vs app) - allow both simultaneously
                     // Token is from different platform, which is allowed
