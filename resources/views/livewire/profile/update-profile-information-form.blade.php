@@ -1,10 +1,11 @@
-    <x-slot name="header">
-        <h2 class="text-2xl font-bold capitalize text-[#ff2323]">
-           profile
-        </h2>
-    </x-slot>
+<x-slot name="header">
+    <h2 class="text-2xl font-bold capitalize text-[#ff2323]">
+       profile
+    </h2>
+</x-slot>
 
-<x-form-section submit="updateProfileInformation">
+<div>
+    <x-form-section submit="updateProfileInformation">
     <x-slot name="title" >
         <span style="white-space: nowrap;">Account Information</span>
     </x-slot>
@@ -980,11 +981,82 @@
     </x-slot>
 
     <x-slot name="actions">
-        <x-button class="bg-red-600 hover:bg-red-700">
-            {{ __('Save') }}
-        </x-button>
+        <div class="flex items-center gap-3">
+            <x-button class="bg-red-600 hover:bg-red-700">
+                {{ __('Save') }}
+            </x-button>
+            <button type="button" 
+                    wire:click="$dispatch('open-delete-account-modal')"
+                    class="inline-flex items-center justify-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-sm text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition ease-in-out duration-150 gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Delete Account
+            </button>
+        </div>
     </x-slot>
-</x-form-section>
+    </x-form-section>
+
+    {{-- Delete Account Modal --}}
+    <div x-data="{ showDeleteModal: false }" 
+         x-on:open-delete-account-modal.window="showDeleteModal = true"
+         x-on:close-delete-account-modal.window="showDeleteModal = false"
+         x-on:account-deleted.window="showDeleteModal = false">
+        <div x-show="showDeleteModal" 
+             x-cloak
+             x-transition
+             class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+             @click.self="showDeleteModal = false; $wire.set('deletePassword', '')">
+            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md mx-4" @click.stop>
+                <h2 class="text-xl font-bold text-red-600 mb-4">Delete Account</h2>
+                <p class="text-gray-700 mb-4">
+                    Are you sure you want to delete your account? Once your account is deleted, all of its resources and data will be permanently deleted. Before deleting your account, please download any data or information that you wish to retain.
+                </p>
+                <p class="text-gray-700 mb-6 font-semibold">
+                    Please enter your password to confirm you would like to permanently delete your account.
+                </p>
+                
+                <div class="mb-6">
+                    <label for="delete-password" class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                    <input type="password" 
+                           id="delete-password"
+                           wire:model="deletePassword"
+                           placeholder="Enter your password"
+                           class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-red-500 focus:border-red-500 px-3 py-2"
+                           wire:keydown.enter="deleteAccount"
+                           autocomplete="current-password">
+                    @error('deletePassword')
+                        <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="flex justify-end gap-3">
+                    <button type="button" 
+                            @click="showDeleteModal = false; $wire.set('deletePassword', '')"
+                            class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="button" 
+                            wire:click="deleteAccount"
+                            wire:loading.attr="disabled"
+                            wire:target="deleteAccount"
+                            class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span wire:loading.remove wire:target="deleteAccount">Delete Account</span>
+                        <span wire:loading wire:target="deleteAccount" class="flex items-center gap-2">
+                            <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Deleting...
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
 <!-- Include intl-tel-input JS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.21/js/intlTelInput.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.21/js/utils.js"></script>
@@ -1054,4 +1126,4 @@ function initTelInput(input, livewire, phoneField, countryField, initialPhone = 
     input.addEventListener("countrychange", updateValues);
 }
 </script>
-
+@endpush

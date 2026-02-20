@@ -3,6 +3,7 @@
 namespace App\Livewire\Profile;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Jetstream\Http\Livewire\UpdateProfileInformationForm as BaseUpdateProfileInformationForm;
@@ -45,6 +46,55 @@ class UpdateProfileInformationForm extends BaseUpdateProfileInformationForm
             $this->state['working_friday'] = ($user->working_friday !== null) ? (bool)$user->working_friday : true;
             $this->state['HI_include_saturday'] = ($user->HI_include_saturday !== null) ? (bool)$user->HI_include_saturday : false;
             $this->state['HI_include_sunday'] = ($user->HI_include_sunday !== null) ? (bool)$user->HI_include_sunday : false;
+        }
+    }
+
+    /**
+     * Password for account deletion confirmation.
+     *
+     * @var string
+     */
+    public $deletePassword = '';
+
+    /**
+     * Delete the user's account.
+     *
+     * @return void
+     */
+    public function deleteAccount(): void
+    {
+        $this->validate([
+            'deletePassword' => ['required', 'string'],
+        ]);
+
+        $user = Auth::user();
+
+        if (!Hash::check($this->deletePassword, $user->password)) {
+            $this->addError('deletePassword', 'The provided password is incorrect.');
+            return;
+        }
+
+        try {
+            // Use Jetstream's DeleteUser action
+            app(\Laravel\Jetstream\Contracts\DeletesUsers::class)->delete($user);
+
+            // Dispatch event to close modal
+            $this->dispatch('account-deleted');
+
+            // Logout the user and invalidate session
+            Auth::logout();
+            request()->session()->invalidate();
+            request()->session()->regenerateToken();
+
+            // Use JavaScript to redirect after a short delay to ensure logout completes
+            $this->js('
+                setTimeout(function() {
+                    window.location.href = "/login";
+                }, 100);
+            ');
+        } catch (\Exception $e) {
+            Log::error('Error deleting user account: ' . $e->getMessage());
+            $this->addError('deletePassword', 'Failed to delete account. Please try again.');
         }
     }
 
