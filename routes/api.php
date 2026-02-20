@@ -21,6 +21,14 @@ Route::post('/user-set-password', [AuthController::class, 'setPassword']);
 Route::post('/login-admin', [AuthController::class, 'adminLogin']);
 Route::post('/logout', [AuthController::class, 'logout']);
 
+// Summary APIs - bypass auth:api middleware (handle authentication in controller)
+// This allows expired tokens to work (auto logout disabled)
+Route::middleware(['validate.jwt'])->group(function () {
+	Route::get('/weekly-summaries', [WeeklySummaryController::class, 'index']);
+	Route::get('/monthly-summary', [MonthlySummaryController::class, 'index']);
+	Route::post('/monthly-summary/generate', [MonthlySummaryController::class, 'generate']);
+	Route::get('/summary/{filterType}', [SummaryController::class, 'getSummary']);
+});
 
 Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     // flutter api
@@ -36,13 +44,6 @@ Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     Route::post('/get-principles-list', [HPTMController::class, 'getPrinciplesList']);
     Route::post('/get-learning-checklist', [HPTMController::class, 'getLearningCheckList']);
     Route::post('/change-read-status-of-user-checklist', [HPTMController::class, 'changeReadStatusOfUserChecklist']);
-	Route::get('/summary/{filterType}', [SummaryController::class, 'getSummary']);
-	
-	// Summary APIs for app (JWT authentication)
-	// NOTE: These routes are inside auth:api middleware group, but we handle authentication in controller
-	Route::get('/weekly-summaries', [WeeklySummaryController::class, 'index']);
-	Route::get('/monthly-summary', [MonthlySummaryController::class, 'index']);
-	Route::post('/monthly-summary/generate', [MonthlySummaryController::class, 'generate']);
 
     // Payment APIs
     Route::post('/submit-payment', [PaymentController::class, 'submitPayment']);
