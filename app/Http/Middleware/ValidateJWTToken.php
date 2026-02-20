@@ -201,149 +201,30 @@ class ValidateJWTToken
                         ]);
                     }
                     
-                    // For app tokens, check if this is the current device FIRST
-                    // If it's the current device, allow it immediately (no need for further validation)
-                    if (!$isWebToken) {
-                        $appDeviceKey = "user_current_app_device_{$user->id}";
-                        $currentAppDeviceId = \Illuminate\Support\Facades\Cache::get($appDeviceKey);
-                        
-                        // Use request device ID (already set in user->deviceId above)
-                        $tokenDeviceId = $user->deviceId;
-                        
-                        // If token is from current device, allow it immediately
-                        if ($currentAppDeviceId && $currentAppDeviceId === $tokenDeviceId) {
-                            Log::info("Allowing app token - current device (bypassing validation)", [
-                                'user_id' => $user->id,
-                                'token_device_id' => $tokenDeviceId,
-                                'current_device_id' => $currentAppDeviceId,
-                                'path' => $path,
-                                'is_summary' => $isSummaryEndpoint,
-                            ]);
-                            return $next($request);
-                        }
-                        
-                        // If no app device tracking exists, allow the token (might be first login or cache issue)
-                        if (!$currentAppDeviceId) {
-                            Log::info("Allowing app token - no device tracking found (might be cache issue)", [
-                                'user_id' => $user->id,
-                                'token_device_id' => $tokenDeviceId,
-                                'path' => $path,
-                                'is_summary' => $isSummaryEndpoint,
-                            ]);
-                            return $next($request);
-                        }
-                        
-                        // COMMENTED OUT: Multiple app login prevention - allow tokens from any device
-                        // Token is from different device - continue to validation
-                        // This will check if it's an old device (should be rejected) or valid
-                        /*
-                        Log::info("App token from different device - checking validation", [
-                            'user_id' => $user->id,
-                            'token_device_id' => $tokenDeviceId,
-                            'current_device_id' => $currentAppDeviceId,
-                            'path' => $path,
-                            'is_summary' => $isSummaryEndpoint,
-                        ]);
-                        */
-                    }
-                    
                     // COMMENTED OUT: Multiple app login prevention - allow all app tokens
-                    // For app tokens, skip validation completely
+                    // For app tokens, skip ALL validation and allow immediately
                     if (!$isWebToken) {
                         // App tokens are always allowed (multiple app logins allowed)
-                        Log::info("Allowing app token - multiple app logins allowed", [
+                        // No validation checks at all - just allow the request
+                        Log::info("Allowing app token - multiple app logins allowed (no validation)", [
                             'user_id' => $user->id,
                             'token_device_id' => $user->deviceId,
                             'path' => $path,
+                            'is_summary' => $isSummaryEndpoint,
                         ]);
                         return $next($request);
                     }
                     
-                    // For web tokens, still do validation
+                    // For web tokens only, do validation
                     $sessionService = new SessionManagementService();
                     $isValid = $sessionService->isTokenValid($token, $user);
                     
                     if (!$isValid) {
-                        // For app tokens, be EXTREMELY lenient - only reject if we're 100% certain it's from old device
-                        if (!$isWebToken) {
-                            $appDeviceKey = "user_current_app_device_{$user->id}";
-                            $currentAppDeviceId = \Illuminate\Support\Facades\Cache::get($appDeviceKey);
-                            
-                            // CRITICAL: If token is from current device, ALWAYS allow it
-                            // Even if validation failed, if device ID matches, allow it
-                            if ($currentAppDeviceId === $user->deviceId) {
-                                Log::info("Allowing app token - current device (validation false negative)", [
-                                    'user_id' => $user->id,
-                                    'token_device_id' => $user->deviceId,
-                                    'current_device_id' => $currentAppDeviceId,
-                                    'path' => $path,
-                                ]);
-                                return $next($request);
-                            }
-                            
-                            // If no current device ID in cache, allow token (might be first login or cache cleared)
-                            if (!$currentAppDeviceId) {
-                                Log::info("Allowing app token - no current device ID in cache (might be cache issue)", [
-                                    'user_id' => $user->id,
-                                    'token_device_id' => $user->deviceId,
-                                    'path' => $path,
-                                ]);
-                                return $next($request);
-                            }
-                            
-                            // Check token age - if token is recent (less than 1 hour), allow it
-                            // This prevents false rejections for valid tokens
-                            try {
-                                $payload = JWTAuth::setToken($token)->getPayload();
-                                $tokenIat = $payload->get('iat');
-                                $tokenAge = now()->timestamp - $tokenIat;
-                                
-                                // If token is less than 1 hour old, allow it (very lenient)
-                                if ($tokenAge < 3600) {
-                                    Log::info("Allowing app token - recent token (less than 1 hour old)", [
-                                        'user_id' => $user->id,
-                                        'token_device_id' => $user->deviceId,
-                                        'current_device_id' => $currentAppDeviceId,
-                                        'token_age' => $tokenAge,
-                                        'path' => $path,
-                                    ]);
-                                    return $next($request);
-                                }
-                            } catch (\Exception $e) {
-                                // If we can't decode token, allow it (being lenient)
-                                Log::info("Allowing app token - decode failed, being lenient", [
-                                    'user_id' => $user->id,
-                                    'token_device_id' => $user->deviceId,
-                                    'path' => $path,
-                                ]);
-                                return $next($request);
-                            }
-                            
-                            // Only reject if token is from different device AND token is old (more than 1 hour)
-                            // AND we have a clear current device ID
-                            Log::warning("App token rejected - from different device and token is old", [
-                                'user_id' => $user->id,
-                                'token_device_id' => $user->deviceId,
-                                'current_device_id' => $currentAppDeviceId,
-                                'path' => $path,
-                            ]);
-                        } else {
-                            // For web tokens, reject if validation fails
-                            Log::warning("Web token rejected - validation failed", [
-                                'user_id' => $user->id,
-                                'device_id' => $user->deviceId,
-                                'path' => $path,
-                            ]);
-                        }
-                        
-                        // Token is from a previous session/device
-                        // DO NOT invalidate the token here - let it be handled by auth:api middleware
-                        // Just return 401 to reject the request
-                        Log::warning("Token rejected - returning 401", [
+                        // For web tokens, reject if validation fails
+                        Log::warning("Web token rejected - validation failed", [
                             'user_id' => $user->id,
                             'device_id' => $user->deviceId,
                             'path' => $path,
-                            'is_summary' => $isSummaryEndpoint,
                         ]);
                         
                         return response()->json([
