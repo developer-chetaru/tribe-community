@@ -71,10 +71,6 @@ Route::post('/add-happy-index', [HappyIndexController::class, 'addHappyIndex']);
 Route::post('/user/apply-leave', [UserLeaveController::class, 'userApplyLeave']);
 Route::post('/user-change-leave-status', [UserLeaveController::class, 'userChangeLeaveStatus']);
 
-Route::get('/weekly-summaries', [WeeklySummaryController::class, 'index']);
-Route::get('/monthly-summary', [MonthlySummaryController::class, 'index']);
-Route::post('/monthly-summary/generate', [MonthlySummaryController::class, 'generate']);
-
 Route::get('/reflections', [ReflectionApiController::class, 'list']);
 Route::post('/reflections', [ReflectionApiController::class, 'create']);
 Route::get('/reflections/{reflection}/chats', [ReflectionApiController::class, 'chats']);

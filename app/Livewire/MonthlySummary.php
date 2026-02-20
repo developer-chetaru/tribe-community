@@ -17,22 +17,25 @@ class MonthlySummary extends Component
     public $validMonths = [];
     public $validYears = [];
     public $isGenerating = false;
+    public $refreshKey = 0;
 
     public function mount()
     {
-        $this->selectedYear = now()->year;
-        $this->selectedMonth = now()->month;
+        $this->selectedYear = (int) now()->year;
+        $this->selectedMonth = (int) now()->month;
 
         $this->calculateValidMonthsAndYears();
         $this->loadSummariesFromDatabase();
     }
 
-    public function updatedSelectedYear($value)
+    public function filterByYear($value)
     {
-        // Ensure year is cast to int
-        $this->selectedYear = (int) $value;
+        \Illuminate\Support\Facades\Log::info('MonthlySummary filterByYear CALLED', [
+            'user_id' => Auth::id(),
+            'received_value' => $value,
+        ]);
         
-        // Store the current month before recalculating (cast to int)
+        $this->selectedYear = (int) $value;
         $previousMonth = (int) $this->selectedMonth;
         
         // Recalculate valid months for the new year
@@ -47,28 +50,39 @@ class MonthlySummary extends Component
                 $this->selectedMonth = (int) max($validMonthValues);
             } else {
                 // Preserve the same month if it's valid
-                $this->selectedMonth = $previousMonth;
+                $this->selectedMonth = (int) $previousMonth;
             }
         }
         
-        // Debug logging
-        \Illuminate\Support\Facades\Log::info('MonthlySummary updatedSelectedYear', [
-            'user_id' => Auth::id(),
-            'previousMonth' => $previousMonth,
-            'newYear' => $this->selectedYear,
-            'selectedMonth' => $this->selectedMonth,
-            'validMonths' => $validMonthValues,
-        ]);
-        
+        // Load data
         $this->loadSummariesFromDatabase();
+        
+        // Set refresh key to force re-render
+        $this->refreshKey = time();
+        
+        \Illuminate\Support\Facades\Log::info('MonthlySummary filterByYear COMPLETED', [
+            'user_id' => Auth::id(),
+            'selectedYear' => $this->selectedYear,
+            'selectedMonth' => $this->selectedMonth,
+            'monthlySummaries_count' => count($this->monthlySummaries),
+            'refreshKey' => $this->refreshKey,
+        ]);
     }
 
-    public function updatedSelectedMonth($value)
+    public function updatedSelectedYear($value)
     {
-        // Ensure month is cast to int
-        $this->selectedMonth = (int) $value;
+        // Keep this for wire:model compatibility but use filterByYear for actual filtering
+        $this->filterByYear($value);
+    }
+
+    public function filterByMonth($value)
+    {
+        \Illuminate\Support\Facades\Log::info('MonthlySummary filterByMonth CALLED', [
+            'user_id' => Auth::id(),
+            'received_value' => $value,
+        ]);
         
-        // Ensure year is also int (in case it's a string)
+        $this->selectedMonth = (int) $value;
         $this->selectedYear = (int) $this->selectedYear;
         
         // Recalculate valid months to ensure consistency
@@ -81,15 +95,25 @@ class MonthlySummary extends Component
             $this->selectedMonth = (int) min($validMonthValues);
         }
         
-        // Debug logging
-        \Illuminate\Support\Facades\Log::info('MonthlySummary updatedSelectedMonth', [
+        // Load data
+        $this->loadSummariesFromDatabase();
+        
+        // Set refresh key to force re-render
+        $this->refreshKey = time();
+        
+        \Illuminate\Support\Facades\Log::info('MonthlySummary filterByMonth COMPLETED', [
             'user_id' => Auth::id(),
             'selectedYear' => $this->selectedYear,
             'selectedMonth' => $this->selectedMonth,
-            'validMonths' => $validMonthValues,
+            'monthlySummaries_count' => count($this->monthlySummaries),
+            'refreshKey' => $this->refreshKey,
         ]);
-        
-        $this->loadSummariesFromDatabase();
+    }
+
+    public function updatedSelectedMonth($value)
+    {
+        // Keep this for wire:model compatibility but use filterByMonth for actual filtering
+        $this->filterByMonth($value);
     }
 
     public function loadSummariesFromDatabase()
@@ -100,6 +124,9 @@ class MonthlySummary extends Component
         // Ensure year and month are integers
         $year = (int) $this->selectedYear;
         $month = (int) $this->selectedMonth;
+
+        // Reset array first to ensure Livewire detects the change
+        $this->monthlySummaries = [];
 
         // Debug logging
         \Illuminate\Support\Facades\Log::info('MonthlySummary loadSummariesFromDatabase called', [
@@ -130,7 +157,13 @@ class MonthlySummary extends Component
             ->where('month', $month)
             ->first();
 
+        // Assign the new data - Livewire should detect this change
         $this->monthlySummaries = $summary ? [$summary] : [];
+        
+        \Illuminate\Support\Facades\Log::info('MonthlySummary monthlySummaries updated', [
+            'user_id' => $user->id,
+            'count' => count($this->monthlySummaries),
+        ]);
         
         \Illuminate\Support\Facades\Log::info('MonthlySummary: Summary loaded', [
             'user_id' => $user->id,
@@ -208,20 +241,23 @@ class MonthlySummary extends Component
         $user = Auth::user();
         if (!$user) return;
 
-        $startYear = $user->created_at->year;
-        $currentYear = now()->year;
+        $startYear = (int) $user->created_at->year;
+        $currentYear = (int) now()->year;
         $this->validYears = range($startYear, $currentYear);
 
+        // Ensure selectedYear is int for comparison
+        $selectedYear = (int) $this->selectedYear;
+
         // Determine valid months for the selected year
-        if ($this->selectedYear == $startYear && $this->selectedYear == $currentYear) {
-            $startMonth = $user->created_at->month;
-            $maxMonth = now()->month;
-        } elseif ($this->selectedYear == $startYear) {
-            $startMonth = $user->created_at->month;
+        if ($selectedYear == $startYear && $selectedYear == $currentYear) {
+            $startMonth = (int) $user->created_at->month;
+            $maxMonth = (int) now()->month;
+        } elseif ($selectedYear == $startYear) {
+            $startMonth = (int) $user->created_at->month;
             $maxMonth = 12;
-        } elseif ($this->selectedYear == $currentYear) {
+        } elseif ($selectedYear == $currentYear) {
             $startMonth = 1;
-            $maxMonth = now()->month;
+            $maxMonth = (int) now()->month;
         } else {
             $startMonth = 1;
             $maxMonth = 12;
@@ -238,6 +274,18 @@ class MonthlySummary extends Component
 
     public function render()
     {
+        // Recalculate valid months and years on each render to ensure consistency
+        $this->calculateValidMonthsAndYears();
+        
+        // Log render to debug
+        \Illuminate\Support\Facades\Log::info('MonthlySummary render called', [
+            'user_id' => Auth::id(),
+            'selectedYear' => $this->selectedYear,
+            'selectedMonth' => $this->selectedMonth,
+            'monthlySummaries_count' => count($this->monthlySummaries),
+            'refreshKey' => $this->refreshKey,
+        ]);
+        
         return view('livewire.monthly-summary');
     }
 }

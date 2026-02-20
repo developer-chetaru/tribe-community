@@ -15,6 +15,7 @@ class WeeklySummary extends Component
     public $weeklySummaries = [];
     public $validMonths = [];
     public $validYears = [];
+    public $refreshKey = 0;
 
     public function mount()
     {
@@ -25,12 +26,15 @@ class WeeklySummary extends Component
         $this->loadSummariesFromDatabase();
     }
 
-    public function updatedSelectedMonth($value)
+    public function filterByMonth($value)
     {
-        // Ensure month is cast to int
-        $this->selectedMonth = (int) $value;
+        Log::info('WeeklySummary filterByMonth CALLED', [
+            'user_id' => Auth::id(),
+            'received_value' => $value,
+            'value_type' => gettype($value),
+        ]);
         
-        // Ensure year is also int (in case it's a string)
+        $this->selectedMonth = (int) $value;
         $this->selectedYear = (int) $this->selectedYear;
         
         // Recalculate valid months to ensure consistency
@@ -43,23 +47,36 @@ class WeeklySummary extends Component
             $this->selectedMonth = (int) min($validMonthValues);
         }
         
-        // Debug logging
-        Log::info('WeeklySummary updatedSelectedMonth', [
+        // Load data
+        $this->loadSummariesFromDatabase();
+        
+        // Increment refresh key to force re-render
+        $this->refreshKey = time();
+        
+        Log::info('WeeklySummary filterByMonth COMPLETED', [
             'user_id' => Auth::id(),
             'selectedYear' => $this->selectedYear,
             'selectedMonth' => $this->selectedMonth,
-            'validMonths' => $validMonthValues,
+            'weeklySummaries_count' => count($this->weeklySummaries),
+            'refreshKey' => $this->refreshKey,
         ]);
-        
-        $this->loadSummariesFromDatabase();
     }
 
-    public function updatedSelectedYear($value)
+    public function updatedSelectedMonth($value)
     {
-        // Ensure year is cast to int
-        $this->selectedYear = (int) $value;
+        // Keep this for wire:model compatibility but use filterByMonth for actual filtering
+        $this->filterByMonth($value);
+    }
+
+    public function filterByYear($value)
+    {
+        Log::info('WeeklySummary filterByYear CALLED', [
+            'user_id' => Auth::id(),
+            'received_value' => $value,
+            'value_type' => gettype($value),
+        ]);
         
-        // Store the current month before recalculating (cast to int)
+        $this->selectedYear = (int) $value;
         $previousMonth = (int) $this->selectedMonth;
         
         // Recalculate valid months for the new year
@@ -69,29 +86,34 @@ class WeeklySummary extends Component
         $validMonthValues = array_column($this->validMonths, 'value');
         if (!empty($validMonthValues)) {
             // Try to preserve the same month if it's valid for the new year
-            // This ensures Oct 2026 -> Oct 2025 works correctly
             if (!in_array($previousMonth, $validMonthValues)) {
                 // If previous month is not valid, set to last valid month (most recent)
-                // This ensures we show the most recent data available
                 $this->selectedMonth = (int) max($validMonthValues);
             } else {
                 // Preserve the same month if it's valid
-                $this->selectedMonth = $previousMonth;
+                $this->selectedMonth = (int) $previousMonth;
             }
         }
         
-        // Debug logging
-        Log::info('WeeklySummary updatedSelectedYear', [
-            'user_id' => Auth::id(),
-            'previousMonth' => $previousMonth,
-            'newYear' => $this->selectedYear,
-            'selectedMonth' => $this->selectedMonth,
-            'selectedMonthType' => gettype($this->selectedMonth),
-            'validMonths' => $validMonthValues,
-        ]);
-        
-        // Load summaries for the new year and (possibly adjusted) month
+        // Load data
         $this->loadSummariesFromDatabase();
+        
+        // Increment refresh key to force re-render
+        $this->refreshKey = time();
+        
+        Log::info('WeeklySummary filterByYear COMPLETED', [
+            'user_id' => Auth::id(),
+            'selectedYear' => $this->selectedYear,
+            'selectedMonth' => $this->selectedMonth,
+            'weeklySummaries_count' => count($this->weeklySummaries),
+            'refreshKey' => $this->refreshKey,
+        ]);
+    }
+
+    public function updatedSelectedYear($value)
+    {
+        // Keep this for wire:model compatibility but use filterByYear for actual filtering
+        $this->filterByYear($value);
     }
 
     public function loadSummariesFromDatabase()
@@ -102,6 +124,9 @@ class WeeklySummary extends Component
         // Ensure year and month are integers
         $year = (int) $this->selectedYear;
         $month = (int) $this->selectedMonth;
+
+        // Reset array first to ensure Livewire detects the change
+        $this->weeklySummaries = [];
 
         // Debug logging
         Log::info('WeeklySummary loadSummariesFromDatabase called', [
@@ -165,7 +190,14 @@ class WeeklySummary extends Component
             $weekStart->addWeek();
         }
 
-        $this->weeklySummaries = $weeksInMonth;
+        // Convert to indexed array - use array_values to ensure Livewire detects the change
+        $this->weeklySummaries = array_values($weeksInMonth);
+        
+        Log::info('WeeklySummary weeklySummaries updated', [
+            'user_id' => $user->id,
+            'count' => count($this->weeklySummaries),
+            'weeks' => array_column($this->weeklySummaries, 'week'),
+        ]);
     }
 
     private function calculateValidMonthsAndYears()
@@ -173,19 +205,22 @@ class WeeklySummary extends Component
         $user = Auth::user();
         if (!$user) return;
 
-        $startYear = $user->created_at->year;
-        $currentYear = now()->year;
+        $startYear = (int) $user->created_at->year;
+        $currentYear = (int) now()->year;
         $this->validYears = range($startYear, $currentYear);
 
-        if ($this->selectedYear == $startYear && $this->selectedYear == $currentYear) {
-            $startMonth = $user->created_at->month;
-            $maxMonth = now()->month;
-        } elseif ($this->selectedYear == $startYear) {
-            $startMonth = $user->created_at->month;
+        // Ensure selectedYear is int for comparison
+        $selectedYear = (int) $this->selectedYear;
+
+        if ($selectedYear == $startYear && $selectedYear == $currentYear) {
+            $startMonth = (int) $user->created_at->month;
+            $maxMonth = (int) now()->month;
+        } elseif ($selectedYear == $startYear) {
+            $startMonth = (int) $user->created_at->month;
             $maxMonth = 12;
-        } elseif ($this->selectedYear == $currentYear) {
+        } elseif ($selectedYear == $currentYear) {
             $startMonth = 1;
-            $maxMonth = now()->month;
+            $maxMonth = (int) now()->month;
         } else {
             $startMonth = 1;
             $maxMonth = 12;
@@ -202,6 +237,18 @@ class WeeklySummary extends Component
 
     public function render()
     {
+        // Recalculate valid months and years on each render to ensure consistency
+        $this->calculateValidMonthsAndYears();
+        
+        // Log render to debug
+        Log::info('WeeklySummary render called', [
+            'user_id' => Auth::id(),
+            'selectedYear' => $this->selectedYear,
+            'selectedMonth' => $this->selectedMonth,
+            'weeklySummaries_count' => count($this->weeklySummaries),
+            'refreshKey' => $this->refreshKey,
+        ]);
+        
         return view('livewire.weekly-summary');
     }
 }

@@ -64,6 +64,8 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\Billing\StripeSubscriptionController;
 use App\Http\Controllers\Billing\StripeWebhookController;
 use App\Http\Controllers\Billing\RefundController;
+use App\Http\Controllers\Api\WeeklySummaryController;
+use App\Http\Controllers\Api\MonthlySummaryController;
 
 
 use App\Http\Controllers\ForgotController;
@@ -413,5 +415,12 @@ Route::middleware([
         Route::get('/industries', Industry::class)->name('industries.list');
         Route::get('/industries/add', IndustryAdd::class)->name('industries.add');
         Route::get('/industries/edit/{id}', IndustryEdit::class)->name('industries.edit');
+    });
+    
+    // API routes for summaries (use session authentication)
+    Route::prefix('api')->group(function () {
+        Route::get('/weekly-summaries', [WeeklySummaryController::class, 'index']);
+        Route::get('/monthly-summary', [MonthlySummaryController::class, 'index']);
+        Route::post('/monthly-summary/generate', [MonthlySummaryController::class, 'generate']);
     });
 });
