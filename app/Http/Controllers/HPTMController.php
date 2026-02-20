@@ -16,6 +16,7 @@ use App\Models\IotNotification;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Concerns\UpdatesUserTimezone;
@@ -1476,6 +1477,117 @@ class HPTMController extends Controller
                 'status'  => false,
                 'message' => 'Failed to delete profile photo',
                 'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete user account.
+     *
+     * @OA\Delete(
+     *     path="/api/delete-account",
+     *     tags={"User Profile"},
+     *     summary="Delete user account",
+     *     description="Permanently delete the authenticated user's account. Requires password confirmation. Once deleted, all user data will be permanently removed.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"password"},
+     *             @OA\Property(property="password", type="string", format="password", example="userpassword123", description="User's current password for confirmation")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Account deleted successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Account deleted successfully")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized - Invalid password or user not authenticated",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="The provided password is incorrect.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Validation error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Validation failed"),
+     *             @OA\Property(property="errors", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Server error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Failed to delete account")
+     *         )
+     *     )
+     * )
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function deleteAccount(Request $request)
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'User not authenticated'
+                ], 401);
+            }
+
+            // Validate password
+            $validated = $request->validate([
+                'password' => ['required', 'string'],
+            ]);
+
+            // Verify password
+            if (!Hash::check($validated['password'], $user->password)) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'The provided password is incorrect.'
+                ], 401);
+            }
+
+            // Use Jetstream's DeleteUser action
+            app(\Laravel\Jetstream\Contracts\DeletesUsers::class)->delete($user);
+
+            // Revoke all tokens for this user (if using Sanctum)
+            if (method_exists($user, 'tokens')) {
+                $user->tokens()->delete();
+            }
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Account deleted successfully'
+            ], 200);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Validation failed',
+                'errors'  => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Error deleting user account via API: ' . $e->getMessage(), [
+                'user_id' => $user->id ?? null,
+                'trace'   => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Failed to delete account. Please try again.'
             ], 500);
         }
     }
