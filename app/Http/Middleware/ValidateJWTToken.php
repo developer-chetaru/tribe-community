@@ -59,8 +59,31 @@ class ValidateJWTToken
                 // Summary endpoints will go through normal validation, but we'll be lenient for current device
                 
                 // Get user from token
+                // NOTE: auth:api middleware should have already authenticated the token
+                // But we need to get the user here for validation
                 try {
                     $user = JWTAuth::setToken($token)->authenticate();
+                    if (!$user) {
+                        // If user is null, token is invalid - let auth:api middleware handle it
+                        Log::warning("JWT token authenticated but user is null", [
+                            'path' => $path,
+                        ]);
+                        return $next($request);
+                    }
+                } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
+                    // Token is expired - let auth:api middleware handle it
+                    Log::debug("JWT token expired", [
+                        'path' => $path,
+                        'error' => $e->getMessage(),
+                    ]);
+                    return $next($request);
+                } catch (\Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
+                    // Token is invalid - let auth:api middleware handle it
+                    Log::debug("JWT token invalid", [
+                        'path' => $path,
+                        'error' => $e->getMessage(),
+                    ]);
+                    return $next($request);
                 } catch (\Exception $e) {
                     // If authentication fails, let JWT middleware handle it
                     Log::debug("JWT authentication failed", [
@@ -97,23 +120,38 @@ class ValidateJWTToken
                         }
                     }
                     
-                    if (!$isWebToken && $requestDeviceId) {
-                        // This is an app token - use request device ID, don't update database
-                        // Database might have web deviceId from web login
-                        $user->deviceId = $requestDeviceId;
-                        Log::debug("Using request device ID for app token validation", [
-                            'user_id' => $user->id,
-                            'request_device_id' => $requestDeviceId,
-                            'db_device_id' => $user->getOriginal('deviceId'),
-                        ]);
+                    // CRITICAL: For app tokens, use request device ID for validation
+                    // Database might have web deviceId from web login, so we need to use request header
+                    if (!$isWebToken) {
+                        if ($requestDeviceId) {
+                            // Use request device ID for validation (don't update database)
+                            $user->deviceId = $requestDeviceId;
+                            Log::info("Using request device ID for app token validation", [
+                                'user_id' => $user->id,
+                                'request_device_id' => $requestDeviceId,
+                                'db_device_id' => $user->getOriginal('deviceId'),
+                                'path' => $path,
+                            ]);
+                        } else {
+                            // No device ID in request - try to get from cache
+                            $appDeviceKey = "user_current_app_device_{$user->id}";
+                            $cachedAppDeviceId = \Illuminate\Support\Facades\Cache::get($appDeviceKey);
+                            if ($cachedAppDeviceId && strpos($cachedAppDeviceId, 'web_') !== 0) {
+                                $user->deviceId = $cachedAppDeviceId;
+                                Log::info("Using cached app device ID for validation", [
+                                    'user_id' => $user->id,
+                                    'cached_device_id' => $cachedAppDeviceId,
+                                    'path' => $path,
+                                ]);
+                            }
+                        }
                     } else if ($requestDeviceId && $requestDeviceId !== $user->deviceId) {
-                        // For web tokens or if no device ID in request, update user model
+                        // For web tokens, update user model
                         Log::warning("Device ID mismatch in request vs user model", [
                             'user_id' => $user->id,
                             'request_device_id' => $requestDeviceId,
                             'user_device_id' => $user->deviceId,
                         ]);
-                        // Only update if it's a web token (app tokens handled above)
                         if ($isWebToken) {
                             $user->deviceId = $requestDeviceId;
                         }
@@ -163,44 +201,47 @@ class ValidateJWTToken
                         ]);
                     }
                     
-                    // For app tokens, be extremely lenient - default to allowing unless we're 100% certain it's invalid
+                    // For app tokens, check if this is the current device FIRST
+                    // If it's the current device, allow it immediately (no need for further validation)
                     if (!$isWebToken) {
-                        // For app tokens, check if there's any device tracking at all
                         $appDeviceKey = "user_current_app_device_{$user->id}";
                         $currentAppDeviceId = \Illuminate\Support\Facades\Cache::get($appDeviceKey);
                         
-                        // If no app device tracking exists, allow the token (might be first login or cache issue)
-                        if (!$currentAppDeviceId) {
-                            Log::debug("Allowing app token - no device tracking found (might be cache issue)", [
+                        // Use request device ID (already set in user->deviceId above)
+                        $tokenDeviceId = $user->deviceId;
+                        
+                        // If token is from current device, allow it immediately
+                        if ($currentAppDeviceId && $currentAppDeviceId === $tokenDeviceId) {
+                            Log::info("Allowing app token - current device (bypassing validation)", [
                                 'user_id' => $user->id,
-                                'token_device_id' => $user->deviceId,
+                                'token_device_id' => $tokenDeviceId,
+                                'current_device_id' => $currentAppDeviceId,
+                                'path' => $path,
+                                'is_summary' => $isSummaryEndpoint,
                             ]);
                             return $next($request);
                         }
                         
-                        // For app tokens, check token age first - if it's recent, allow it
-                        try {
-                            $payload = JWTAuth::setToken($token)->getPayload();
-                            $tokenIat = $payload->get('iat');
-                            $tokenAge = now()->timestamp - $tokenIat;
-                            
-                            // If token is less than 10 minutes old, allow it (very lenient for app tokens)
-                            if ($tokenAge < 600) {
-                                Log::debug("Allowing app token - relatively recent (within 10 minutes)", [
-                                    'user_id' => $user->id,
-                                    'token_age' => $tokenAge,
-                                    'device_id' => $user->deviceId,
-                                ]);
-                                return $next($request);
-                            }
-                        } catch (\Exception $e) {
-                            // If we can't decode, allow it for app tokens (being lenient)
-                            Log::debug("Allowing app token - decode failed, being lenient", [
+                        // If no app device tracking exists, allow the token (might be first login or cache issue)
+                        if (!$currentAppDeviceId) {
+                            Log::info("Allowing app token - no device tracking found (might be cache issue)", [
                                 'user_id' => $user->id,
-                                'device_id' => $user->deviceId,
+                                'token_device_id' => $tokenDeviceId,
+                                'path' => $path,
+                                'is_summary' => $isSummaryEndpoint,
                             ]);
                             return $next($request);
                         }
+                        
+                        // Token is from different device - continue to validation
+                        // This will check if it's an old device (should be rejected) or valid
+                        Log::info("App token from different device - checking validation", [
+                            'user_id' => $user->id,
+                            'token_device_id' => $tokenDeviceId,
+                            'current_device_id' => $currentAppDeviceId,
+                            'path' => $path,
+                            'is_summary' => $isSummaryEndpoint,
+                        ]);
                     }
                     
                     // Check if token is from current session and device
@@ -208,39 +249,28 @@ class ValidateJWTToken
                     $isValid = $sessionService->isTokenValid($token, $user);
                     
                     if (!$isValid) {
-                        // For app tokens, be extremely lenient - only reject if we're absolutely certain
+                        // For app tokens, check if this is still the current device
+                        // (might have been updated during validation)
                         if (!$isWebToken) {
-                            // For app tokens, default to allowing unless we're 100% sure it's invalid
-                            // Check token age one more time
-                            try {
-                                $payload = JWTAuth::setToken($token)->getPayload();
-                                $tokenIat = $payload->get('iat');
-                                $tokenAge = now()->timestamp - $tokenIat;
-                                
-                                // If token is less than 30 minutes old, allow it (very lenient)
-                                if ($tokenAge < 1800) {
-                                    Log::debug("Allowing app token - validation failed but token is recent (within 30 minutes)", [
-                                        'user_id' => $user->id,
-                                        'token_age' => $tokenAge,
-                                        'device_id' => $user->deviceId,
-                                    ]);
-                                    return $next($request);
-                                }
-                            } catch (\Exception $e) {
-                                // If we can't decode, allow it for app tokens
-                                Log::debug("Allowing app token - validation failed but decode also failed, being lenient", [
+                            $appDeviceKey = "user_current_app_device_{$user->id}";
+                            $currentAppDeviceId = \Illuminate\Support\Facades\Cache::get($appDeviceKey);
+                            
+                            // If token is from current device, allow it (validation might have false negative)
+                            if ($currentAppDeviceId === $user->deviceId) {
+                                Log::debug("Allowing app token - current device (validation false negative)", [
                                     'user_id' => $user->id,
-                                    'device_id' => $user->deviceId,
+                                    'token_device_id' => $user->deviceId,
+                                    'current_device_id' => $currentAppDeviceId,
                                 ]);
                                 return $next($request);
                             }
                             
-                            // Only reject if token is very old (more than 30 minutes) AND validation failed
-                            // This ensures we only reject tokens that are definitely invalid
-                            Log::warning("App token rejected - very old and validation failed", [
+                            // Token is from old device - this is expected when new login happens
+                            // Reject it to enforce single device login
+                            Log::warning("App token rejected - from old device (new login detected)", [
                                 'user_id' => $user->id,
-                                'device_id' => $user->deviceId,
-                                'token_age' => $tokenAge ?? 'unknown',
+                                'token_device_id' => $user->deviceId,
+                                'current_device_id' => $currentAppDeviceId,
                             ]);
                         } else {
                             // For web tokens, reject if validation fails
@@ -250,12 +280,15 @@ class ValidateJWTToken
                             ]);
                         }
                         
-                        // Token is from a previous session/device, invalidate it
-                        try {
-                            JWTAuth::setToken($token)->invalidate();
-                        } catch (\Exception $e) {
-                            // Token might already be invalid
-                        }
+                        // Token is from a previous session/device
+                        // DO NOT invalidate the token here - let it be handled by auth:api middleware
+                        // Just return 401 to reject the request
+                        Log::warning("Token rejected - returning 401", [
+                            'user_id' => $user->id,
+                            'device_id' => $user->deviceId,
+                            'path' => $path,
+                            'is_summary' => $isSummaryEndpoint,
+                        ]);
                         
                         return response()->json([
                             'status' => false,

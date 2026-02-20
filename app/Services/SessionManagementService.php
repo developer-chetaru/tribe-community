@@ -410,22 +410,10 @@ class SessionManagementService
             // App tokens: any other deviceId
             $isWebToken = (!$deviceId || $deviceId === 'web_default' || strpos($deviceId, 'web_') === 0);
             
-            // CRITICAL: For app tokens, ALWAYS check cache first to get correct device ID
-            // Web login might have overwritten database deviceId, but cache has the real app deviceId
-            if (!$isWebToken) {
-                $appDeviceKey = "user_current_app_device_{$user->id}";
-                $cachedAppDeviceId = Cache::get($appDeviceKey);
-                
-                // If we have a cached app device ID, use it (it's the source of truth)
-                if ($cachedAppDeviceId && strpos($cachedAppDeviceId, 'web_') !== 0) {
-                    $deviceId = $cachedAppDeviceId;
-                    Log::debug("Using cached app device ID (web login safe)", [
-                        'user_id' => $user->id,
-                        'original_device_id' => $user->deviceId,
-                        'cached_app_device_id' => $cachedAppDeviceId,
-                    ]);
-                }
-            }
+            // CRITICAL: For app tokens, use the device ID from user model (set by middleware from request header)
+            // This is the actual device ID from the token request, which is what we need to validate
+            // Don't override it with cache - the middleware already set it correctly
+            // The cache device ID is what we compare against, not what we use as the token's device ID
             
             // Check platform-specific current device
             if ($isWebToken) {
@@ -439,7 +427,11 @@ class SessionManagementService
             // This ensures that tokens from the current app device are never rejected by web login
             // For web tokens, we still need to check timestamps
             // ALSO: If no current device ID is set, allow app tokens (might be first time or cache cleared)
-            if ($currentDeviceId === $deviceId || (!$currentDeviceId && !$isWebToken)) {
+            // IMPORTANT: Use deviceId from user model (set by middleware from request header) for comparison
+            // Don't use cached device ID - that's what we're comparing against
+            $tokenDeviceId = $user->deviceId ?? $deviceId; // Use request device ID from middleware
+            
+            if ($currentDeviceId === $tokenDeviceId || (!$currentDeviceId && !$isWebToken)) {
                 try {
                     $payload = JWTAuth::setToken($token)->getPayload();
                     $tokenIat = $payload->get('iat');
@@ -451,12 +443,12 @@ class SessionManagementService
                     if (!$isWebToken) {
                         // This is an app token from current device - allow it immediately
                         // Don't check invalidation here - that's checked later for non-current devices
-                        Log::debug("App token allowed - current device (web login safe)", [
+                        Log::info("App token allowed - current device (web login safe)", [
                             'user_id' => $user->id,
-                            'token_device_id' => $deviceId,
+                            'token_device_id' => $tokenDeviceId,
+                            'current_device_id' => $currentDeviceId,
                             'token_iat' => $tokenIat,
                             'token_age' => $tokenAge,
-                            'current_device_id' => $currentDeviceId,
                         ]);
                         return true; // Current app device token is always valid (web login safe)
                     }
@@ -539,7 +531,7 @@ class SessionManagementService
             // CRITICAL: For app tokens ONLY, check global app invalidation timestamp
             // Web tokens should NEVER check app invalidation (they use database sessions)
             // This ensures web login NEVER affects app tokens
-            // FOR APP TOKENS: Be extremely lenient - only reject if we're absolutely certain
+            // FOR APP TOKENS: Check invalidation but be lenient for current device
             if (!$isWebToken) {
                 $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
                 $appInvalidationTimestamp = Cache::get($appInvalidationKey);
@@ -549,40 +541,49 @@ class SessionManagementService
                         $payload = JWTAuth::setToken($token)->getPayload();
                         $tokenIat = $payload->get('iat');
                         
-                        // CRITICAL: Only reject if token is significantly older than invalidation timestamp (more than 60 seconds)
-                        // This prevents false rejections due to cache timing issues
-                        if ($tokenIat < $appInvalidationTimestamp) {
-                            $timeDifference = $appInvalidationTimestamp - $tokenIat;
-                            
-                            // Only reject if invalidation was significantly after token (more than 60 seconds)
-                            // AND it's not the current device
-                            if ($timeDifference > 60 && $currentDeviceId !== $deviceId) {
-                                Log::warning("App token rejected - issued significantly before global invalidation (not current device)", [
-                                    'user_id' => $user->id,
-                                    'token_device_id' => $deviceId,
-                                    'current_device_id' => $currentDeviceId,
-                                    'token_iat' => $tokenIat,
-                                    'invalidation_timestamp' => $appInvalidationTimestamp,
-                                    'time_difference' => $timeDifference,
-                                ]);
-                                return false;
-                            } else {
-                                // Small time difference or current device - allow token (might be cache issue)
-                                Log::debug("App token allowed - invalidation check passed (small time difference or current device)", [
-                                    'user_id' => $user->id,
-                                    'token_device_id' => $deviceId,
-                                    'current_device_id' => $currentDeviceId,
-                                    'token_iat' => $tokenIat,
-                                    'invalidation_timestamp' => $appInvalidationTimestamp,
-                                    'time_difference' => $timeDifference,
-                                ]);
-                                // Continue - allow token
+                        // CRITICAL: If token is from CURRENT device, always allow it (even if before invalidation)
+                        // This handles cases where cache might be out of sync
+                        if ($currentDeviceId === $deviceId) {
+                            Log::debug("App token allowed - current device (invalidation check skipped)", [
+                                'user_id' => $user->id,
+                                'token_device_id' => $deviceId,
+                                'token_iat' => $tokenIat,
+                                'invalidation_timestamp' => $appInvalidationTimestamp,
+                            ]);
+                            // Continue - allow token (current device is always valid)
+                        } else {
+                            // Token is from different device - check invalidation
+                            // Only reject if token is significantly older than invalidation timestamp (more than 60 seconds)
+                            // This prevents false rejections due to cache timing issues
+                            if ($tokenIat < $appInvalidationTimestamp) {
+                                $timeDifference = $appInvalidationTimestamp - $tokenIat;
+                                
+                                // Only reject if invalidation was significantly after token (more than 60 seconds)
+                                if ($timeDifference > 60) {
+                                    Log::warning("App token rejected - issued significantly before global invalidation (different device)", [
+                                        'user_id' => $user->id,
+                                        'token_device_id' => $deviceId,
+                                        'current_device_id' => $currentDeviceId,
+                                        'token_iat' => $tokenIat,
+                                        'invalidation_timestamp' => $appInvalidationTimestamp,
+                                        'time_difference' => $timeDifference,
+                                    ]);
+                                    return false;
+                                } else {
+                                    // Small time difference - allow token (might be cache issue)
+                                    Log::debug("App token allowed - invalidation check passed (small time difference)", [
+                                        'user_id' => $user->id,
+                                        'token_device_id' => $deviceId,
+                                        'current_device_id' => $currentDeviceId,
+                                        'token_iat' => $tokenIat,
+                                        'invalidation_timestamp' => $appInvalidationTimestamp,
+                                        'time_difference' => $timeDifference,
+                                    ]);
+                                    // Continue - allow token
+                                }
                             }
-                        }
-                        
-                        // Token passed invalidation check (tokenIat >= invalidationTimestamp or small difference)
-                        // For app tokens, be lenient about device ID mismatch - only reject if we're certain
-                        if ($currentDeviceId !== $deviceId) {
+                            
+                            // Token passed invalidation check (tokenIat >= invalidationTimestamp or small difference)
                             // Check if there's a clear new login on current device
                             $currentDeviceTimestampKey = "user_token_timestamp_{$user->id}_{$currentDeviceId}";
                             $currentDeviceTimestamp = Cache::get($currentDeviceTimestampKey);
