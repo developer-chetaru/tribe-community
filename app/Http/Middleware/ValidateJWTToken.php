@@ -26,17 +26,25 @@ class ValidateJWTToken
                 // CRITICAL: Check if this is a summary endpoint FIRST, before authentication
                 // This allows us to skip validation for summary endpoints
                 $path = $request->path();
+                $uri = $request->getRequestUri();
+                $routeName = $request->route() ? $request->route()->getName() : null;
+                
+                // Check multiple ways to detect summary endpoints
                 $isSummaryEndpoint = strpos($path, 'api/summary/') === 0 || 
                                      $path === 'api/weekly-summaries' || 
-                                     $path === 'api/monthly-summary';
+                                     $path === 'api/monthly-summary' ||
+                                     strpos($uri, '/api/summary/') !== false ||
+                                     strpos($uri, '/api/weekly-summaries') !== false ||
+                                     strpos($uri, '/api/monthly-summary') !== false;
                 
-                // Log for debugging
-                if ($isSummaryEndpoint) {
-                    Log::info("Summary endpoint detected", [
-                        'path' => $path,
-                        'full_url' => $request->fullUrl(),
-                    ]);
-                }
+                // Log for debugging - log ALL requests to see what paths we're getting
+                Log::info("ValidateJWTToken - checking request", [
+                    'path' => $path,
+                    'uri' => $uri,
+                    'route_name' => $routeName,
+                    'is_summary_endpoint' => $isSummaryEndpoint,
+                    'full_url' => $request->fullUrl(),
+                ]);
                 
                 // Get user from token
                 try {
@@ -119,12 +127,22 @@ class ValidateJWTToken
                     }
                 }
                 
-                // If we reach here and it's a summary endpoint but user is null, still allow it
-                // (JWT middleware will handle authentication failure)
+                // CRITICAL: If this is a summary endpoint, COMPLETELY BYPASS all validation
+                // This should happen BEFORE any other validation logic
                 if ($isSummaryEndpoint) {
-                    Log::info("Summary endpoint - user is null, allowing to continue", [
-                        'path' => $path,
-                    ]);
+                    if ($user) {
+                        Log::info("Summary endpoint - COMPLETE BYPASS, allowing request", [
+                            'path' => $path,
+                            'user_id' => $user->id,
+                            'uri' => $uri,
+                        ]);
+                    } else {
+                        Log::info("Summary endpoint - user is null, allowing to continue (JWT will handle auth)", [
+                            'path' => $path,
+                            'uri' => $uri,
+                        ]);
+                    }
+                    // COMPLETE BYPASS - return immediately without any validation
                     return $next($request);
                 }
                 
