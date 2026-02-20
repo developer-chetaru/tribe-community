@@ -23,51 +23,52 @@ class ValidateJWTToken
             $token = $request->bearerToken();
             
             if ($token) {
+                // CRITICAL: Check if this is a summary endpoint FIRST, before authentication
+                // This allows us to skip validation for summary endpoints
+                $path = $request->path();
+                $isSummaryEndpoint = strpos($path, 'api/summary/') === 0 || 
+                                     $path === 'api/weekly-summaries' || 
+                                     $path === 'api/monthly-summary';
+                
                 // Get user from token
                 $user = JWTAuth::setToken($token)->authenticate();
                 
-                // CRITICAL: For app tokens on summary endpoints, be extremely lenient
-                // Check if this is a summary endpoint
-                $isSummaryEndpoint = $request->is('api/summary/*') || 
-                                     $request->is('api/weekly-summaries') || 
-                                     $request->is('api/monthly-summary');
-                
+                // CRITICAL: For app tokens on summary endpoints, SKIP ALL VALIDATION
+                // Only check if token is expired (JWT library handles that)
                 if ($isSummaryEndpoint && $user) {
                     // Get device ID from request header or user model
                     $requestDeviceId = $request->header('X-Device-Id') ?? $user->deviceId ?? null;
                     $isWebToken = (!$requestDeviceId || $requestDeviceId === 'web_default' || strpos($requestDeviceId, 'web_') === 0);
                     
-                    // For app tokens on summary endpoints, ALWAYS allow (very lenient)
-                    // Only reject if token is expired or invalid (JWT library will handle that)
+                    // For app tokens on summary endpoints, SKIP ALL VALIDATION
+                    // Just verify token is not expired - if not expired, allow immediately
                     if (!$isWebToken) {
                         try {
-                            // Just verify token is not expired - if it's not expired, allow it
+                            // Just verify token is not expired
                             $payload = JWTAuth::setToken($token)->getPayload();
                             $exp = $payload->get('exp');
                             
-                            // If token is not expired, allow it (regardless of age or device tracking)
+                            // If token is not expired, allow it immediately (skip ALL other validation)
                             if ($exp && $exp > now()->timestamp) {
-                                Log::debug("Allowing app token on summary endpoint - token not expired", [
+                                Log::debug("Allowing app token on summary endpoint - token not expired, skipping ALL validation", [
                                     'user_id' => $user->id,
                                     'device_id' => $requestDeviceId,
-                                    'endpoint' => $request->path(),
+                                    'endpoint' => $path,
                                     'expires_at' => $exp,
                                 ]);
                                 return $next($request);
                             }
+                            // If expired, let it continue to JWT middleware which will handle it
                         } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
-                            // Token is expired - let it fail
-                            Log::debug("App token on summary endpoint is expired", [
-                                'user_id' => $user->id,
-                                'device_id' => $requestDeviceId,
-                                'endpoint' => $request->path(),
-                            ]);
+                            // Token is expired - let JWT middleware handle it
+                            // Don't return here, let it continue
                         } catch (\Exception $e) {
                             // If we can't decode, allow it for app tokens on summary endpoints (being very lenient)
                             Log::debug("Allowing app token on summary endpoint - decode failed, being lenient", [
                                 'user_id' => $user->id,
                                 'device_id' => $requestDeviceId,
-                                'endpoint' => $request->path(),
+                                'endpoint' => $path,
+                                'error' => $e->getMessage(),
                             ]);
                             return $next($request);
                         }
