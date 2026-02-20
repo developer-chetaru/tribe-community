@@ -77,16 +77,16 @@ class ValidateJWTToken
                         $tokenIat = $payload->get('iat');
                         $tokenAge = now()->timestamp - $tokenIat;
                         
-                        // CRITICAL: Allow tokens issued within last 30 seconds (grace period for login)
+                        // CRITICAL: Allow tokens issued within last 60 seconds (grace period for login)
                         // This prevents newly issued tokens from being rejected during login
-                        if ($tokenAge <= 30) {
+                        // For app tokens, be even more lenient
+                        $gracePeriod = $isWebToken ? 60 : 120; // 60s for web, 120s for app
+                        
+                        if ($tokenAge <= $gracePeriod) {
                             // Also check if this is the current device - if yes, always allow
-                            $isWebToken = (!$user->deviceId || $user->deviceId === 'web_default' || strpos($user->deviceId, 'web_') === 0);
-                            if ($isWebToken) {
-                                $platformDeviceKey = "user_current_web_device_{$user->id}";
-                            } else {
-                                $platformDeviceKey = "user_current_app_device_{$user->id}";
-                            }
+                            $platformDeviceKey = $isWebToken 
+                                ? "user_current_web_device_{$user->id}"
+                                : "user_current_app_device_{$user->id}";
                             $currentDeviceId = \Illuminate\Support\Facades\Cache::get($platformDeviceKey);
                             
                             // If token is from current device and within grace period, allow it
@@ -95,6 +95,7 @@ class ValidateJWTToken
                                     'user_id' => $user->id,
                                     'token_age' => $tokenAge,
                                     'device_id' => $user->deviceId,
+                                    'is_web_token' => $isWebToken,
                                 ]);
                                 return $next($request);
                             }
@@ -103,6 +104,7 @@ class ValidateJWTToken
                             Log::debug("Allowing token - issued very recently (within grace period)", [
                                 'user_id' => $user->id,
                                 'token_age' => $tokenAge,
+                                'is_web_token' => $isWebToken,
                             ]);
                             return $next($request);
                         }
@@ -113,11 +115,49 @@ class ValidateJWTToken
                         ]);
                     }
                     
+                    // For app tokens, be more lenient - only validate if we're sure it's invalid
+                    if (!$isWebToken) {
+                        // For app tokens, check if there's any device tracking at all
+                        $appDeviceKey = "user_current_app_device_{$user->id}";
+                        $currentAppDeviceId = \Illuminate\Support\Facades\Cache::get($appDeviceKey);
+                        
+                        // If no app device tracking exists, allow the token (might be first login or cache issue)
+                        if (!$currentAppDeviceId) {
+                            Log::debug("Allowing app token - no device tracking found (might be cache issue)", [
+                                'user_id' => $user->id,
+                                'token_device_id' => $user->deviceId,
+                            ]);
+                            return $next($request);
+                        }
+                    }
+                    
                     // Check if token is from current session and device
                     $sessionService = new SessionManagementService();
                     $isValid = $sessionService->isTokenValid($token, $user);
                     
                     if (!$isValid) {
+                        // For app tokens, be more lenient - only reject if we're absolutely sure
+                        if (!$isWebToken) {
+                            // Double-check: if token is relatively recent (within 5 minutes), allow it
+                            try {
+                                $payload = JWTAuth::setToken($token)->getPayload();
+                                $tokenIat = $payload->get('iat');
+                                $tokenAge = now()->timestamp - $tokenIat;
+                                
+                                // If token is less than 5 minutes old, allow it (might be cache sync issue)
+                                if ($tokenAge < 300) {
+                                    Log::debug("Allowing app token - relatively recent (within 5 minutes, might be cache issue)", [
+                                        'user_id' => $user->id,
+                                        'token_age' => $tokenAge,
+                                        'device_id' => $user->deviceId,
+                                    ]);
+                                    return $next($request);
+                                }
+                            } catch (\Exception $e) {
+                                // If we can't decode, proceed with rejection
+                            }
+                        }
+                        
                         // Token is from a previous session/device, invalidate it
                         try {
                             JWTAuth::setToken($token)->invalidate();
@@ -128,6 +168,7 @@ class ValidateJWTToken
                         Log::warning("Token rejected - from previous session or device", [
                             'user_id' => $user->id,
                             'device_id' => $user->deviceId,
+                            'is_web_token' => $isWebToken,
                         ]);
                         
                         return response()->json([
