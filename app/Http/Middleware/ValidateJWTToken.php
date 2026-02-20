@@ -25,26 +25,45 @@ class ValidateJWTToken
             if ($token) {
                 // CRITICAL: Check if this is a summary endpoint FIRST, before authentication
                 // This allows us to skip validation for summary endpoints
-                $path = $request->path();
-                $uri = $request->getRequestUri();
+                $path = $request->path(); // e.g., "api/weekly-summaries" or "api/summary/all"
+                $uri = $request->getRequestUri(); // e.g., "/api/weekly-summaries?year=2026&month=2"
                 $routeName = $request->route() ? $request->route()->getName() : null;
                 
                 // Check multiple ways to detect summary endpoints
+                // Path might be "api/weekly-summaries" or "api/monthly-summary" or "api/summary/all"
                 $isSummaryEndpoint = strpos($path, 'api/summary/') === 0 || 
+                                     strpos($path, 'api/summary') === 0 ||
                                      $path === 'api/weekly-summaries' || 
                                      $path === 'api/monthly-summary' ||
                                      strpos($uri, '/api/summary/') !== false ||
+                                     strpos($uri, '/api/summary') !== false ||
                                      strpos($uri, '/api/weekly-summaries') !== false ||
-                                     strpos($uri, '/api/monthly-summary') !== false;
+                                     strpos($uri, '/api/monthly-summary') !== false ||
+                                     strpos($uri, 'weekly-summaries') !== false ||
+                                     strpos($uri, 'monthly-summary') !== false;
                 
                 // Log for debugging - log ALL requests to see what paths we're getting
-                Log::info("ValidateJWTToken - checking request", [
-                    'path' => $path,
-                    'uri' => $uri,
-                    'route_name' => $routeName,
-                    'is_summary_endpoint' => $isSummaryEndpoint,
-                    'full_url' => $request->fullUrl(),
-                ]);
+                // Only log summary-related requests to reduce log noise
+                if (strpos($path, 'summary') !== false || strpos($path, 'weekly') !== false || strpos($path, 'monthly') !== false) {
+                    Log::info("ValidateJWTToken - summary request detected", [
+                        'path' => $path,
+                        'uri' => $uri,
+                        'route_name' => $routeName,
+                        'is_summary_endpoint' => $isSummaryEndpoint,
+                        'full_url' => $request->fullUrl(),
+                    ]);
+                }
+                
+                // CRITICAL: If this is a summary endpoint, BYPASS validation BEFORE authentication
+                // This ensures we don't reject valid tokens due to session validation
+                if ($isSummaryEndpoint) {
+                    Log::info("Summary endpoint detected - bypassing validation BEFORE authentication", [
+                        'path' => $path,
+                        'uri' => $uri,
+                    ]);
+                    // Skip all validation for summary endpoints - let JWT middleware handle authentication
+                    return $next($request);
+                }
                 
                 // Get user from token
                 try {
