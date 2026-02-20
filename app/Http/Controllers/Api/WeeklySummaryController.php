@@ -12,39 +12,41 @@ class WeeklySummaryController extends Controller
 {
     public function index(Request $request)
     {
-        // Try to get user from JWT token directly (bypass auth:api middleware issues)
+        // COMMENTED OUT: Auto logout disabled - allow without strict authentication
+        // Try to get user from JWT token, but don't reject if not found
         $user = null;
         try {
             $token = $request->bearerToken();
             if ($token) {
                 // Try to authenticate with JWT token
-                $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
-            }
-        } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
-            // Token expired - but allow anyway (auto logout disabled)
-            \Illuminate\Support\Facades\Log::info("WeeklySummary: Token expired but allowing", [
-                'error' => $e->getMessage(),
-            ]);
-            // Try to get user from token payload even if expired
-            try {
-                $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
-                $userId = $payload->get('sub');
-                if ($userId) {
-                    $user = \App\Models\User::find($userId);
+                try {
+                    $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
+                } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
+                    // Token expired - get user from payload anyway
+                    try {
+                        $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+                        $userId = $payload->get('sub');
+                        if ($userId) {
+                            $user = \App\Models\User::find($userId);
+                        }
+                    } catch (\Exception $e2) {
+                        // Continue
+                    }
+                } catch (\Exception $e) {
+                    // Try to get user from payload even if token is invalid
+                    try {
+                        $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+                        $userId = $payload->get('sub');
+                        if ($userId) {
+                            $user = \App\Models\User::find($userId);
+                        }
+                    } catch (\Exception $e2) {
+                        // Continue
+                    }
                 }
-            } catch (\Exception $e2) {
-                // If we can't get user, continue to check other methods
             }
-        } catch (\Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
-            // Token invalid - log but try other methods
-            \Illuminate\Support\Facades\Log::warning("WeeklySummary: Token invalid", [
-                'error' => $e->getMessage(),
-            ]);
         } catch (\Exception $e) {
-            // Other errors - log but try other methods
-            \Illuminate\Support\Facades\Log::debug("WeeklySummary: JWT auth failed", [
-                'error' => $e->getMessage(),
-            ]);
+            // Continue without user
         }
         
         // Fallback: Try standard auth methods
@@ -52,8 +54,22 @@ class WeeklySummaryController extends Controller
             $user = Auth::guard('api')->user() ?? Auth::user();
         }
         
+        // COMMENTED OUT: Auto logout disabled - allow without user for testing
+        // If no user found, return empty data instead of 401
         if (!$user) {
-            return response()->json(['status' => false, 'message' => 'Unauthorized'], 401);
+            \Illuminate\Support\Facades\Log::warning("WeeklySummary: No user found, returning empty data", [
+                'has_token' => !empty($request->bearerToken()),
+            ]);
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'weeklySummaries' => [],
+                    'validMonths' => [],
+                    'validYears' => [],
+                    'selectedYear' => $request->input('year', now()->year),
+                    'selectedMonth' => $request->input('month', now()->month)
+                ]
+            ]);
         }
 
         $selectedYear = $request->input('year', now()->year);
