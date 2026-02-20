@@ -233,16 +233,6 @@ class ValidateJWTToken
                             'code' => 'SESSION_EXPIRED'
                         ], 401);
                     }
-                    */
-                    
-                    // NEW: Allow all app tokens - multiple app logins allowed
-                    if (!$isWebToken) {
-                        Log::info("Allowing app token - multiple app logins allowed", [
-                            'user_id' => $user->id,
-                            'token_device_id' => $user->deviceId,
-                            'path' => $path,
-                        ]);
-                    }
                 }
             }
         } catch (\Exception $e) {
