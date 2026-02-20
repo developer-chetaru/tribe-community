@@ -195,7 +195,7 @@
             <div class="mt-8">
                 <h4 class="text-lg font-semibold text-gray-800 mb-4">Engagement Details</h4>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {{-- Total Engagement Score --}}
+                    {{-- Total Engagement Score (Engagement Index) --}}
                     <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 border border-blue-200">
                         <div class="flex items-center justify-between mb-1">
                             <span class="text-sm font-medium text-gray-700">Total Engagement</span>
@@ -204,18 +204,18 @@
                             </svg>
                         </div>
                         <p class="text-xl font-bold text-blue-900">{{ number_format($hptmData['engagement']['totalScore'] ?? 0, 2) }}</p>
-                        <p class="text-xs text-gray-600">EI + HPTM Score</p>
+                        <p class="text-xs text-gray-600">Engagement Index</p>
                         <div class="mt-1.5 pt-1.5 border-t border-blue-200">
                             <p class="text-xs text-gray-600 leading-tight">
-                                <strong>Formula:</strong> EI Score + HPTM Score<br>
+                                <strong>Formula:</strong> (EI Score % / 100 × 200) + HPTM Score<br>
                                 <span class="text-gray-500">
-                                    <span class="font-bold text-blue-700">{{ number_format($hptmData['engagement']['eiScore'] ?? 0, 2) }}</span> + 
+                                    (<span class="font-bold text-green-700">{{ number_format($hptmData['engagement']['eiScore'] ?? 0, 2) }}</span>% / 100 × 200) + 
                                     <span class="font-bold text-purple-700">{{ number_format($hptmData['engagement']['hptmScore'] ?? 0, 2) }}</span> = 
                                     <span class="font-bold text-blue-900 text-sm">{{ number_format($hptmData['engagement']['totalScore'] ?? 0, 2) }}</span>
                                 </span>
                                 <div class="mt-1 bg-blue-50 rounded p-1 text-xs">
                                     <p class="mb-0 text-gray-600">
-                                        <strong>Example:</strong> <span class="font-bold text-blue-700">250</span> (EI) + <span class="font-bold text-purple-700">0</span> (HPTM) = <span class="font-bold text-blue-900">250</span>
+                                        <strong>Example:</strong> (<span class="font-bold text-green-700">50</span>% × 2) + <span class="font-bold text-purple-700">230</span> = <span class="font-bold text-blue-900">330</span>
                                     </p>
                                 </div>
                             </p>
@@ -230,19 +230,19 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
                         </div>
-                        <p class="text-xl font-bold text-green-900">{{ number_format($hptmData['engagement']['eiScore'] ?? 0, 2) }}</p>
+                        <p class="text-xl font-bold text-green-900">{{ number_format($hptmData['engagement']['eiScore'] ?? 0, 2) }}%</p>
                         <p class="text-xs text-gray-600">Emotional Intelligence</p>
                         <div class="mt-1.5 pt-1.5 border-t border-green-200">
                             <p class="text-xs text-gray-600 leading-tight">
-                                <strong>How it works:</strong><br>
+                                <strong>Formula:</strong> (Sentiment Submissions / Working Days) × 100<br>
                                 <span class="text-gray-500">
-                                    +<span class="font-bold text-green-700 text-sm">250</span> points per sentiment submission<br>
-                                    Current: <span class="font-bold text-green-700">{{ number_format(($hptmData['engagement']['eiScore'] ?? 0) / 250, 0) }}</span> submission(s) = 
-                                    <span class="font-bold text-green-700">{{ number_format($hptmData['engagement']['eiScore'] ?? 0, 2) }}</span> points
+                                    Current: <span class="font-bold text-green-700">{{ $hptmData['engagement']['eiScoreSubmissions'] ?? 0 }}</span> submission(s) / 
+                                    <span class="font-bold text-green-700">{{ $hptmData['engagement']['eiScoreWorkingDays'] ?? 0 }}</span> working days = 
+                                    <span class="font-bold text-green-700">{{ number_format($hptmData['engagement']['eiScore'] ?? 0, 2) }}</span>%
                                 </span>
                                 <div class="mt-1 bg-green-50 rounded p-1 text-xs">
                                     <p class="mb-0 text-gray-600">
-                                        <strong>Example:</strong> 1 submission × <span class="font-bold text-green-700">250</span> = <span class="font-bold text-green-700">250</span>
+                                        <strong>Example:</strong> <span class="font-bold text-green-700">5</span> submissions / <span class="font-bold text-green-700">10</span> working days = <span class="font-bold text-green-700">50</span>%
                                     </p>
                                 </div>
                             </p>

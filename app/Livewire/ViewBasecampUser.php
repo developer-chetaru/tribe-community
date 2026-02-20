@@ -39,34 +39,123 @@ class ViewBasecampUser extends Component
         // Get engagement service
         $engagementService = app(EngagementService::class);
         
-        // Get EI Score (raw, without +250)
-        $eiScore = $this->user->EIScore ?? 0;
+        // Get user's timezone
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($this->user);
+        $userNow = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
         
-        // Get HPTM Score (already calculated in loadHptmData)
+        // Get user's working days
+        $workingDays = ["Mon", "Tue", "Wed", "Thu", "Fri"]; // Default working days
+        if ($this->user->hasRole('basecamp')) {
+            // For basecamp users, all days are working days
+            $workingDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        } else {
+            // For organization users, use organization's working days
+            $org = $this->user->organisation;
+            if ($org && $org->working_days) {
+                if (is_array($org->working_days)) {
+                    $workingDays = $org->working_days;
+                } else {
+                    $decoded = json_decode($org->working_days, true);
+                    $workingDays = $decoded ?: $workingDays;
+                }
+            }
+        }
+        
+        // Calculate period: from user registration to today
+        $startDate = \Carbon\Carbon::parse($this->user->created_at)->setTimezone($userTimezone)->startOfDay();
+        $endDate = $userNow->copy()->endOfDay();
+        
+        // Count sentiment submissions in period
+        $sentimentSubmissions = \App\Models\HappyIndex::where('user_id', $userId)
+            ->whereBetween('created_at', [$startDate->utc(), $endDate->utc()])
+            ->count();
+        
+        // Count working days in period
+        $workingDaysCount = $this->countWorkingDays($startDate, $endDate, $workingDays, $this->user);
+        
+        // Calculate EI Score as percentage: (Sentiment Submissions / Working Days) x 100
+        $eiScorePercentage = $workingDaysCount > 0 
+            ? round(($sentimentSubmissions / $workingDaysCount) * 100, 2) 
+            : 0;
+        
+        // Get HPTM Score (raw score - lifetime, never resets)
         $hptmScore = $this->hptmData['totalRawScore'] ?? 0;
         
-        // Calculate total engagement score manually (without the +250 addition)
-        // Total = EI Score + HPTM Score (no base value added)
-        $totalEngagementScore = $eiScore + $hptmScore;
+        // Calculate Engagement Index: (EI Score % / 100 x 200) + HPTM Score
+        // Simplified: (EI Score % x 2) + HPTM Score
+        $engagementIndex = ($eiScorePercentage * 2) + $hptmScore;
         
-        // Calculate engagement index for today (in user's timezone)
-        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($this->user);
-        $userTodayDate = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone)->toDateString();
+        // Calculate total engagement score (for display - same as Engagement Index)
+        $totalEngagementScore = $engagementIndex;
         
+        // Calculate engagement index for today (in user's timezone) - for legacy compatibility
+        $userTodayDate = $userNow->toDateString();
         $userDataArr = [
             'orgId' => $this->user->orgId,
             'userId' => $userId,
             'HI_include_saturday' => $this->user->HI_include_saturday ?? 0,
             'HI_include_sunday' => $this->user->HI_include_sunday ?? 0,
         ];
-        $engagementIndex = $engagementService->getUserEngagementIndexForLastDay($userDataArr, $userTodayDate);
+        $legacyEngagementIndex = $engagementService->getUserEngagementIndexForLastDay($userDataArr, $userTodayDate);
         
         $this->hptmData['engagement'] = [
             'totalScore' => $totalEngagementScore,
-            'eiScore' => $eiScore,
+            'eiScore' => $eiScorePercentage, // Now a percentage
+            'eiScorePoints' => $this->user->EIScore ?? 0, // Keep old points for reference
+            'eiScoreSubmissions' => $sentimentSubmissions,
+            'eiScoreWorkingDays' => $workingDaysCount,
             'hptmScore' => $hptmScore,
             'engagementIndex' => $engagementIndex,
+            'legacyEngagementIndex' => $legacyEngagementIndex, // Keep for compatibility
         ];
+    }
+    
+    /**
+     * Count working days between two dates based on user's working days configuration
+     */
+    private function countWorkingDays($startDate, $endDate, $workingDays, $user)
+    {
+        $count = 0;
+        $current = $startDate->copy();
+        
+        // Map day names to Carbon day of week (0=Sunday, 1=Monday, etc.)
+        $dayMap = [
+            'Sun' => 0,
+            'Mon' => 1,
+            'Tue' => 2,
+            'Wed' => 3,
+            'Thu' => 4,
+            'Fri' => 5,
+            'Sat' => 6,
+        ];
+        
+        $workingDaysNumeric = [];
+        foreach ($workingDays as $day) {
+            if (isset($dayMap[$day])) {
+                $workingDaysNumeric[] = $dayMap[$day];
+            }
+        }
+        
+        // Also consider HI_include_saturday and HI_include_sunday
+        $includeSaturday = $user->HI_include_saturday ?? 0;
+        $includeSunday = $user->HI_include_sunday ?? 0;
+        
+        while ($current->lte($endDate)) {
+            $dayOfWeek = $current->dayOfWeek; // 0=Sunday, 1=Monday, etc.
+            
+            // Check if this day is a working day
+            if (in_array($dayOfWeek, $workingDaysNumeric)) {
+                $count++;
+            } elseif ($dayOfWeek == 6 && $includeSaturday == 1) { // Saturday
+                $count++;
+            } elseif ($dayOfWeek == 0 && $includeSunday == 1) { // Sunday
+                $count++;
+            }
+            
+            $current->addDay();
+        }
+        
+        return $count;
     }
 
     public function loadHptmData()
