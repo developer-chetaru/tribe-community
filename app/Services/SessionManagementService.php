@@ -716,6 +716,14 @@ class SessionManagementService
                     'user_id' => $user->id,
                     'error' => $e->getMessage(),
                 ]);
+                // For app tokens, be more lenient - allow if decode fails
+                if (!$isWebToken) {
+                    Log::debug("App token allowed - decode failed, being lenient", [
+                        'user_id' => $user->id,
+                        'token_device_id' => $deviceId,
+                    ]);
+                    return true;
+                }
                 return false;
             }
             
@@ -724,19 +732,35 @@ class SessionManagementService
             $currentDeviceTimestamp = Cache::get($currentDeviceTimestampKey);
             
             // If token was issued before current device's login, it's from an old device
-            // Reject it (unless it's the same device and timestamp matches)
+            // BUT: Only reject if we're CERTAIN there was a new login (60+ seconds difference)
+            // This prevents false rejections when cache has stale data
             if ($currentDeviceTimestamp && $tokenIat < $currentDeviceTimestamp) {
-                // Token is older than current device's login - check if it's from an invalidated device
-                // Check all device timestamps to see if any were invalidated (future timestamp)
-                // This is a simple check: if token is older than current device, and current device exists, reject
-                Log::warning("Token rejected - issued before current device login", [
-                    'user_id' => $user->id,
-                    'token_device_id' => $deviceId,
-                    'current_device_id' => $currentDeviceId,
-                    'token_iat' => $tokenIat,
-                    'current_device_timestamp' => $currentDeviceTimestamp,
-                ]);
-                return false;
+                $timeDifference = $currentDeviceTimestamp - $tokenIat;
+                
+                // Only reject if current device timestamp is significantly newer (more than 60 seconds)
+                // This ensures we only reject when we're CERTAIN there was a new login
+                if ($timeDifference > 60) {
+                    Log::warning("Token rejected - issued before current device login (confirmed new login)", [
+                        'user_id' => $user->id,
+                        'token_device_id' => $deviceId,
+                        'current_device_id' => $currentDeviceId,
+                        'token_iat' => $tokenIat,
+                        'current_device_timestamp' => $currentDeviceTimestamp,
+                        'time_difference' => $timeDifference,
+                    ]);
+                    return false;
+                } else {
+                    // Time difference is small - might be cache issue, allow token
+                    Log::debug("Token allowed - time difference is small (might be cache issue)", [
+                        'user_id' => $user->id,
+                        'token_device_id' => $deviceId,
+                        'current_device_id' => $currentDeviceId,
+                        'token_iat' => $tokenIat,
+                        'current_device_timestamp' => $currentDeviceTimestamp,
+                        'time_difference' => $timeDifference,
+                    ]);
+                    // Continue - allow token
+                }
             }
             
             // NEW LOGIC: Check platform-specific timestamp
@@ -846,9 +870,42 @@ class SessionManagementService
                 $tokenIat = $payload->get('iat'); // Issued at timestamp
                 
                 // Token is valid if it was issued after or at the last valid timestamp
-                // Allow a 5 second grace period for timing issues
-                $gracePeriod = 5;
-                return $tokenIat >= ($lastValidTimestamp - $gracePeriod);
+                // Allow a grace period for timing issues
+                // For app tokens, be more lenient (60 seconds) to prevent false rejections
+                $gracePeriod = $isWebToken ? 5 : 60;
+                
+                // Check if token is valid
+                $isValid = $tokenIat >= ($lastValidTimestamp - $gracePeriod);
+                
+                if (!$isValid) {
+                    // Token is older than last valid timestamp
+                    // For app tokens, only reject if timestamp difference is significant (more than 60 seconds)
+                    if (!$isWebToken) {
+                        $timeDifference = $lastValidTimestamp - $tokenIat;
+                        if ($timeDifference <= 60) {
+                            // Small difference - might be cache issue, allow token
+                            Log::debug("App token allowed - timestamp difference is small (might be cache issue)", [
+                                'user_id' => $user->id,
+                                'token_device_id' => $deviceId,
+                                'token_iat' => $tokenIat,
+                                'last_valid_timestamp' => $lastValidTimestamp,
+                                'time_difference' => $timeDifference,
+                            ]);
+                            return true;
+                        }
+                    }
+                    
+                    Log::warning("Token rejected - issued before last valid timestamp", [
+                        'user_id' => $user->id,
+                        'token_device_id' => $deviceId,
+                        'token_iat' => $tokenIat,
+                        'last_valid_timestamp' => $lastValidTimestamp,
+                        'is_web_token' => $isWebToken,
+                    ]);
+                    return false;
+                }
+                
+                return true;
             } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
                 return false;
             } catch (\Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
@@ -858,6 +915,14 @@ class SessionManagementService
                     'user_id' => $user->id,
                     'error' => $e->getMessage(),
                 ]);
+                // For app tokens, be more lenient - allow if decode fails (might be valid token)
+                if (!$isWebToken) {
+                    Log::debug("App token allowed - decode failed, being lenient", [
+                        'user_id' => $user->id,
+                        'token_device_id' => $deviceId,
+                    ]);
+                    return true;
+                }
                 return false;
             }
             

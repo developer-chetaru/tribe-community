@@ -37,6 +37,11 @@ Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     Route::post('/get-learning-checklist', [HPTMController::class, 'getLearningCheckList']);
     Route::post('/change-read-status-of-user-checklist', [HPTMController::class, 'changeReadStatusOfUserChecklist']);
 	Route::get('/summary/{filterType}', [SummaryController::class, 'getSummary']);
+	
+	// Summary APIs for app (JWT authentication)
+	Route::get('/weekly-summaries', [WeeklySummaryController::class, 'index']);
+	Route::get('/monthly-summary', [MonthlySummaryController::class, 'index']);
+	Route::post('/monthly-summary/generate', [MonthlySummaryController::class, 'generate']);
 
     // Payment APIs
     Route::post('/submit-payment', [PaymentController::class, 'submitPayment']);
