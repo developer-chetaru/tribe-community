@@ -436,6 +436,16 @@ class SessionManagementService
             // App tokens: any other deviceId
             $isWebToken = (!$deviceId || $deviceId === 'web_default' || strpos($deviceId, 'web_') === 0);
             
+            // COMMENTED OUT: Multiple app login prevention - allow all app tokens
+            // For app tokens, always return true (multiple app logins allowed)
+            if (!$isWebToken) {
+                Log::info("App token allowed - multiple app logins allowed", [
+                    'user_id' => $user->id,
+                    'token_device_id' => $deviceId,
+                ]);
+                return true;
+            }
+            
             // CRITICAL: For app tokens, use the device ID from user model (set by middleware from request header)
             // This is the actual device ID from the token request, which is what we need to validate
             // Don't override it with cache - the middleware already set it correctly

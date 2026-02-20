@@ -248,8 +248,18 @@ class ValidateJWTToken
                     }
                     
                     // COMMENTED OUT: Multiple app login prevention - allow all app tokens
-                    // Check if token is from current session and device
-                    /*
+                    // For app tokens, skip validation completely
+                    if (!$isWebToken) {
+                        // App tokens are always allowed (multiple app logins allowed)
+                        Log::info("Allowing app token - multiple app logins allowed", [
+                            'user_id' => $user->id,
+                            'token_device_id' => $user->deviceId,
+                            'path' => $path,
+                        ]);
+                        return $next($request);
+                    }
+                    
+                    // For web tokens, still do validation
                     $sessionService = new SessionManagementService();
                     $isValid = $sessionService->isTokenValid($token, $user);
                     
