@@ -12,7 +12,21 @@ class WeeklySummaryController extends Controller
 {
     public function index(Request $request)
     {
-        $user = Auth::user();
+        // Try multiple ways to get user (for API guard)
+        $user = Auth::guard('api')->user() ?? Auth::user();
+        if (!$user) {
+            // If still no user, try to get from JWT token directly
+            try {
+                $token = $request->bearerToken();
+                if ($token) {
+                    $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
+                }
+            } catch (\Exception $e) {
+                // If all methods fail, return unauthorized
+                return response()->json(['status' => false, 'message' => 'Unauthorized'], 401);
+            }
+        }
+        
         if (!$user) {
             return response()->json(['status' => false, 'message' => 'Unauthorized'], 401);
         }
