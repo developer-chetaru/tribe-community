@@ -43,4 +43,26 @@ return Application::configure(basePath: dirname(__DIR__))
             return redirect()->route('login')
                 ->with('error', 'Your session has expired. Please log in again.');
         });
+        
+        // COMMENTED OUT: Auto logout disabled - allow unauthenticated requests for summary endpoints
+        // Handle unauthenticated exceptions for summary APIs
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) {
+            // For summary endpoints, allow unauthenticated requests (auto logout disabled)
+            $path = $request->path();
+            $isSummaryEndpoint = strpos($path, 'api/weekly-summaries') !== false || 
+                                 strpos($path, 'api/monthly-summary') !== false ||
+                                 strpos($path, 'api/summary/') !== false;
+            
+            if ($isSummaryEndpoint && $request->expectsJson()) {
+                // Return empty data instead of 401 for summary endpoints
+                \Illuminate\Support\Facades\Log::info("Summary endpoint - allowing unauthenticated request", [
+                    'path' => $path,
+                ]);
+                // Don't return anything - let the controller handle it
+                return null;
+            }
+            
+            // For other endpoints, use default behavior
+            return null;
+        });
     })->create();

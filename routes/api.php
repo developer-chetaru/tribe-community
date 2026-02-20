@@ -21,14 +21,12 @@ Route::post('/user-set-password', [AuthController::class, 'setPassword']);
 Route::post('/login-admin', [AuthController::class, 'adminLogin']);
 Route::post('/logout', [AuthController::class, 'logout']);
 
-// Summary APIs - bypass auth:api middleware (handle authentication in controller)
+// Summary APIs - no middleware (handle authentication in controller)
 // This allows expired tokens to work (auto logout disabled)
-Route::middleware(['validate.jwt'])->group(function () {
-	Route::get('/weekly-summaries', [WeeklySummaryController::class, 'index']);
-	Route::get('/monthly-summary', [MonthlySummaryController::class, 'index']);
-	Route::post('/monthly-summary/generate', [MonthlySummaryController::class, 'generate']);
-	Route::get('/summary/{filterType}', [SummaryController::class, 'getSummary']);
-});
+Route::get('/weekly-summaries', [WeeklySummaryController::class, 'index']);
+Route::get('/monthly-summary', [MonthlySummaryController::class, 'index']);
+Route::post('/monthly-summary/generate', [MonthlySummaryController::class, 'generate']);
+Route::get('/summary/{filterType}', [SummaryController::class, 'getSummary']);
 
 Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     // flutter api

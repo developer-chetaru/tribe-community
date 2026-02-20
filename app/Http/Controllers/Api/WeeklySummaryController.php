@@ -15,50 +15,65 @@ class WeeklySummaryController extends Controller
         // COMMENTED OUT: Auto logout disabled - allow without strict authentication
         // Try to get user from JWT token, but don't reject if not found
         $user = null;
-        try {
-            $token = $request->bearerToken();
-            if ($token) {
-                // Try to authenticate with JWT token
-                try {
-                    $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
-                } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
-                    // Token expired - get user from payload anyway
-                    try {
-                        $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
-                        $userId = $payload->get('sub');
-                        if ($userId) {
-                            $user = \App\Models\User::find($userId);
-                        }
-                    } catch (\Exception $e2) {
-                        // Continue
-                    }
-                } catch (\Exception $e) {
-                    // Try to get user from payload even if token is invalid
-                    try {
-                        $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
-                        $userId = $payload->get('sub');
-                        if ($userId) {
-                            $user = \App\Models\User::find($userId);
-                        }
-                    } catch (\Exception $e2) {
-                        // Continue
+        $token = $request->bearerToken();
+        
+        if ($token) {
+            try {
+                // Try to get payload first (works even if token is expired)
+                $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+                $userId = $payload->get('sub');
+                if ($userId) {
+                    $user = \App\Models\User::find($userId);
+                    if ($user) {
+                        \Illuminate\Support\Facades\Log::info("WeeklySummary: User found from token payload", [
+                            'user_id' => $user->id,
+                        ]);
                     }
                 }
+            } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
+                // Token expired - try to get user from payload anyway
+                try {
+                    // Even if expired, we can still decode the payload
+                    $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+                    $userId = $payload->get('sub');
+                    if ($userId) {
+                        $user = \App\Models\User::find($userId);
+                        \Illuminate\Support\Facades\Log::info("WeeklySummary: User found from expired token payload", [
+                            'user_id' => $userId,
+                        ]);
+                    }
+                } catch (\Exception $e2) {
+                    \Illuminate\Support\Facades\Log::debug("WeeklySummary: Could not decode expired token", [
+                        'error' => $e2->getMessage(),
+                    ]);
+                }
+            } catch (\Exception $e) {
+                // Try to authenticate normally (might work for valid tokens)
+                try {
+                    $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
+                } catch (\Exception $e2) {
+                    \Illuminate\Support\Facades\Log::debug("WeeklySummary: JWT auth failed", [
+                        'error' => $e2->getMessage(),
+                    ]);
+                }
             }
-        } catch (\Exception $e) {
-            // Continue without user
         }
         
         // Fallback: Try standard auth methods
         if (!$user) {
-            $user = Auth::guard('api')->user() ?? Auth::user();
+            try {
+                $user = Auth::guard('api')->user() ?? Auth::user();
+            } catch (\Exception $e) {
+                // Continue without user
+            }
         }
         
-        // COMMENTED OUT: Auto logout disabled - allow without user for testing
+        // COMMENTED OUT: Auto logout disabled - allow without user
         // If no user found, return empty data instead of 401
         if (!$user) {
-            \Illuminate\Support\Facades\Log::warning("WeeklySummary: No user found, returning empty data", [
-                'has_token' => !empty($request->bearerToken()),
+            \Illuminate\Support\Facades\Log::info("WeeklySummary: No user found, returning empty data", [
+                'has_token' => !empty($token),
+                'token_preview' => $token ? substr($token, 0, 20) . '...' : 'none',
             ]);
             return response()->json([
                 'status' => true,
