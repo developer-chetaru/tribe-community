@@ -683,19 +683,35 @@ class HPTMController extends Controller
      */
 	public function userGivenfeedbackOnHIValueORM($userId, $HI_include_saturday, $HI_include_sunday, $orgId = null)
 	{
+    	$user = Auth::user();
+    	if (!$user) {
+    	    return false;
+    	}
+    	
+    	// Get user's timezone
+    	$userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+    	
+    	// Get "today" in user's timezone
+    	$userToday = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
+    	$todayDate = $userToday->toDateString(); // Y-m-d format
+    	$dayOfWeek = $userToday->format('D'); // Day of week in user's timezone
+    	
+    	// Get start and end of today in user's timezone, then convert to UTC for database query
+    	$todayStart = $userToday->copy()->startOfDay()->utc();
+    	$todayEnd = $userToday->copy()->endOfDay()->utc();
+    	
+    	// Check if user has given feedback today (in their timezone)
+    	// Query entries that fall within today's date range in user's timezone
     	$isUser = HappyIndex::where('user_id', $userId)
-        ->where('status', 'active')
-        ->whereDate('created_at', now()->toDateString())
-        ->exists();
+            ->where('status', 'active')
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
+            ->exists();
 
-    	$dayOfWeek  = now()->format('D');
     	$HIFeedback = false;
 
-    	$user = Auth::user();
-
-    if ($user && $user->hasRole('basecamp')) {
+    	if ($user && $user->hasRole('basecamp')) {
         	$HIFeedback = $isUser;
-    } else {
+    	} else {
         	$organisation = Organisation::where('id', $orgId)->first();
         	
         	// Check if organization has working_days set
@@ -705,7 +721,7 @@ class HPTMController extends Controller
                 	? $organisation->working_days 
                 	: json_decode($organisation->working_days, true);
             	
-            	// If organization has working_days, check if today is a working day
+            	// If organization has working_days, check if today is a working day (in user's timezone)
             	if (is_array($workingDays) && !empty($workingDays)) {
                 	if (in_array($dayOfWeek, $workingDays)) {
                     	// Today is a working day, check if user gave feedback
