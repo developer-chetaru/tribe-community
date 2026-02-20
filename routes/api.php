@@ -39,6 +39,7 @@ Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
 	Route::get('/summary/{filterType}', [SummaryController::class, 'getSummary']);
 	
 	// Summary APIs for app (JWT authentication)
+	// NOTE: These routes are inside auth:api middleware group, but we handle authentication in controller
 	Route::get('/weekly-summaries', [WeeklySummaryController::class, 'index']);
 	Route::get('/monthly-summary', [MonthlySummaryController::class, 'index']);
 	Route::post('/monthly-summary/generate', [MonthlySummaryController::class, 'generate']);

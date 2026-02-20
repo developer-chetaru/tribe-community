@@ -12,19 +12,44 @@ class WeeklySummaryController extends Controller
 {
     public function index(Request $request)
     {
-        // Try multiple ways to get user (for API guard)
-        $user = Auth::guard('api')->user() ?? Auth::user();
-        if (!$user) {
-            // If still no user, try to get from JWT token directly
-            try {
-                $token = $request->bearerToken();
-                if ($token) {
-                    $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
-                }
-            } catch (\Exception $e) {
-                // If all methods fail, return unauthorized
-                return response()->json(['status' => false, 'message' => 'Unauthorized'], 401);
+        // Try to get user from JWT token directly (bypass auth:api middleware issues)
+        $user = null;
+        try {
+            $token = $request->bearerToken();
+            if ($token) {
+                // Try to authenticate with JWT token
+                $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
             }
+        } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
+            // Token expired - but allow anyway (auto logout disabled)
+            \Illuminate\Support\Facades\Log::info("WeeklySummary: Token expired but allowing", [
+                'error' => $e->getMessage(),
+            ]);
+            // Try to get user from token payload even if expired
+            try {
+                $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+                $userId = $payload->get('sub');
+                if ($userId) {
+                    $user = \App\Models\User::find($userId);
+                }
+            } catch (\Exception $e2) {
+                // If we can't get user, continue to check other methods
+            }
+        } catch (\Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
+            // Token invalid - log but try other methods
+            \Illuminate\Support\Facades\Log::warning("WeeklySummary: Token invalid", [
+                'error' => $e->getMessage(),
+            ]);
+        } catch (\Exception $e) {
+            // Other errors - log but try other methods
+            \Illuminate\Support\Facades\Log::debug("WeeklySummary: JWT auth failed", [
+                'error' => $e->getMessage(),
+            ]);
+        }
+        
+        // Fallback: Try standard auth methods
+        if (!$user) {
+            $user = Auth::guard('api')->user() ?? Auth::user();
         }
         
         if (!$user) {
