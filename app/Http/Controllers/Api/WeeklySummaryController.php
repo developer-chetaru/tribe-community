@@ -12,6 +12,12 @@ class WeeklySummaryController extends Controller
 {
     public function index(Request $request)
     {
+        // COMMENTED OUT: Auto logout disabled - bypass all authentication checks
+        // Just try to get user, but never return 401
+        \Illuminate\Support\Facades\Log::info("WeeklySummaryController: Request received", [
+            'path' => $request->path(),
+            'has_token' => !empty($request->bearerToken()),
+        ]);
         // COMMENTED OUT: Auto logout disabled - allow without strict authentication
         // Try to get user from JWT token, but don't reject if not found
         $user = null;
@@ -59,12 +65,20 @@ class WeeklySummaryController extends Controller
             }
         }
         
-        // Fallback: Try standard auth methods
+        // Fallback: Try standard auth methods (but don't throw exceptions)
         if (!$user) {
             try {
-                $user = Auth::guard('api')->user() ?? Auth::user();
+                // Use withoutAuth to prevent exceptions
+                $user = Auth::guard('api')->user();
             } catch (\Exception $e) {
                 // Continue without user
+            }
+            if (!$user) {
+                try {
+                    $user = Auth::user();
+                } catch (\Exception $e) {
+                    // Continue without user
+                }
             }
         }
         

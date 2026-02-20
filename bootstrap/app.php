@@ -53,13 +53,41 @@ return Application::configure(basePath: dirname(__DIR__))
                                  strpos($path, 'api/monthly-summary') !== false ||
                                  strpos($path, 'api/summary/') !== false;
             
-            if ($isSummaryEndpoint && $request->expectsJson()) {
+            if ($isSummaryEndpoint) {
                 // Return empty data instead of 401 for summary endpoints
-                \Illuminate\Support\Facades\Log::info("Summary endpoint - allowing unauthenticated request", [
+                \Illuminate\Support\Facades\Log::info("Summary endpoint - catching AuthenticationException, returning empty data", [
                     'path' => $path,
                 ]);
-                // Don't return anything - let the controller handle it
-                return null;
+                
+                // Return appropriate empty response based on endpoint
+                if (strpos($path, 'weekly-summaries') !== false) {
+                    return response()->json([
+                        'status' => true,
+                        'data' => [
+                            'weeklySummaries' => [],
+                            'validMonths' => [],
+                            'validYears' => [],
+                            'selectedYear' => $request->input('year', now()->year),
+                            'selectedMonth' => $request->input('month', now()->month)
+                        ]
+                    ]);
+                } elseif (strpos($path, 'monthly-summary') !== false) {
+                    return response()->json([
+                        'status' => true,
+                        'data' => [
+                            'monthlySummaries' => [],
+                            'validMonths' => [],
+                            'validYears' => [],
+                            'selectedYear' => $request->input('year', now()->year),
+                            'selectedMonth' => $request->input('month', now()->month)
+                        ]
+                    ]);
+                } else {
+                    return response()->json([
+                        'status' => true,
+                        'data' => []
+                    ]);
+                }
             }
             
             // For other endpoints, use default behavior

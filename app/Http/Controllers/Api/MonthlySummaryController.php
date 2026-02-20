@@ -61,12 +61,20 @@ class MonthlySummaryController extends Controller
             }
         }
         
-        // Fallback: Try standard auth methods
+        // Fallback: Try standard auth methods (but don't throw exceptions)
         if (!$user) {
             try {
-                $user = Auth::guard('api')->user() ?? Auth::user();
+                // Use withoutAuth to prevent exceptions
+                $user = Auth::guard('api')->user();
             } catch (\Exception $e) {
                 // Continue without user
+            }
+            if (!$user) {
+                try {
+                    $user = Auth::user();
+                } catch (\Exception $e) {
+                    // Continue without user
+                }
             }
         }
         
