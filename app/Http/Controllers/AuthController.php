@@ -165,12 +165,27 @@ class AuthController extends Controller
     // Refresh user model to get updated deviceId
     $user->refresh();
   
+    // COMMENTED OUT: Multiple app login prevention - allow multiple app logins
     // ✅ Invalidate all previous sessions/tokens for other devices
+    /*
     try {
         $sessionService = new SessionManagementService();
         $sessionService->invalidatePreviousSessions($user, $token, null);
     } catch (\Exception $e) {
         Log::warning('Failed to invalidate previous sessions on login', [
+            'user_id' => $user->id,
+            'error' => $e->getMessage(),
+        ]);
+    }
+    */
+    
+    // NEW: Just store session info without invalidating previous sessions
+    try {
+        $sessionService = new SessionManagementService();
+        // Only store session info, don't invalidate previous sessions
+        $sessionService->storeActiveSession($user, null);
+    } catch (\Exception $e) {
+        Log::warning('Failed to store session on login', [
             'user_id' => $user->id,
             'error' => $e->getMessage(),
         ]);

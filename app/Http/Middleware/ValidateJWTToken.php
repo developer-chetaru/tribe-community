@@ -233,8 +233,10 @@ class ValidateJWTToken
                             return $next($request);
                         }
                         
+                        // COMMENTED OUT: Multiple app login prevention - allow tokens from any device
                         // Token is from different device - continue to validation
                         // This will check if it's an old device (should be rejected) or valid
+                        /*
                         Log::info("App token from different device - checking validation", [
                             'user_id' => $user->id,
                             'token_device_id' => $tokenDeviceId,
@@ -242,9 +244,12 @@ class ValidateJWTToken
                             'path' => $path,
                             'is_summary' => $isSummaryEndpoint,
                         ]);
+                        */
                     }
                     
+                    // COMMENTED OUT: Multiple app login prevention - allow all app tokens
                     // Check if token is from current session and device
+                    /*
                     $sessionService = new SessionManagementService();
                     $isValid = $sessionService->isTokenValid($token, $user);
                     
@@ -336,6 +341,16 @@ class ValidateJWTToken
                             'message' => 'Your session has expired. Please login again.',
                             'code' => 'SESSION_EXPIRED'
                         ], 401);
+                    }
+                    */
+                    
+                    // NEW: Allow all app tokens - multiple app logins allowed
+                    if (!$isWebToken) {
+                        Log::info("Allowing app token - multiple app logins allowed", [
+                            'user_id' => $user->id,
+                            'token_device_id' => $user->deviceId,
+                            'path' => $path,
+                        ]);
                     }
                 }
             }

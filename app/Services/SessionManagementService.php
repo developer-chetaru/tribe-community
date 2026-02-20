@@ -65,7 +65,9 @@ class SessionManagementService
                 // Delete all old web sessions from database (except current)
                 $this->invalidateAllWebSessions($user, $currentSessionId);
             } else {
+                // COMMENTED OUT: Multiple app login prevention - allow multiple app logins
                 // For app/mobile sessions: invalidate ALL previous app sessions
+                /*
                 $appDeviceKey = "user_current_app_device_{$user->id}";
                 $previousAppDeviceId = Cache::get($appDeviceKey);
                 
@@ -154,6 +156,30 @@ class SessionManagementService
                     'previous_device_id' => $previousAppDeviceId,
                     'token_iat' => $tokenIat,
                     'invalidation_timestamp' => $invalidationTimestamp,
+                ]);
+                */
+                
+                // NEW: Allow multiple app logins - just store current device mapping
+                $appDeviceKey = "user_current_app_device_{$user->id}";
+                // Store current app device mapping (but don't invalidate previous)
+                Cache::put($appDeviceKey, $deviceId, now()->addDays(30));
+                
+                // Store token timestamp for this device
+                $tokenIat = now()->timestamp;
+                if ($currentToken) {
+                    try {
+                        $payload = JWTAuth::setToken($currentToken)->getPayload();
+                        $tokenIat = $payload->get('iat');
+                    } catch (\Exception $e) {
+                        // If we can't decode, use current time
+                    }
+                }
+                $currentDeviceTimestampKey = "user_token_timestamp_{$user->id}_{$deviceId}";
+                Cache::put($currentDeviceTimestampKey, $tokenIat, now()->addDays(30));
+                
+                Log::info("App login: Multiple app logins allowed", [
+                    'user_id' => $user->id,
+                    'device_id' => $deviceId,
                 ]);
                 
                 // DO NOT invalidate web sessions - allow both web and app simultaneously
@@ -528,10 +554,12 @@ class SessionManagementService
                 }
             }
             
+            // COMMENTED OUT: Multiple app login prevention - allow all app tokens
             // CRITICAL: For app tokens ONLY, check global app invalidation timestamp
             // Web tokens should NEVER check app invalidation (they use database sessions)
             // This ensures web login NEVER affects app tokens
             // FOR APP TOKENS: Check invalidation but be lenient for current device
+            /*
             if (!$isWebToken) {
                 $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
                 $appInvalidationTimestamp = Cache::get($appInvalidationKey);
@@ -627,6 +655,15 @@ class SessionManagementService
                     ]);
                     // Continue - allow token
                 }
+            }
+            */
+            
+            // NEW: Allow all app tokens - multiple app logins allowed
+            if (!$isWebToken) {
+                Log::debug("App token allowed - multiple app logins allowed", [
+                    'user_id' => $user->id,
+                    'token_device_id' => $deviceId,
+                ]);
             }
             
             // If no device mapping exists, allow for backward compatibility
