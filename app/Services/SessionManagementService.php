@@ -65,9 +65,7 @@ class SessionManagementService
                 // Delete all old web sessions from database (except current)
                 $this->invalidateAllWebSessions($user, $currentSessionId);
             } else {
-                // COMMENTED OUT: Multiple app login prevention - allow multiple app logins
-                // For app/mobile sessions: invalidate ALL previous app sessions
-                /*
+                // ✅ Multiple app login prevention - invalidate ALL previous app sessions
                 $appDeviceKey = "user_current_app_device_{$user->id}";
                 $previousAppDeviceId = Cache::get($appDeviceKey);
                 
@@ -156,30 +154,6 @@ class SessionManagementService
                     'previous_device_id' => $previousAppDeviceId,
                     'token_iat' => $tokenIat,
                     'invalidation_timestamp' => $invalidationTimestamp,
-                ]);
-                */
-                
-                // NEW: Allow multiple app logins - just store current device mapping
-                $appDeviceKey = "user_current_app_device_{$user->id}";
-                // Store current app device mapping (but don't invalidate previous)
-                Cache::put($appDeviceKey, $deviceId, now()->addDays(30));
-                
-                // Store token timestamp for this device
-                $tokenIat = now()->timestamp;
-                if ($currentToken) {
-                    try {
-                        $payload = JWTAuth::setToken($currentToken)->getPayload();
-                        $tokenIat = $payload->get('iat');
-                    } catch (\Exception $e) {
-                        // If we can't decode, use current time
-                    }
-                }
-                $currentDeviceTimestampKey = "user_token_timestamp_{$user->id}_{$deviceId}";
-                Cache::put($currentDeviceTimestampKey, $tokenIat, now()->addDays(30));
-                
-                Log::info("App login: Multiple app logins allowed", [
-                    'user_id' => $user->id,
-                    'device_id' => $deviceId,
                 ]);
                 
                 // DO NOT invalidate web sessions - allow both web and app simultaneously
@@ -436,15 +410,8 @@ class SessionManagementService
             // App tokens: any other deviceId
             $isWebToken = (!$deviceId || $deviceId === 'web_default' || strpos($deviceId, 'web_') === 0);
             
-            // COMMENTED OUT: Multiple app login prevention - allow all app tokens
-            // For app tokens, always return true (multiple app logins allowed)
-            if (!$isWebToken) {
-                Log::info("App token allowed - multiple app logins allowed", [
-                    'user_id' => $user->id,
-                    'token_device_id' => $deviceId,
-                ]);
-                return true;
-            }
+            // ✅ Multiple app login prevention - check app token validation
+            // For app tokens, validate against current device and invalidation timestamp
             
             // CRITICAL: For app tokens, use the device ID from user model (set by middleware from request header)
             // This is the actual device ID from the token request, which is what we need to validate
@@ -564,12 +531,11 @@ class SessionManagementService
                 }
             }
             
-            // COMMENTED OUT: Multiple app login prevention - allow all app tokens
+            // ✅ Multiple app login prevention - check global app invalidation timestamp
             // CRITICAL: For app tokens ONLY, check global app invalidation timestamp
             // Web tokens should NEVER check app invalidation (they use database sessions)
             // This ensures web login NEVER affects app tokens
             // FOR APP TOKENS: Check invalidation but be lenient for current device
-            /*
             if (!$isWebToken) {
                 $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
                 $appInvalidationTimestamp = Cache::get($appInvalidationKey);
@@ -666,27 +632,48 @@ class SessionManagementService
                     // Continue - allow token
                 }
             }
-            */
             
-            // NEW: Allow all app tokens - multiple app logins allowed
-            if (!$isWebToken) {
-                Log::debug("App token allowed - multiple app logins allowed", [
-                    'user_id' => $user->id,
-                    'token_device_id' => $deviceId,
-                ]);
-            }
-            
-            // If no device mapping exists, allow for backward compatibility
-            // IMPORTANT: For app tokens, be more lenient - allow if no device mapping
-            // CRITICAL: For app tokens, if we can't find current device, default to allowing the token
+            // If no device mapping exists, check invalidation for app tokens
+            // IMPORTANT: For app tokens, check invalidation even if no device mapping
             if (!$currentDeviceId) {
-                // For app tokens, if no device mapping exists, allow it (might be first time or cache cleared)
+                // For app tokens, check invalidation timestamp even if no device mapping
                 if (!$isWebToken) {
+                    // Check if there's an invalidation timestamp
+                    $appInvalidationKey = "user_app_tokens_invalidated_{$user->id}";
+                    $appInvalidationTimestamp = Cache::get($appInvalidationKey);
+                    
+                    if ($appInvalidationTimestamp) {
+                        try {
+                            $payload = JWTAuth::setToken($token)->getPayload();
+                            $tokenIat = $payload->get('iat');
+                            
+                            if ($tokenIat < $appInvalidationTimestamp) {
+                                $timeDifference = $appInvalidationTimestamp - $tokenIat;
+                                if ($timeDifference > 60) {
+                                    Log::warning("App token rejected - no device mapping but before invalidation", [
+                                        'user_id' => $user->id,
+                                        'token_device_id' => $deviceId,
+                                        'token_iat' => $tokenIat,
+                                        'invalidation_timestamp' => $appInvalidationTimestamp,
+                                    ]);
+                                    return false;
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            // If we can't decode, be lenient
+                            Log::debug("App token decode failed - being lenient", [
+                                'user_id' => $user->id,
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+                    
+                    // If no invalidation timestamp or token is valid, allow it
                     Log::debug("App token allowed - no current device ID in cache (backward compatibility)", [
                         'user_id' => $user->id,
                         'token_device_id' => $deviceId,
                     ]);
-                    return true; // App tokens: default to allow if no device tracking
+                    return true;
                 }
                 
                 // For web tokens, check old format token timestamp (backward compatibility)
