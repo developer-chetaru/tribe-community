@@ -54,16 +54,9 @@ class ValidateJWTToken
                     ]);
                 }
                 
-                // CRITICAL: If this is a summary endpoint, BYPASS validation BEFORE authentication
-                // This ensures we don't reject valid tokens due to session validation
-                if ($isSummaryEndpoint) {
-                    Log::info("Summary endpoint detected - bypassing validation BEFORE authentication", [
-                        'path' => $path,
-                        'uri' => $uri,
-                    ]);
-                    // Skip all validation for summary endpoints - let JWT middleware handle authentication
-                    return $next($request);
-                }
+                // NOTE: We do NOT bypass validation for summary endpoints anymore
+                // This ensures that when a new login happens, old tokens are properly rejected
+                // Summary endpoints will go through normal validation, but we'll be lenient for current device
                 
                 // Get user from token
                 try {
@@ -77,93 +70,9 @@ class ValidateJWTToken
                     return $next($request);
                 }
                 
-                // CRITICAL: For app tokens on summary endpoints, SKIP ALL VALIDATION
-                // Only check if token is expired (JWT library handles that)
-                if ($isSummaryEndpoint && $user) {
-                    // Get device ID from request header or user model
-                    $requestDeviceId = $request->header('X-Device-Id') ?? $user->deviceId ?? null;
-                    $isWebToken = (!$requestDeviceId || $requestDeviceId === 'web_default' || strpos($requestDeviceId, 'web_') === 0);
-                    
-                    Log::info("Summary endpoint - checking token", [
-                        'user_id' => $user->id,
-                        'device_id' => $requestDeviceId,
-                        'is_web_token' => $isWebToken,
-                        'path' => $path,
-                    ]);
-                    
-                    // For app tokens on summary endpoints, SKIP ALL VALIDATION
-                    // Just verify token is not expired - if not expired, allow immediately
-                    if (!$isWebToken) {
-                        try {
-                            // Just verify token is not expired
-                            $payload = JWTAuth::setToken($token)->getPayload();
-                            $exp = $payload->get('exp');
-                            
-                            // If token is not expired, allow it immediately (skip ALL other validation)
-                            if ($exp && $exp > now()->timestamp) {
-                                Log::info("Allowing app token on summary endpoint - token not expired, skipping ALL validation", [
-                                    'user_id' => $user->id,
-                                    'device_id' => $requestDeviceId,
-                                    'endpoint' => $path,
-                                    'expires_at' => $exp,
-                                ]);
-                                return $next($request);
-                            } else {
-                                Log::warning("App token on summary endpoint is expired", [
-                                    'user_id' => $user->id,
-                                    'device_id' => $requestDeviceId,
-                                    'endpoint' => $path,
-                                    'expires_at' => $exp,
-                                    'current_time' => now()->timestamp,
-                                ]);
-                            }
-                            // If expired, let it continue to JWT middleware which will handle it
-                        } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
-                            // Token is expired - let JWT middleware handle it
-                            Log::warning("App token on summary endpoint is expired (exception)", [
-                                'user_id' => $user->id,
-                                'device_id' => $requestDeviceId,
-                                'endpoint' => $path,
-                            ]);
-                        } catch (\Exception $e) {
-                            // If we can't decode, allow it for app tokens on summary endpoints (being very lenient)
-                            Log::info("Allowing app token on summary endpoint - decode failed, being lenient", [
-                                'user_id' => $user->id,
-                                'device_id' => $requestDeviceId,
-                                'endpoint' => $path,
-                                'error' => $e->getMessage(),
-                            ]);
-                            return $next($request);
-                        }
-                    } else {
-                        // Web token on summary endpoint - allow it (web tokens are handled differently)
-                        Log::info("Allowing web token on summary endpoint", [
-                            'user_id' => $user->id,
-                            'device_id' => $requestDeviceId,
-                            'endpoint' => $path,
-                        ]);
-                        return $next($request);
-                    }
-                }
-                
-                // CRITICAL: If this is a summary endpoint, COMPLETELY BYPASS all validation
-                // This should happen BEFORE any other validation logic
-                if ($isSummaryEndpoint) {
-                    if ($user) {
-                        Log::info("Summary endpoint - COMPLETE BYPASS, allowing request", [
-                            'path' => $path,
-                            'user_id' => $user->id,
-                            'uri' => $uri,
-                        ]);
-                    } else {
-                        Log::info("Summary endpoint - user is null, allowing to continue (JWT will handle auth)", [
-                            'path' => $path,
-                            'uri' => $uri,
-                        ]);
-                    }
-                    // COMPLETE BYPASS - return immediately without any validation
-                    return $next($request);
-                }
+                // NOTE: Summary endpoints now go through normal validation
+                // This ensures that when a new login happens, old tokens are properly rejected
+                // The validation logic below will handle checking if token is from current device
                 
                 if ($user) {
                     // Get device ID from request header or user model
