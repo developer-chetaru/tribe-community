@@ -14,98 +14,75 @@ class MonthlySummaryController extends Controller
 {
     public function index(Request $request)
     {
-        // COMMENTED OUT: Auto logout disabled - allow without strict authentication
-        // Try to get user from JWT token, but don't reject if not found
+        // Use same authentication approach as SummaryController
+        // Try Auth::user() first (works if JWT middleware sets user)
         $user = null;
-        $token = $request->bearerToken();
         
-        if ($token) {
-            try {
-                // First try to authenticate normally (works for valid tokens)
-                $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
-                if ($user) {
-                    \Illuminate\Support\Facades\Log::info("MonthlySummary: User authenticated successfully", [
-                        'user_id' => $user->id,
-                    ]);
-                }
-            } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
-                // Token expired - try to get user from payload anyway
-                \Illuminate\Support\Facades\Log::info("MonthlySummary: Token expired, trying to get user from payload", [
-                    'error' => $e->getMessage(),
-                ]);
-                try {
-                    // Even if expired, we can still decode the payload
-                    $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
-                    $userId = $payload->get('sub');
-                    if ($userId) {
-                        $user = \App\Models\User::find($userId);
-                        if ($user) {
-                            \Illuminate\Support\Facades\Log::info("MonthlySummary: User found from expired token payload", [
-                                'user_id' => $userId,
-                            ]);
-                        } else {
-                            \Illuminate\Support\Facades\Log::warning("MonthlySummary: User ID from token not found in database", [
-                                'user_id' => $userId,
-                            ]);
-                        }
-                    }
-                } catch (\Exception $e2) {
-                    \Illuminate\Support\Facades\Log::warning("MonthlySummary: Could not decode expired token", [
-                        'error' => $e2->getMessage(),
-                    ]);
-                }
-            } catch (\Tymon\JWTAuth\Exceptions\TokenInvalidException $e) {
-                // Token invalid - try to get user from payload anyway
-                \Illuminate\Support\Facades\Log::info("MonthlySummary: Token invalid, trying to get user from payload", [
-                    'error' => $e->getMessage(),
-                ]);
-                try {
-                    $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
-                    $userId = $payload->get('sub');
-                    if ($userId) {
-                        $user = \App\Models\User::find($userId);
-                        if ($user) {
-                            \Illuminate\Support\Facades\Log::info("MonthlySummary: User found from invalid token payload", [
-                                'user_id' => $userId,
-                            ]);
-                        }
-                    }
-                } catch (\Exception $e2) {
-                    \Illuminate\Support\Facades\Log::warning("MonthlySummary: Could not decode invalid token", [
-                        'error' => $e2->getMessage(),
-                    ]);
-                }
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::warning("MonthlySummary: JWT auth failed", [
-                    'error' => $e->getMessage(),
-                    'class' => get_class($e),
+        try {
+            $user = Auth::user();
+            if ($user) {
+                \Illuminate\Support\Facades\Log::info("MonthlySummary: User found from Auth::user()", [
+                    'user_id' => $user->id,
                 ]);
             }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::debug("MonthlySummary: Auth::user() failed", [
+                'error' => $e->getMessage(),
+            ]);
         }
         
-        // Fallback: Try standard auth methods (but don't throw exceptions)
+        // Fallback: Try JWT token directly
         if (!$user) {
-            try {
-                // Use withoutAuth to prevent exceptions
-                $user = Auth::guard('api')->user();
-            } catch (\Exception $e) {
-                // Continue without user
-            }
-            if (!$user) {
+            $token = $request->bearerToken();
+            if ($token) {
                 try {
-                    $user = Auth::user();
+                    // Try to authenticate normally (works for valid tokens)
+                    $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
+                    if ($user) {
+                        \Illuminate\Support\Facades\Log::info("MonthlySummary: User authenticated from JWT token", [
+                            'user_id' => $user->id,
+                        ]);
+                    }
+                } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
+                    // Token expired - try to get user from payload anyway
+                    try {
+                        $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+                        $userId = $payload->get('sub');
+                        if ($userId) {
+                            $user = \App\Models\User::find($userId);
+                            if ($user) {
+                                \Illuminate\Support\Facades\Log::info("MonthlySummary: User found from expired token payload", [
+                                    'user_id' => $userId,
+                                ]);
+                            }
+                        }
+                    } catch (\Exception $e2) {
+                        // Continue
+                    }
                 } catch (\Exception $e) {
-                    // Continue without user
+                    // Try to get user from payload even if token is invalid
+                    try {
+                        $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+                        $userId = $payload->get('sub');
+                        if ($userId) {
+                            $user = \App\Models\User::find($userId);
+                            if ($user) {
+                                \Illuminate\Support\Facades\Log::info("MonthlySummary: User found from token payload", [
+                                    'user_id' => $userId,
+                                ]);
+                            }
+                        }
+                    } catch (\Exception $e2) {
+                        // Continue
+                    }
                 }
             }
         }
         
-        // COMMENTED OUT: Auto logout disabled - allow without user
         // If no user found, return empty data instead of 401
         if (!$user) {
             \Illuminate\Support\Facades\Log::warning("MonthlySummary: No user found, returning empty data", [
-                'has_token' => !empty($token),
-                'token_preview' => $token ? substr($token, 0, 20) . '...' : 'none',
+                'has_token' => !empty($request->bearerToken()),
                 'path' => $request->path(),
             ]);
             return response()->json([
