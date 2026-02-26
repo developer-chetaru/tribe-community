@@ -14,22 +14,46 @@ class MonthlySummaryController extends Controller
 {
     public function index(Request $request)
     {
-        // Use same authentication approach as other APIs (SummaryController, HPTMController, etc.)
-        $user = Auth::user();
+        // Use same authentication approach as other APIs
+        // Try to get user from token first (since routes don't have middleware)
+        $user = null;
+        $token = $request->bearerToken();
         
-        // If Auth::user() doesn't work, try to get user from token payload
-        if (!$user) {
-            $token = $request->bearerToken();
-            if ($token) {
+        if ($token) {
+            try {
+                // Try to authenticate with JWT token
+                $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
+            } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
+                // Token expired - get user from payload anyway
                 try {
                     $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
                     $userId = $payload->get('sub');
                     if ($userId) {
                         $user = \App\Models\User::find($userId);
                     }
-                } catch (\Exception $e) {
-                    // Token invalid or expired, continue
+                } catch (\Exception $e2) {
+                    // Continue
                 }
+            } catch (\Exception $e) {
+                // Try to get user from payload even if token is invalid
+                try {
+                    $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+                    $userId = $payload->get('sub');
+                    if ($userId) {
+                        $user = \App\Models\User::find($userId);
+                    }
+                } catch (\Exception $e2) {
+                    // Continue
+                }
+            }
+        }
+        
+        // Fallback: Try Auth methods
+        if (!$user) {
+            try {
+                $user = Auth::guard('api')->user() ?? Auth::user();
+            } catch (\Exception $e) {
+                // Continue without user
             }
         }
         
