@@ -15,17 +15,19 @@ class MonthlySummaryController extends Controller
     public function index(Request $request)
     {
         // Use same authentication approach as SummaryController
-        // First extract user from token and set in Auth context, then use Auth::user()
+        // Extract user from token (SummaryController uses Auth::user() which works because of middleware)
+        // Since we don't have middleware, we extract manually and use directly
         $token = $request->bearerToken();
         $user = null;
         
         if ($token) {
-            // Extract user from token (same as SummaryController would do via middleware)
+            // Extract user from token - try manual decode first (most reliable)
             try {
-                // Try manual decode first
                 $parts = explode('.', $token);
                 if (count($parts) === 3) {
-                    $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[1])), true);
+                    // Decode base64 with proper padding
+                    $payloadJson = base64_decode(str_pad(strtr($parts[1], '-_', '+/'), strlen($parts[1]) % 4, '=', STR_PAD_RIGHT));
+                    $payload = json_decode($payloadJson, true);
                     $userId = $payload['sub'] ?? null;
                     if ($userId) {
                         $userId = is_string($userId) ? (int)$userId : $userId;
@@ -33,10 +35,17 @@ class MonthlySummaryController extends Controller
                     }
                 }
             } catch (\Exception $e) {
-                // Try JWTAuth
+                // Manual decode failed, try JWTAuth
+                \Illuminate\Support\Facades\Log::debug("MonthlySummary: Manual decode exception", [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+            
+            // If manual decode didn't work, try JWTAuth
+            if (!$user) {
                 try {
                     $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
-                } catch (\Exception $e2) {
+                } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
                     try {
                         $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
                         $userId = $payload->get('sub');
@@ -44,21 +53,44 @@ class MonthlySummaryController extends Controller
                             $userId = is_string($userId) ? (int)$userId : $userId;
                             $user = \App\Models\User::find($userId);
                         }
-                    } catch (\Exception $e3) {
+                    } catch (\Exception $e2) {
+                        // Continue
+                    }
+                } catch (\Exception $e) {
+                    try {
+                        $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+                        $userId = $payload->get('sub');
+                        if ($userId) {
+                            $userId = is_string($userId) ? (int)$userId : $userId;
+                            $user = \App\Models\User::find($userId);
+                        }
+                    } catch (\Exception $e2) {
                         // Continue
                     }
                 }
             }
-            
-            // Set user in Auth context so Auth::user() works
-            if ($user) {
-                Auth::setUser($user);
-                Auth::guard('api')->setUser($user);
+        }
+        
+        // Fallback: Try Auth::user() (in case middleware set it)
+        if (!$user) {
+            try {
+                $user = Auth::guard('api')->user() ?? Auth::user();
+            } catch (\Exception $e) {
+                // Continue
             }
         }
         
-        // Now use Auth::user() like SummaryController does
-        $user = Auth::user();
+        // Debug: Log user extraction result
+        if (!$user && $token) {
+            \Illuminate\Support\Facades\Log::warning("MonthlySummary: User not found", [
+                'has_token' => !empty($token),
+                'token_preview' => substr($token, 0, 30) . '...',
+            ]);
+        } elseif ($user) {
+            \Illuminate\Support\Facades\Log::info("MonthlySummary: User found", [
+                'user_id' => $user->id,
+            ]);
+        }
         
         // If no user found, return empty data
         if (!$user) {
