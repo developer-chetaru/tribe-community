@@ -14,77 +14,27 @@ class MonthlySummaryController extends Controller
 {
     public function index(Request $request)
     {
-        // Use same authentication approach as SummaryController
-        // Try Auth::user() first (works if JWT middleware sets user)
-        $user = null;
+        // Use same authentication approach as other APIs (SummaryController, HPTMController, etc.)
+        $user = Auth::user();
         
-        try {
-            $user = Auth::user();
-            if ($user) {
-                \Illuminate\Support\Facades\Log::info("MonthlySummary: User found from Auth::user()", [
-                    'user_id' => $user->id,
-                ]);
-            }
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::debug("MonthlySummary: Auth::user() failed", [
-                'error' => $e->getMessage(),
-            ]);
-        }
-        
-        // Fallback: Try JWT token directly
+        // If Auth::user() doesn't work, try to get user from token payload
         if (!$user) {
             $token = $request->bearerToken();
             if ($token) {
                 try {
-                    // Try to authenticate normally (works for valid tokens)
-                    $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
-                    if ($user) {
-                        \Illuminate\Support\Facades\Log::info("MonthlySummary: User authenticated from JWT token", [
-                            'user_id' => $user->id,
-                        ]);
-                    }
-                } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
-                    // Token expired - try to get user from payload anyway
-                    try {
-                        $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
-                        $userId = $payload->get('sub');
-                        if ($userId) {
-                            $user = \App\Models\User::find($userId);
-                            if ($user) {
-                                \Illuminate\Support\Facades\Log::info("MonthlySummary: User found from expired token payload", [
-                                    'user_id' => $userId,
-                                ]);
-                            }
-                        }
-                    } catch (\Exception $e2) {
-                        // Continue
+                    $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+                    $userId = $payload->get('sub');
+                    if ($userId) {
+                        $user = \App\Models\User::find($userId);
                     }
                 } catch (\Exception $e) {
-                    // Try to get user from payload even if token is invalid
-                    try {
-                        $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
-                        $userId = $payload->get('sub');
-                        if ($userId) {
-                            $user = \App\Models\User::find($userId);
-                            if ($user) {
-                                \Illuminate\Support\Facades\Log::info("MonthlySummary: User found from token payload", [
-                                    'user_id' => $userId,
-                                ]);
-                            }
-                        }
-                    } catch (\Exception $e2) {
-                        // Continue
-                    }
+                    // Token invalid or expired, continue
                 }
             }
         }
         
-        // If no user found, return empty data instead of 401
+        // If no user found, return empty data
         if (!$user) {
-            \Illuminate\Support\Facades\Log::warning("MonthlySummary: No user found, returning empty data", [
-                'has_token' => !empty($request->bearerToken()),
-                'path' => $request->path(),
-            ]);
             return response()->json([
                 'status' => true,
                 'data' => [
@@ -97,12 +47,6 @@ class MonthlySummaryController extends Controller
             ]);
         }
         
-        \Illuminate\Support\Facades\Log::info("MonthlySummary: User found, fetching data", [
-            'user_id' => $user->id,
-            'year' => $request->input('year'),
-            'month' => $request->input('month'),
-        ]);
-
         $selectedYear = $request->input('year', now()->year);
         $selectedMonth = $request->input('month', now()->month);
 

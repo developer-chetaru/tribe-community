@@ -44,53 +44,8 @@ return Application::configure(basePath: dirname(__DIR__))
                 ->with('error', 'Your session has expired. Please log in again.');
         });
         
-        // COMMENTED OUT: Auto logout disabled - allow unauthenticated requests for summary endpoints
-        // Handle unauthenticated exceptions for summary APIs
-        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) {
-            // For summary endpoints, allow unauthenticated requests (auto logout disabled)
-            $path = $request->path();
-            $isSummaryEndpoint = strpos($path, 'api/weekly-summaries') !== false || 
-                                 strpos($path, 'api/monthly-summary') !== false ||
-                                 strpos($path, 'api/summary/') !== false;
-            
-            if ($isSummaryEndpoint) {
-                // Return empty data instead of 401 for summary endpoints
-                \Illuminate\Support\Facades\Log::info("Summary endpoint - catching AuthenticationException, returning empty data", [
-                    'path' => $path,
-                ]);
-                
-                // Return appropriate empty response based on endpoint
-                if (strpos($path, 'weekly-summaries') !== false) {
-                    return response()->json([
-                        'status' => true,
-                        'data' => [
-                            'weeklySummaries' => [],
-                            'validMonths' => [],
-                            'validYears' => [],
-                            'selectedYear' => $request->input('year', now()->year),
-                            'selectedMonth' => $request->input('month', now()->month)
-                        ]
-                    ]);
-                } elseif (strpos($path, 'monthly-summary') !== false) {
-                    return response()->json([
-                        'status' => true,
-                        'data' => [
-                            'monthlySummaries' => [],
-                            'validMonths' => [],
-                            'validYears' => [],
-                            'selectedYear' => $request->input('year', now()->year),
-                            'selectedMonth' => $request->input('month', now()->month)
-                        ]
-                    ]);
-                } else {
-                    return response()->json([
-                        'status' => true,
-                        'data' => []
-                    ]);
-                }
-            }
-            
-            // For other endpoints, use default behavior
-            return null;
-        });
+        // REMOVED: Exception handler for summary endpoints
+        // The controllers (WeeklySummaryController, MonthlySummaryController) handle authentication themselves
+        // They extract user from token payload even if token is expired, so we don't need to catch exceptions here
+        // This allows the controllers to properly authenticate and return data
     })->create();
