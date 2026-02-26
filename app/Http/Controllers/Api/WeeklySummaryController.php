@@ -30,7 +30,19 @@ class WeeklySummaryController extends Controller
                         $user = \App\Models\User::find($userId);
                     }
                 } catch (\Exception $e2) {
-                    // Continue
+                    // Try alternative method to decode token
+                    try {
+                        $parts = explode('.', $token);
+                        if (count($parts) === 3) {
+                            $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[1])), true);
+                            $userId = $payload['sub'] ?? null;
+                            if ($userId) {
+                                $user = \App\Models\User::find($userId);
+                            }
+                        }
+                    } catch (\Exception $e3) {
+                        // Continue
+                    }
                 }
             } catch (\Exception $e) {
                 // Try to get user from payload even if token is invalid
@@ -41,7 +53,19 @@ class WeeklySummaryController extends Controller
                         $user = \App\Models\User::find($userId);
                     }
                 } catch (\Exception $e2) {
-                    // Continue
+                    // Try alternative method to decode token
+                    try {
+                        $parts = explode('.', $token);
+                        if (count($parts) === 3) {
+                            $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[1])), true);
+                            $userId = $payload['sub'] ?? null;
+                            if ($userId) {
+                                $user = \App\Models\User::find($userId);
+                            }
+                        }
+                    } catch (\Exception $e3) {
+                        // Continue
+                    }
                 }
             }
         }
