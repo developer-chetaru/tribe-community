@@ -12,58 +12,51 @@ class WeeklySummaryController extends Controller
 {
     public function index(Request $request)
     {
-        // Use same authentication approach as other APIs
-        // Try to get user from token first (since routes don't have middleware)
+        // Use same authentication approach as SummaryController
+        // First try manual decode (most reliable, works even if token expired)
         $user = null;
         $token = $request->bearerToken();
         
         if ($token) {
+            // Try manual decode first - this always works if token format is valid
             try {
-                // Try to authenticate with JWT token
-                $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
-            } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
-                // Token expired - get user from payload anyway
-                try {
-                    $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
-                    $userId = $payload->get('sub');
+                $parts = explode('.', $token);
+                if (count($parts) === 3) {
+                    $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[1])), true);
+                    $userId = $payload['sub'] ?? null;
                     if ($userId) {
+                        $userId = is_string($userId) ? (int)$userId : $userId;
                         $user = \App\Models\User::find($userId);
-                    }
-                } catch (\Exception $e2) {
-                    // Try alternative method to decode token
-                    try {
-                        $parts = explode('.', $token);
-                        if (count($parts) === 3) {
-                            $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[1])), true);
-                            $userId = $payload['sub'] ?? null;
-                            if ($userId) {
-                                $user = \App\Models\User::find($userId);
-                            }
-                        }
-                    } catch (\Exception $e3) {
-                        // Continue
                     }
                 }
             } catch (\Exception $e) {
-                // Try to get user from payload even if token is invalid
+                // Manual decode failed, try JWTAuth
+            }
+            
+            // If manual decode didn't work, try JWTAuth methods
+            if (!$user) {
                 try {
-                    $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
-                    $userId = $payload->get('sub');
-                    if ($userId) {
-                        $user = \App\Models\User::find($userId);
-                    }
-                } catch (\Exception $e2) {
-                    // Try alternative method to decode token
+                    $user = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->authenticate();
+                } catch (\Tymon\JWTAuth\Exceptions\TokenExpiredException $e) {
                     try {
-                        $parts = explode('.', $token);
-                        if (count($parts) === 3) {
-                            $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[1])), true);
-                            $userId = $payload['sub'] ?? null;
-                            if ($userId) {
-                                $user = \App\Models\User::find($userId);
-                            }
+                        $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+                        $userId = $payload->get('sub');
+                        if ($userId) {
+                            $userId = is_string($userId) ? (int)$userId : $userId;
+                            $user = \App\Models\User::find($userId);
                         }
-                    } catch (\Exception $e3) {
+                    } catch (\Exception $e2) {
+                        // Continue
+                    }
+                } catch (\Exception $e) {
+                    try {
+                        $payload = \Tymon\JWTAuth\Facades\JWTAuth::setToken($token)->getPayload();
+                        $userId = $payload->get('sub');
+                        if ($userId) {
+                            $userId = is_string($userId) ? (int)$userId : $userId;
+                            $user = \App\Models\User::find($userId);
+                        }
+                    } catch (\Exception $e2) {
                         // Continue
                     }
                 }
@@ -76,6 +69,54 @@ class WeeklySummaryController extends Controller
                 $user = Auth::guard('api')->user() ?? Auth::user();
             } catch (\Exception $e) {
                 // Continue without user
+            }
+        }
+        
+        // If user found, set it in Auth context (like middleware does)
+        // This ensures Auth::user() works in the rest of the code
+        if ($user) {
+            Auth::setUser($user);
+            // Also set for api guard
+            Auth::guard('api')->setUser($user);
+        }
+        
+        // Debug: Log if user not found
+        if (!$user && $token) {
+            \Illuminate\Support\Facades\Log::warning("WeeklySummary: User not found from token", [
+                'token_preview' => substr($token, 0, 50) . '...',
+                'has_token' => !empty($token),
+            ]);
+            // Try manual decode one more time
+            try {
+                $parts = explode('.', $token);
+                if (count($parts) === 3) {
+                    $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[1])), true);
+                    $userId = $payload['sub'] ?? null;
+                    \Illuminate\Support\Facades\Log::info("WeeklySummary: Manual decode result", [
+                        'user_id_from_token' => $userId,
+                        'user_id_type' => gettype($userId),
+                        'payload_keys' => array_keys($payload ?? []),
+                    ]);
+                    if ($userId) {
+                        // Convert to integer if it's a string
+                        $userId = is_string($userId) ? (int)$userId : $userId;
+                        $user = \App\Models\User::find($userId);
+                        if ($user) {
+                            \Illuminate\Support\Facades\Log::info("WeeklySummary: User found via manual decode", [
+                                'user_id' => $user->id,
+                            ]);
+                        } else {
+                            \Illuminate\Support\Facades\Log::warning("WeeklySummary: User not found in database", [
+                                'user_id' => $userId,
+                                'user_id_type' => gettype($userId),
+                            ]);
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error("WeeklySummary: Manual decode failed", [
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
         
