@@ -15,6 +15,15 @@ class WeeklySummaryController extends Controller
     {
         // CRITICAL: Log at the very start to ensure method is being called
         // Use both Log facade and error_log to ensure we see something
+        file_put_contents(storage_path('logs/weekly-summary-debug.log'), 
+            date('Y-m-d H:i:s') . " - WeeklySummary API CALLED\n" . 
+            "Path: " . $request->path() . "\n" .
+            "Full URL: " . $request->fullUrl() . "\n" .
+            "Method: " . $request->method() . "\n" .
+            "Has Token: " . (!empty($request->bearerToken()) ? 'YES' : 'NO') . "\n\n",
+            FILE_APPEND
+        );
+        
         error_log("=== WeeklySummary API CALLED ===");
         Log::info("=== WeeklySummary API CALLED ===", [
             'timestamp' => now()->toDateTimeString(),
@@ -45,13 +54,30 @@ class WeeklySummaryController extends Controller
                     $payloadJson = base64_decode(str_pad(strtr($parts[1], '-_', '+/'), strlen($parts[1]) % 4, '=', STR_PAD_RIGHT));
                     $payload = json_decode($payloadJson, true);
                     $userId = $payload['sub'] ?? null;
+                    
+                    file_put_contents(storage_path('logs/weekly-summary-debug.log'), 
+                        date('Y-m-d H:i:s') . " - Token decoded\n" . 
+                        "User ID from token: " . ($userId ?? 'NULL') . "\n",
+                        FILE_APPEND
+                    );
+                    
                     if ($userId) {
                         $userId = is_string($userId) ? (int)$userId : $userId;
                         $user = \App\Models\User::find($userId);
+                        
+                        file_put_contents(storage_path('logs/weekly-summary-debug.log'), 
+                            date('Y-m-d H:i:s') . " - User lookup\n" . 
+                            "User found: " . ($user ? $user->email : 'NO') . "\n",
+                            FILE_APPEND
+                        );
                     }
                 }
             } catch (\Exception $e) {
                 // Manual decode failed, try JWTAuth
+                file_put_contents(storage_path('logs/weekly-summary-debug.log'), 
+                    date('Y-m-d H:i:s') . " - Manual decode exception: " . $e->getMessage() . "\n",
+                    FILE_APPEND
+                );
                 \Illuminate\Support\Facades\Log::debug("WeeklySummary: Manual decode exception", [
                     'error' => $e->getMessage(),
                 ]);
@@ -120,30 +146,65 @@ class WeeklySummaryController extends Controller
             Log::warning("WeeklySummary: No token provided");
         }
         
-        // If no user found, return empty data
+        // If no user found, return empty data with debug info
         if (!$user) {
-            return response()->json([
-                'status' => true,
-                'data' => [
-                    'weeklySummaries' => [],
-                    'validMonths' => [],
-                    'validYears' => [],
-                    'selectedYear' => $request->input('year', now()->year),
-                    'selectedMonth' => $request->input('month', now()->month)
-                ]
-            ]);
+            // Try one more time with direct token decode
+            $userIdFromToken = null;
+            if ($token) {
+                try {
+                    $parts = explode('.', $token);
+                    if (count($parts) === 3) {
+                        $payloadJson = base64_decode(str_pad(strtr($parts[1], '-_', '+/'), strlen($parts[1]) % 4, '=', STR_PAD_RIGHT));
+                        $payload = json_decode($payloadJson, true);
+                        $userIdFromToken = $payload['sub'] ?? null;
+                        if ($userIdFromToken) {
+                            $user = \App\Models\User::find((int)$userIdFromToken);
+                            Log::info("WeeklySummary: User found on retry", [
+                                'user_id' => $userIdFromToken,
+                                'user_found' => $user ? 'yes' : 'no',
+                            ]);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::error("WeeklySummary: Final decode attempt failed", ['error' => $e->getMessage()]);
+                }
+            }
+            
+            if (!$user) {
+                Log::error("WeeklySummary: ❌ NO USER FOUND - Returning empty data", [
+                    'has_token' => !empty($token),
+                    'user_id_from_token' => $userIdFromToken,
+                ]);
+                return response()->json([
+                    'status' => true,
+                    'debug' => [
+                        'user_found' => false,
+                        'user_id_from_token' => $userIdFromToken,
+                        'has_token' => !empty($token),
+                    ],
+                    'data' => [
+                        'weeklySummaries' => [],
+                        'validMonths' => [],
+                        'validYears' => [],
+                        'selectedYear' => $request->input('year', now()->year),
+                        'selectedMonth' => $request->input('month', now()->month)
+                    ]
+                ]);
+            }
         }
         
-        $selectedYear = $request->input('year', now()->year);
-        $selectedMonth = $request->input('month', now()->month);
+        $selectedYear = (int)$request->input('year', now()->year);
+        $selectedMonth = (int)$request->input('month', now()->month);
         
         Log::info("WeeklySummary: Fetching data for user", [
             'user_id' => $user->id,
             'selected_year' => $selectedYear,
+            'selected_year_type' => gettype($selectedYear),
             'selected_month' => $selectedMonth,
+            'selected_month_type' => gettype($selectedMonth),
         ]);
 
-        // Load weekly summaries
+        // Load weekly summaries - ensure year and month are integers
         $existingSummaries = WeeklySummary::where('user_id', $user->id)
             ->where('year', $selectedYear)
             ->where('month', $selectedMonth)
@@ -158,6 +219,10 @@ class WeeklySummaryController extends Controller
             'summaries_found' => $existingSummaries->count(),
             'summary_ids' => $existingSummaries->pluck('id')->toArray(),
             'week_numbers' => $existingSummaries->pluck('week_number')->toArray(),
+            'raw_query' => WeeklySummary::where('user_id', $user->id)
+                ->where('year', $selectedYear)
+                ->where('month', $selectedMonth)
+                ->toSql(),
         ]);
 
         $firstDay = Carbon::create($selectedYear, $selectedMonth, 1)->startOfMonth();
@@ -179,72 +244,54 @@ class WeeklySummaryController extends Controller
             'last_day_of_month' => $lastDay->toDateTimeString(),
         ]);
 
-        // Build weeks array - show all weeks in the month that have summaries OR are in the past
-        // Don't filter by future weeks - just show all weeks in the month
+        // ULTRA SIMPLIFIED: Just return all summaries that exist in database
+        // NO DATE FILTERING - just return what's in DB
         $weeksInMonth = [];
-        $weekNum = 1;
-        $weekStart = $firstDay->copy()->startOfWeek(Carbon::MONDAY);
         
-        // If month doesn't start on Monday, we might need to adjust
-        // But let's start from the first Monday of the month's week
-        if ($firstDay->dayOfWeek != Carbon::MONDAY) {
+        Log::info("WeeklySummary: Processing summaries", [
+            'summaries_count' => $existingSummaries->count(),
+            'week_numbers' => $existingSummaries->pluck('week_number')->toArray(),
+        ]);
+        
+        // Simply iterate through all summaries and add them - NO FILTERING
+        foreach ($existingSummaries as $weekNum => $summary) {
+            // Calculate week dates simply
             $weekStart = $firstDay->copy()->startOfWeek(Carbon::MONDAY);
+            if ($weekNum > 1) {
+                $weekStart->addWeeks($weekNum - 1);
+            }
+            $weekEnd = $weekStart->copy()->endOfWeek(Carbon::SUNDAY);
+            
+            // Add ALL summaries - no date filtering
+            $weeksInMonth[] = [
+                'week' => (int)$weekNum,
+                'weekLabel' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
+                'summary' => $summary->summary ?? null,
+            ];
+            
+            Log::info("WeeklySummary: ✅ Added week (NO FILTERING)", [
+                'week_num' => $weekNum,
+                'week_label' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
+                'summary_id' => $summary->id,
+            ]);
         }
-
-        $weeksProcessed = 0;
-        $weeksSkippedBeforeRegistration = 0;
         
-        while ($weekStart->lte($lastDay)) {
-            $weekEnd = $weekStart->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
-            
-            // Only skip weeks that occurred before user's registration date
-            if ($weekEnd->lt($userRegistrationDate)) {
-                $weeksSkippedBeforeRegistration++;
-                Log::info("WeeklySummary: ⏭️ Skipping week before registration", [
-                    'week_num' => $weekNum,
-                    'week_end' => $weekEnd->toDateTimeString(),
-                    'user_registration_date' => $userRegistrationDate->toDateTimeString(),
-                ]);
-                $weekNum++;
-                $weekStart->addWeek();
-                continue;
-            }
-
-            // Add week if it's in the selected month OR if we have a summary for it
-            // Check if this week overlaps with the selected month
-            $weekOverlapsMonth = $weekStart->lte($lastDay) && $weekEnd->gte($firstDay);
-            
-            if ($weekOverlapsMonth) {
-                $weeksProcessed++;
-                $weeksInMonth[$weekNum] = [
-                    'week' => $weekNum,
-                    'weekLabel' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
-                    'summary' => $existingSummaries[$weekNum]->summary ?? null,
-                ];
-                
-                Log::info("WeeklySummary: ✅ Added week", [
-                    'week_num' => $weekNum,
-                    'week_label' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
-                    'has_summary' => isset($existingSummaries[$weekNum]),
-                    'summary_id' => isset($existingSummaries[$weekNum]) ? $existingSummaries[$weekNum]->id : null,
-                ]);
-            }
-
-            $weekNum++;
-            $weekStart->addWeek();
-            
-            // Stop if we've gone past the month
-            if ($weekStart->gt($lastDay)) {
-                break;
-            }
-        }
+        // Sort by week number
+        usort($weeksInMonth, function($a, $b) {
+            return $a['week'] <=> $b['week'];
+        });
+        
+        Log::info("WeeklySummary: Final weeks array", [
+            'total_weeks' => count($weeksInMonth),
+            'week_numbers' => array_column($weeksInMonth, 'week'),
+        ]);
         
         Log::info("WeeklySummary: 📈 Week processing summary", [
             'user_id' => $user->id,
             'weeks_processed' => $weeksProcessed,
-            'weeks_skipped_future' => $weeksSkippedFuture,
             'weeks_skipped_before_registration' => $weeksSkippedBeforeRegistration,
             'total_weeks_in_result' => count($weeksInMonth),
+            'existing_summaries_count' => $existingSummaries->count(),
         ]);
 
         // Calculate valid months and years
@@ -276,6 +323,12 @@ class WeeklySummaryController extends Controller
 
         $responseData = [
             'status' => true,
+            'debug' => [
+                'user_id' => $user->id,
+                'summaries_found_in_db' => $existingSummaries->count(),
+                'weeks_in_result' => count($weeksInMonth),
+                'week_numbers_in_db' => $existingSummaries->pluck('week_number')->toArray(),
+            ],
             'data' => [
                 'weeklySummaries' => array_values($weeksInMonth),
                 'validMonths' => $validMonths,
@@ -288,6 +341,7 @@ class WeeklySummaryController extends Controller
         Log::info("WeeklySummary: 🎯 Final response", [
             'user_id' => $user->id,
             'weekly_summaries_count' => count($responseData['data']['weeklySummaries']),
+            'summaries_found_in_db' => $existingSummaries->count(),
             'valid_months_count' => count($validMonths),
             'valid_years_count' => count($validYears),
         ]);
