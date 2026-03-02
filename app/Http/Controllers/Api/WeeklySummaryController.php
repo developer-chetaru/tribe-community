@@ -13,26 +13,29 @@ class WeeklySummaryController extends Controller
 {
     public function index(Request $request)
     {
-        // CRITICAL: Log at the very start to ensure method is being called
-        // Use both Log facade and error_log to ensure we see something
-        file_put_contents(storage_path('logs/weekly-summary-debug.log'), 
-            date('Y-m-d H:i:s') . " - WeeklySummary API CALLED\n" . 
+        // CRITICAL: Log at the very start - use multiple methods to ensure we see it
+        $logMessage = date('Y-m-d H:i:s') . " === WeeklySummary API CALLED ===\n" . 
             "Path: " . $request->path() . "\n" .
             "Full URL: " . $request->fullUrl() . "\n" .
             "Method: " . $request->method() . "\n" .
-            "Has Token: " . (!empty($request->bearerToken()) ? 'YES' : 'NO') . "\n\n",
-            FILE_APPEND
-        );
+            "Has Token: " . (!empty($request->bearerToken()) ? 'YES' : 'NO') . "\n" .
+            "Year: " . $request->input('year') . "\n" .
+            "Month: " . $request->input('month') . "\n\n";
         
+        // Write to multiple places
+        @file_put_contents(storage_path('logs/weekly-summary-debug.log'), $logMessage, FILE_APPEND);
+        @file_put_contents(storage_path('logs/laravel.log'), "[WEEKLY_API] " . $logMessage, FILE_APPEND);
         error_log("=== WeeklySummary API CALLED ===");
+        
         Log::info("=== WeeklySummary API CALLED ===", [
             'timestamp' => now()->toDateTimeString(),
             'path' => $request->path(),
             'full_url' => $request->fullUrl(),
             'method' => $request->method(),
             'ip' => $request->ip(),
+            'year' => $request->input('year'),
+            'month' => $request->input('month'),
         ]);
-        error_log("WeeklySummary: Path = " . $request->path());
         
         // Use same authentication approach as SummaryController
         // Extract user from token (SummaryController uses Auth::user() which works because of middleware)
@@ -205,11 +208,18 @@ class WeeklySummaryController extends Controller
         ]);
 
         // Load weekly summaries - ensure year and month are integers
+        // CRITICAL: Add debug logging before query
+        $debugLog = "Before query - User ID: {$user->id}, Year: {$selectedYear}, Month: {$selectedMonth}\n";
+        @file_put_contents(storage_path('logs/weekly-summary-debug.log'), date('Y-m-d H:i:s') . " " . $debugLog, FILE_APPEND);
+        
         $existingSummaries = WeeklySummary::where('user_id', $user->id)
             ->where('year', $selectedYear)
             ->where('month', $selectedMonth)
             ->orderBy('week_number')
             ->get();
+            
+        $queryLog = "Query result - Found: {$existingSummaries->count()} summaries\n";
+        @file_put_contents(storage_path('logs/weekly-summary-debug.log'), date('Y-m-d H:i:s') . " " . $queryLog, FILE_APPEND);
             
         Log::info("WeeklySummary: 📊 Database query result", [
             'user_id' => $user->id,
@@ -222,6 +232,18 @@ class WeeklySummaryController extends Controller
         
         // Key by week_number for easy lookup
         $existingSummaries = $existingSummaries->keyBy('week_number');
+        
+        // CRITICAL: If no summaries found, log and return early with debug info
+        if ($existingSummaries->count() === 0) {
+            $noDataLog = "NO SUMMARIES FOUND - User: {$user->id}, Year: {$selectedYear}, Month: {$selectedMonth}\n";
+            @file_put_contents(storage_path('logs/weekly-summary-debug.log'), date('Y-m-d H:i:s') . " " . $noDataLog, FILE_APPEND);
+            
+            Log::warning("WeeklySummary: No summaries found in database", [
+                'user_id' => $user->id,
+                'year' => $selectedYear,
+                'month' => $selectedMonth,
+            ]);
+        }
 
         $firstDay = Carbon::create($selectedYear, $selectedMonth, 1)->startOfMonth();
         $lastDay = Carbon::create($selectedYear, $selectedMonth, 1)->endOfMonth();
