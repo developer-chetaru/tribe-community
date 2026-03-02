@@ -242,19 +242,16 @@ class WeeklySummaryController extends Controller
             'last_day_of_month' => $lastDay->toDateTimeString(),
         ]);
 
-        // ULTRA SIMPLIFIED: Just return all summaries that exist in database
+        // DIRECT RETURN: Just return all summaries that exist in database
         // NO DATE FILTERING - just return what's in DB
         $weeksInMonth = [];
         
         Log::info("WeeklySummary: Processing summaries", [
             'summaries_count' => $existingSummaries->count(),
             'week_numbers' => $existingSummaries->pluck('week_number')->toArray(),
-            'summaries_data' => $existingSummaries->map(function($s) {
-                return ['id' => $s->id, 'week' => $s->week_number, 'has_summary' => !empty($s->summary)];
-            })->toArray(),
         ]);
         
-        // Simply iterate through all summaries and add them - NO FILTERING
+        // Simply iterate through all summaries and add them - NO FILTERING AT ALL
         foreach ($existingSummaries as $weekNum => $summary) {
             // Calculate week dates simply
             $weekStart = $firstDay->copy()->startOfWeek(Carbon::MONDAY);
@@ -263,19 +260,12 @@ class WeeklySummaryController extends Controller
             }
             $weekEnd = $weekStart->copy()->endOfWeek(Carbon::SUNDAY);
             
-            // Add ALL summaries - no date filtering
+            // Add ALL summaries - no date filtering, no registration check
             $weeksInMonth[] = [
                 'week' => (int)$weekNum,
                 'weekLabel' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
                 'summary' => $summary->summary ?? null,
             ];
-            
-            Log::info("WeeklySummary: ✅ Added week (NO FILTERING)", [
-                'week_num' => $weekNum,
-                'week_label' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
-                'summary_id' => $summary->id,
-                'summary_length' => strlen($summary->summary ?? ''),
-            ]);
         }
         
         // Sort by week number
@@ -286,7 +276,6 @@ class WeeklySummaryController extends Controller
         Log::info("WeeklySummary: Final weeks array", [
             'total_weeks' => count($weeksInMonth),
             'week_numbers' => array_column($weeksInMonth, 'week'),
-            'weeks_data' => $weeksInMonth,
         ]);
         
         Log::info("WeeklySummary: 📈 Week processing summary", [
@@ -339,10 +328,13 @@ class WeeklySummaryController extends Controller
             ]
         ];
         
-        Log::info("WeeklySummary: 🎯 Final response", [
+        // CRITICAL: Log final response to verify data is being returned
+        Log::info("WeeklySummary: 🎯 FINAL RESPONSE DATA", [
             'user_id' => $user->id,
-            'weekly_summaries_count' => count($responseData['data']['weeklySummaries']),
+            'weekly_summaries_count' => count($weeksInMonth),
             'summaries_found_in_db' => $existingSummaries->count(),
+            'week_numbers' => array_column($weeksInMonth, 'week'),
+            'response_weekly_summaries_count' => count($responseData['data']['weeklySummaries']),
             'valid_months_count' => count($validMonths),
             'valid_years_count' => count($validYears),
         ]);
