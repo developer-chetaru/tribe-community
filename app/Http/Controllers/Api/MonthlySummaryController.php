@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use App\Models\MonthlySummary as MonthlySummaryModel;
 use App\Models\HappyIndex;
 use Carbon\Carbon;
@@ -80,16 +81,28 @@ class MonthlySummaryController extends Controller
             }
         }
         
-        // Debug: Log user extraction result
+        // Debug: Log user extraction result with full details
+        Log::info("=== MonthlySummary API Request ===", [
+            'path' => $request->path(),
+            'has_token' => !empty($token),
+            'year' => $request->input('year'),
+            'month' => $request->input('month'),
+        ]);
+        
         if (!$user && $token) {
-            \Illuminate\Support\Facades\Log::warning("MonthlySummary: User not found", [
+            Log::warning("MonthlySummary: User not found from token", [
                 'has_token' => !empty($token),
-                'token_preview' => substr($token, 0, 30) . '...',
+                'token_preview' => $token ? substr($token, 0, 30) . '...' : 'none',
             ]);
         } elseif ($user) {
-            \Illuminate\Support\Facades\Log::info("MonthlySummary: User found", [
+            Log::info("MonthlySummary: ✅ User found - DETAILS", [
                 'user_id' => $user->id,
+                'user_email' => $user->email ?? 'N/A',
+                'user_name' => $user->name ?? 'N/A',
+                'user_created_at' => $user->created_at ? $user->created_at->toDateTimeString() : 'N/A',
             ]);
+        } else {
+            Log::warning("MonthlySummary: No token provided");
         }
         
         // If no user found, return empty data
@@ -108,12 +121,25 @@ class MonthlySummaryController extends Controller
         
         $selectedYear = $request->input('year', now()->year);
         $selectedMonth = $request->input('month', now()->month);
+        
+        Log::info("MonthlySummary: Fetching data for user", [
+            'user_id' => $user->id,
+            'selected_year' => $selectedYear,
+            'selected_month' => $selectedMonth,
+        ]);
 
         // Get user's registration date
         $userRegistrationDate = Carbon::parse($user->created_at)->startOfDay();
         
         // Get the selected month's start date
         $selectedMonthStart = Carbon::create($selectedYear, $selectedMonth, 1)->startOfMonth();
+        
+        Log::info("MonthlySummary: 📅 Date calculations", [
+            'user_id' => $user->id,
+            'user_registration_date' => $userRegistrationDate->toDateTimeString(),
+            'selected_month_start' => $selectedMonthStart->toDateTimeString(),
+            'month_after_registration' => $selectedMonthStart->gte($userRegistrationDate),
+        ]);
         
         // Only load summary if the selected month occurred on or after user's registration
         $monthlySummaries = [];
@@ -122,8 +148,22 @@ class MonthlySummaryController extends Controller
                 ->where('year', $selectedYear)
                 ->where('month', $selectedMonth)
                 ->first();
+                
+            Log::info("MonthlySummary: 📊 Database query result", [
+                'user_id' => $user->id,
+                'year' => $selectedYear,
+                'month' => $selectedMonth,
+                'summary_found' => $summary ? 'yes' : 'no',
+                'summary_id' => $summary ? $summary->id : null,
+            ]);
 
             $monthlySummaries = $summary ? [$summary] : [];
+        } else {
+            Log::info("MonthlySummary: ⏭️ Skipping month before registration", [
+                'user_id' => $user->id,
+                'selected_month_start' => $selectedMonthStart->toDateTimeString(),
+                'user_registration_date' => $userRegistrationDate->toDateTimeString(),
+            ]);
         }
 
         // Calculate valid months and years
@@ -153,7 +193,7 @@ class MonthlySummaryController extends Controller
             ];
         }
 
-        return response()->json([
+        $responseData = [
             'status' => true,
             'data' => [
                 'monthlySummaries' => $monthlySummaries,
@@ -162,7 +202,17 @@ class MonthlySummaryController extends Controller
                 'selectedYear' => $selectedYear,
                 'selectedMonth' => $selectedMonth
             ]
+        ];
+        
+        Log::info("MonthlySummary: 🎯 Final response", [
+            'user_id' => $user->id,
+            'monthly_summaries_count' => count($monthlySummaries),
+            'valid_months_count' => count($validMonths),
+            'valid_years_count' => count($validYears),
         ]);
+        Log::info("=== MonthlySummary API Response Complete ===");
+        
+        return response()->json($responseData);
     }
 
     public function generate(Request $request)
