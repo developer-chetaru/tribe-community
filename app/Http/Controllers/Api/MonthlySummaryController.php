@@ -15,11 +15,28 @@ class MonthlySummaryController extends Controller
 {
     public function index(Request $request)
     {
+        // CRITICAL: Log at the very start to ensure method is being called
+        // Use both Log facade and error_log to ensure we see something
+        error_log("=== MonthlySummary API CALLED ===");
+        Log::info("=== MonthlySummary API CALLED ===", [
+            'timestamp' => now()->toDateTimeString(),
+            'path' => $request->path(),
+            'full_url' => $request->fullUrl(),
+            'method' => $request->method(),
+            'ip' => $request->ip(),
+        ]);
+        error_log("MonthlySummary: Path = " . $request->path());
+        
         // Use same authentication approach as SummaryController
         // Extract user from token (SummaryController uses Auth::user() which works because of middleware)
         // Since we don't have middleware, we extract manually and use directly
         $token = $request->bearerToken();
         $user = null;
+        
+        Log::info("MonthlySummary: Token extracted", [
+            'has_token' => !empty($token),
+            'token_length' => $token ? strlen($token) : 0,
+        ]);
         
         if ($token) {
             // Extract user from token - try manual decode first (most reliable)
@@ -128,20 +145,24 @@ class MonthlySummaryController extends Controller
             'selected_month' => $selectedMonth,
         ]);
 
-        // Get user's registration date
-        $userRegistrationDate = Carbon::parse($user->created_at)->startOfDay();
+        // Get user's timezone
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+        
+        // Get user's registration date in user's timezone
+        $userRegistrationDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), $userTimezone)->startOfDay();
         
         // Get the selected month's start date
         $selectedMonthStart = Carbon::create($selectedYear, $selectedMonth, 1)->startOfMonth();
         
         Log::info("MonthlySummary: 📅 Date calculations", [
             'user_id' => $user->id,
+            'user_timezone' => $userTimezone,
             'user_registration_date' => $userRegistrationDate->toDateTimeString(),
             'selected_month_start' => $selectedMonthStart->toDateTimeString(),
             'month_after_registration' => $selectedMonthStart->gte($userRegistrationDate),
         ]);
         
-        // Only load summary if the selected month occurred on or after user's registration
+        // Load summary if the selected month occurred on or after user's registration
         $monthlySummaries = [];
         if ($selectedMonthStart->gte($userRegistrationDate)) {
             $summary = MonthlySummaryModel::where('user_id', $user->id)
@@ -155,6 +176,7 @@ class MonthlySummaryController extends Controller
                 'month' => $selectedMonth,
                 'summary_found' => $summary ? 'yes' : 'no',
                 'summary_id' => $summary ? $summary->id : null,
+                'summary_preview' => $summary ? substr($summary->summary ?? '', 0, 100) : null,
             ]);
 
             $monthlySummaries = $summary ? [$summary] : [];

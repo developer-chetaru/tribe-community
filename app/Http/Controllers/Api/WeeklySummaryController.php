@@ -13,11 +13,28 @@ class WeeklySummaryController extends Controller
 {
     public function index(Request $request)
     {
+        // CRITICAL: Log at the very start to ensure method is being called
+        // Use both Log facade and error_log to ensure we see something
+        error_log("=== WeeklySummary API CALLED ===");
+        Log::info("=== WeeklySummary API CALLED ===", [
+            'timestamp' => now()->toDateTimeString(),
+            'path' => $request->path(),
+            'full_url' => $request->fullUrl(),
+            'method' => $request->method(),
+            'ip' => $request->ip(),
+        ]);
+        error_log("WeeklySummary: Path = " . $request->path());
+        
         // Use same authentication approach as SummaryController
         // Extract user from token (SummaryController uses Auth::user() which works because of middleware)
         // Since we don't have middleware, we extract manually and use directly
         $token = $request->bearerToken();
         $user = null;
+        
+        Log::info("WeeklySummary: Token extracted", [
+            'has_token' => !empty($token),
+            'token_length' => $token ? strlen($token) : 0,
+        ]);
         
         if ($token) {
             // Extract user from token - try manual decode first (most reliable)
@@ -145,46 +162,42 @@ class WeeklySummaryController extends Controller
 
         $firstDay = Carbon::create($selectedYear, $selectedMonth, 1)->startOfMonth();
         $lastDay = Carbon::create($selectedYear, $selectedMonth, 1)->endOfMonth();
-        $weekNum = 1;
-        $weekStart = $firstDay->copy()->startOfWeek(Carbon::MONDAY);
-
-        $weeksInMonth = [];
-
-        // Get user's registration date safely
-        $defaultTimezone = \App\Helpers\TimezoneHelper::DEFAULT_TIMEZONE;
-        $userRegistrationDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), $defaultTimezone)->startOfDay();
-        $today = \App\Helpers\TimezoneHelper::carbon(null, $defaultTimezone);
+        
+        // Get user's timezone
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+        $today = Carbon::now($userTimezone);
+        
+        // Get user's registration date in user's timezone
+        $userRegistrationDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), $userTimezone)->startOfDay();
         
         Log::info("WeeklySummary: 📅 Date calculations", [
             'user_id' => $user->id,
+            'user_timezone' => $userTimezone,
             'user_registration_date' => $userRegistrationDate->toDateTimeString(),
             'today' => $today->toDateTimeString(),
             'first_day_of_month' => $firstDay->toDateTimeString(),
             'last_day_of_month' => $lastDay->toDateTimeString(),
         ]);
 
+        // Build weeks array - show all weeks in the month that have summaries OR are in the past
+        // Don't filter by future weeks - just show all weeks in the month
+        $weeksInMonth = [];
+        $weekNum = 1;
+        $weekStart = $firstDay->copy()->startOfWeek(Carbon::MONDAY);
+        
+        // If month doesn't start on Monday, we might need to adjust
+        // But let's start from the first Monday of the month's week
+        if ($firstDay->dayOfWeek != Carbon::MONDAY) {
+            $weekStart = $firstDay->copy()->startOfWeek(Carbon::MONDAY);
+        }
+
         $weeksProcessed = 0;
-        $weeksSkippedFuture = 0;
         $weeksSkippedBeforeRegistration = 0;
         
         while ($weekStart->lte($lastDay)) {
             $weekEnd = $weekStart->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
-
-            // Skip future weeks and current week (only show summaries for completed weeks)
-            // A week is considered completed only if its end date (Sunday) has passed
-            if ($weekStart->gt($today) || $weekEnd->gt($today)) {
-                $weeksSkippedFuture++;
-                Log::info("WeeklySummary: ⏭️ Skipping future week", [
-                    'week_num' => $weekNum,
-                    'week_start' => $weekStart->toDateTimeString(),
-                    'week_end' => $weekEnd->toDateTimeString(),
-                    'today' => $today->toDateTimeString(),
-                ]);
-                break;
-            }
             
-            // Skip weeks that occurred before user's registration date
-            // Only show weeks where the week's end date (Sunday) is on or after registration date
+            // Only skip weeks that occurred before user's registration date
             if ($weekEnd->lt($userRegistrationDate)) {
                 $weeksSkippedBeforeRegistration++;
                 Log::info("WeeklySummary: ⏭️ Skipping week before registration", [
@@ -197,21 +210,33 @@ class WeeklySummaryController extends Controller
                 continue;
             }
 
-            $weeksProcessed++;
-            $weeksInMonth[$weekNum] = [
-                'week' => $weekNum,
-                'weekLabel' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
-                'summary' => $existingSummaries[$weekNum]->summary ?? null,
-            ];
+            // Add week if it's in the selected month OR if we have a summary for it
+            // Check if this week overlaps with the selected month
+            $weekOverlapsMonth = $weekStart->lte($lastDay) && $weekEnd->gte($firstDay);
             
-            Log::info("WeeklySummary: ✅ Added week", [
-                'week_num' => $weekNum,
-                'week_label' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
-                'has_summary' => isset($existingSummaries[$weekNum]),
-            ]);
+            if ($weekOverlapsMonth) {
+                $weeksProcessed++;
+                $weeksInMonth[$weekNum] = [
+                    'week' => $weekNum,
+                    'weekLabel' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
+                    'summary' => $existingSummaries[$weekNum]->summary ?? null,
+                ];
+                
+                Log::info("WeeklySummary: ✅ Added week", [
+                    'week_num' => $weekNum,
+                    'week_label' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
+                    'has_summary' => isset($existingSummaries[$weekNum]),
+                    'summary_id' => isset($existingSummaries[$weekNum]) ? $existingSummaries[$weekNum]->id : null,
+                ]);
+            }
 
             $weekNum++;
             $weekStart->addWeek();
+            
+            // Stop if we've gone past the month
+            if ($weekStart->gt($lastDay)) {
+                break;
+            }
         }
         
         Log::info("WeeklySummary: 📈 Week processing summary", [
