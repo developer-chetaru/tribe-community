@@ -13,20 +13,7 @@ class WeeklySummaryController extends Controller
 {
     public function index(Request $request)
     {
-        // CRITICAL: Log at the very start - use multiple methods to ensure we see it
-        $logMessage = date('Y-m-d H:i:s') . " === WeeklySummary API CALLED ===\n" . 
-            "Path: " . $request->path() . "\n" .
-            "Full URL: " . $request->fullUrl() . "\n" .
-            "Method: " . $request->method() . "\n" .
-            "Has Token: " . (!empty($request->bearerToken()) ? 'YES' : 'NO') . "\n" .
-            "Year: " . $request->input('year') . "\n" .
-            "Month: " . $request->input('month') . "\n\n";
-        
-        // Write to multiple places
-        @file_put_contents(storage_path('logs/weekly-summary-debug.log'), $logMessage, FILE_APPEND);
-        @file_put_contents(storage_path('logs/laravel.log'), "[WEEKLY_API] " . $logMessage, FILE_APPEND);
-        error_log("=== WeeklySummary API CALLED ===");
-        
+        // CRITICAL: Log at the very start - MUST appear in logs
         Log::info("=== WeeklySummary API CALLED ===", [
             'timestamp' => now()->toDateTimeString(),
             'path' => $request->path(),
@@ -35,7 +22,11 @@ class WeeklySummaryController extends Controller
             'ip' => $request->ip(),
             'year' => $request->input('year'),
             'month' => $request->input('month'),
+            'has_token' => !empty($request->bearerToken()),
         ]);
+        
+        // Also use error_log which goes to PHP error log
+        error_log("WEEKLY_API_CALLED: " . $request->path() . " | Year: " . $request->input('year') . " | Month: " . $request->input('month'));
         
         // Use same authentication approach as SummaryController
         // Extract user from token (SummaryController uses Auth::user() which works because of middleware)
@@ -58,30 +49,24 @@ class WeeklySummaryController extends Controller
                     $payload = json_decode($payloadJson, true);
                     $userId = $payload['sub'] ?? null;
                     
-                    file_put_contents(storage_path('logs/weekly-summary-debug.log'), 
-                        date('Y-m-d H:i:s') . " - Token decoded\n" . 
-                        "User ID from token: " . ($userId ?? 'NULL') . "\n",
-                        FILE_APPEND
-                    );
+                    Log::info("WeeklySummary: Token decoded", [
+                        'user_id_from_token' => $userId,
+                    ]);
                     
                     if ($userId) {
                         $userId = is_string($userId) ? (int)$userId : $userId;
                         $user = \App\Models\User::find($userId);
                         
-                        file_put_contents(storage_path('logs/weekly-summary-debug.log'), 
-                            date('Y-m-d H:i:s') . " - User lookup\n" . 
-                            "User found: " . ($user ? $user->email : 'NO') . "\n",
-                            FILE_APPEND
-                        );
+                        Log::info("WeeklySummary: User lookup result", [
+                            'user_id' => $userId,
+                            'user_found' => $user ? 'yes' : 'no',
+                            'user_email' => $user ? $user->email : null,
+                        ]);
                     }
                 }
             } catch (\Exception $e) {
                 // Manual decode failed, try JWTAuth
-                file_put_contents(storage_path('logs/weekly-summary-debug.log'), 
-                    date('Y-m-d H:i:s') . " - Manual decode exception: " . $e->getMessage() . "\n",
-                    FILE_APPEND
-                );
-                \Illuminate\Support\Facades\Log::debug("WeeklySummary: Manual decode exception", [
+                Log::warning("WeeklySummary: Manual decode exception", [
                     'error' => $e->getMessage(),
                 ]);
             }
@@ -208,18 +193,17 @@ class WeeklySummaryController extends Controller
         ]);
 
         // Load weekly summaries - ensure year and month are integers
-        // CRITICAL: Add debug logging before query
-        $debugLog = "Before query - User ID: {$user->id}, Year: {$selectedYear}, Month: {$selectedMonth}\n";
-        @file_put_contents(storage_path('logs/weekly-summary-debug.log'), date('Y-m-d H:i:s') . " " . $debugLog, FILE_APPEND);
+        Log::info("WeeklySummary: Before database query", [
+            'user_id' => $user->id,
+            'year' => $selectedYear,
+            'month' => $selectedMonth,
+        ]);
         
         $existingSummaries = WeeklySummary::where('user_id', $user->id)
             ->where('year', $selectedYear)
             ->where('month', $selectedMonth)
             ->orderBy('week_number')
             ->get();
-            
-        $queryLog = "Query result - Found: {$existingSummaries->count()} summaries\n";
-        @file_put_contents(storage_path('logs/weekly-summary-debug.log'), date('Y-m-d H:i:s') . " " . $queryLog, FILE_APPEND);
             
         Log::info("WeeklySummary: 📊 Database query result", [
             'user_id' => $user->id,
@@ -233,12 +217,9 @@ class WeeklySummaryController extends Controller
         // Key by week_number for easy lookup
         $existingSummaries = $existingSummaries->keyBy('week_number');
         
-        // CRITICAL: If no summaries found, log and return early with debug info
+        // CRITICAL: If no summaries found, log warning
         if ($existingSummaries->count() === 0) {
-            $noDataLog = "NO SUMMARIES FOUND - User: {$user->id}, Year: {$selectedYear}, Month: {$selectedMonth}\n";
-            @file_put_contents(storage_path('logs/weekly-summary-debug.log'), date('Y-m-d H:i:s') . " " . $noDataLog, FILE_APPEND);
-            
-            Log::warning("WeeklySummary: No summaries found in database", [
+            Log::warning("WeeklySummary: ⚠️ NO SUMMARIES FOUND in database", [
                 'user_id' => $user->id,
                 'year' => $selectedYear,
                 'month' => $selectedMonth,
