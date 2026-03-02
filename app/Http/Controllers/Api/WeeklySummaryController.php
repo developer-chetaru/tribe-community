@@ -209,8 +209,7 @@ class WeeklySummaryController extends Controller
             ->where('year', $selectedYear)
             ->where('month', $selectedMonth)
             ->orderBy('week_number')
-            ->get()
-            ->keyBy('week_number');
+            ->get();
             
         Log::info("WeeklySummary: 📊 Database query result", [
             'user_id' => $user->id,
@@ -219,11 +218,10 @@ class WeeklySummaryController extends Controller
             'summaries_found' => $existingSummaries->count(),
             'summary_ids' => $existingSummaries->pluck('id')->toArray(),
             'week_numbers' => $existingSummaries->pluck('week_number')->toArray(),
-            'raw_query' => WeeklySummary::where('user_id', $user->id)
-                ->where('year', $selectedYear)
-                ->where('month', $selectedMonth)
-                ->toSql(),
         ]);
+        
+        // Key by week_number for easy lookup
+        $existingSummaries = $existingSummaries->keyBy('week_number');
 
         $firstDay = Carbon::create($selectedYear, $selectedMonth, 1)->startOfMonth();
         $lastDay = Carbon::create($selectedYear, $selectedMonth, 1)->endOfMonth();
@@ -251,6 +249,9 @@ class WeeklySummaryController extends Controller
         Log::info("WeeklySummary: Processing summaries", [
             'summaries_count' => $existingSummaries->count(),
             'week_numbers' => $existingSummaries->pluck('week_number')->toArray(),
+            'summaries_data' => $existingSummaries->map(function($s) {
+                return ['id' => $s->id, 'week' => $s->week_number, 'has_summary' => !empty($s->summary)];
+            })->toArray(),
         ]);
         
         // Simply iterate through all summaries and add them - NO FILTERING
@@ -273,6 +274,7 @@ class WeeklySummaryController extends Controller
                 'week_num' => $weekNum,
                 'week_label' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
                 'summary_id' => $summary->id,
+                'summary_length' => strlen($summary->summary ?? ''),
             ]);
         }
         
@@ -284,12 +286,11 @@ class WeeklySummaryController extends Controller
         Log::info("WeeklySummary: Final weeks array", [
             'total_weeks' => count($weeksInMonth),
             'week_numbers' => array_column($weeksInMonth, 'week'),
+            'weeks_data' => $weeksInMonth,
         ]);
         
         Log::info("WeeklySummary: 📈 Week processing summary", [
             'user_id' => $user->id,
-            'weeks_processed' => $weeksProcessed,
-            'weeks_skipped_before_registration' => $weeksSkippedBeforeRegistration,
             'total_weeks_in_result' => count($weeksInMonth),
             'existing_summaries_count' => $existingSummaries->count(),
         ]);
