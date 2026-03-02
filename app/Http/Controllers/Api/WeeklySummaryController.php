@@ -196,7 +196,9 @@ class WeeklySummaryController extends Controller
         Log::info("WeeklySummary: Before database query", [
             'user_id' => $user->id,
             'year' => $selectedYear,
+            'year_type' => gettype($selectedYear),
             'month' => $selectedMonth,
+            'month_type' => gettype($selectedMonth),
         ]);
         
         $existingSummaries = WeeklySummary::where('user_id', $user->id)
@@ -212,19 +214,30 @@ class WeeklySummaryController extends Controller
             'summaries_found' => $existingSummaries->count(),
             'summary_ids' => $existingSummaries->pluck('id')->toArray(),
             'week_numbers' => $existingSummaries->pluck('week_number')->toArray(),
+            'raw_data' => $existingSummaries->map(function($s) {
+                return ['id' => $s->id, 'week' => $s->week_number, 'has_summary' => !empty($s->summary)];
+            })->toArray(),
         ]);
         
-        // Key by week_number for easy lookup
-        $existingSummaries = $existingSummaries->keyBy('week_number');
-        
-        // CRITICAL: If no summaries found, log warning
+        // CRITICAL: If no summaries found, log detailed warning
         if ($existingSummaries->count() === 0) {
+            // Try query without type casting to see if that's the issue
+            $testQuery = WeeklySummary::where('user_id', $user->id)
+                ->where('year', (string)$selectedYear)
+                ->where('month', (string)$selectedMonth)
+                ->count();
+            
             Log::warning("WeeklySummary: ⚠️ NO SUMMARIES FOUND in database", [
                 'user_id' => $user->id,
                 'year' => $selectedYear,
                 'month' => $selectedMonth,
+                'test_query_with_strings' => $testQuery,
+                'all_summaries_for_user' => WeeklySummary::where('user_id', $user->id)->count(),
             ]);
         }
+        
+        // Key by week_number for easy lookup
+        $existingSummaries = $existingSummaries->keyBy('week_number');
 
         $firstDay = Carbon::create($selectedYear, $selectedMonth, 1)->startOfMonth();
         $lastDay = Carbon::create($selectedYear, $selectedMonth, 1)->endOfMonth();
@@ -255,7 +268,18 @@ class WeeklySummaryController extends Controller
         ]);
         
         // Simply iterate through all summaries and add them - NO FILTERING AT ALL
+        Log::info("WeeklySummary: Starting to process summaries", [
+            'existing_summaries_count' => $existingSummaries->count(),
+            'existing_summaries_keys' => $existingSummaries->keys()->toArray(),
+        ]);
+        
         foreach ($existingSummaries as $weekNum => $summary) {
+            Log::info("WeeklySummary: Processing week", [
+                'week_num' => $weekNum,
+                'summary_id' => $summary->id,
+                'has_summary_text' => !empty($summary->summary),
+            ]);
+            
             // Calculate week dates simply
             $weekStart = $firstDay->copy()->startOfWeek(Carbon::MONDAY);
             if ($weekNum > 1) {
@@ -269,7 +293,16 @@ class WeeklySummaryController extends Controller
                 'weekLabel' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
                 'summary' => $summary->summary ?? null,
             ];
+            
+            Log::info("WeeklySummary: Added week to array", [
+                'week_num' => $weekNum,
+                'weeks_in_month_count' => count($weeksInMonth),
+            ]);
         }
+        
+        Log::info("WeeklySummary: Finished processing summaries", [
+            'total_weeks_added' => count($weeksInMonth),
+        ]);
         
         // Sort by week number
         usort($weeksInMonth, function($a, $b) {

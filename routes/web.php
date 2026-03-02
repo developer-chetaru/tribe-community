@@ -417,10 +417,7 @@ Route::middleware([
         Route::get('/industries/edit/{id}', IndustryEdit::class)->name('industries.edit');
     });
     
-    // API routes for summaries (use session authentication)
-    Route::prefix('api')->group(function () {
-        Route::get('/weekly-summaries', [WeeklySummaryController::class, 'index']);
-        Route::get('/monthly-summary', [MonthlySummaryController::class, 'index']);
-        Route::post('/monthly-summary/generate', [MonthlySummaryController::class, 'generate']);
-    });
+    // REMOVED: API routes for summaries moved to routes/api.php
+    // These routes should not require web session authentication
+    // They are now in routes/api.php without middleware
 });
