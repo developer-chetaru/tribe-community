@@ -45,7 +45,10 @@ return Application::configure(basePath: dirname(__DIR__))
         });
         
         // Handle AuthenticationException for summary endpoints - return empty data instead of 401
-        // This allows controllers to handle authentication themselves
+        // REMOVED: Exception handler that was blocking controller execution
+        // The controllers now handle authentication themselves, so we don't need to catch AuthenticationException
+        // This was preventing the controller from being called
+        /*
         $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) {
             $path = $request->path();
             $isSummaryEndpoint = strpos($path, 'api/weekly-summaries') !== false || 
@@ -53,34 +56,11 @@ return Application::configure(basePath: dirname(__DIR__))
                                  strpos($path, 'api/summary/') !== false;
             
             if ($isSummaryEndpoint && $request->expectsJson()) {
-                // Return empty data instead of 401 for summary endpoints
-                // Controllers will handle authentication and return proper data
-                if (strpos($path, 'weekly-summaries') !== false) {
-                    return response()->json([
-                        'status' => true,
-                        'data' => [
-                            'weeklySummaries' => [],
-                            'validMonths' => [],
-                            'validYears' => [],
-                            'selectedYear' => $request->input('year', now()->year),
-                            'selectedMonth' => $request->input('month', now()->month)
-                        ]
-                    ]);
-                } elseif (strpos($path, 'monthly-summary') !== false) {
-                    return response()->json([
-                        'status' => true,
-                        'data' => [
-                            'monthlySummaries' => [],
-                            'validMonths' => [],
-                            'validYears' => [],
-                            'selectedYear' => $request->input('year', now()->year),
-                            'selectedMonth' => $request->input('month', now()->month)
-                        ]
-                    ]);
-                }
+                // Let the controller handle it - don't return early
+                return null;
             }
             
-            // For other endpoints, use default behavior
             return null;
         });
+        */
     })->create();

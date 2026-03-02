@@ -13,6 +13,33 @@ class WeeklySummaryController extends Controller
 {
     public function index(Request $request)
     {
+        // CRITICAL: Return immediately with debug info to verify controller is being called
+        // TEMPORARY: Remove this after confirming controller is called
+        $testResponse = [
+            'status' => true,
+            'debug' => [
+                'controller_called' => true,
+                'timestamp' => now()->toDateTimeString(),
+                'path' => $request->path(),
+                'full_url' => $request->fullUrl(),
+                'year' => $request->input('year'),
+                'month' => $request->input('month'),
+                'has_token' => !empty($request->bearerToken()),
+                'message' => 'CONTROLLER IS BEING CALLED - This proves the route is working',
+            ],
+            'data' => [
+                'weeklySummaries' => [],
+                'validMonths' => [],
+                'validYears' => [],
+                'selectedYear' => $request->input('year', now()->year),
+                'selectedMonth' => $request->input('month', now()->month)
+            ]
+        ];
+        
+        // TEMPORARY: Return immediately to test if controller is called
+        // Remove this after confirming controller is working
+        return response()->json($testResponse);
+        
         // CRITICAL: Add debug message in response immediately
         $immediateDebug = [
             'controller_called' => true,
