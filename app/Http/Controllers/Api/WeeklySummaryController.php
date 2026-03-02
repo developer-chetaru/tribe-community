@@ -36,9 +36,8 @@ class WeeklySummaryController extends Controller
             ]
         ];
         
-        // TEMPORARY: Return immediately to test if controller is called
-        // Remove this after confirming controller is working
-        return response()->json($testResponse);
+        // REMOVED: Test return - now running actual logic
+        // return response()->json($testResponse);
         
         // CRITICAL: Add debug message in response immediately
         $immediateDebug = [
@@ -396,29 +395,44 @@ class WeeklySummaryController extends Controller
             'status' => true,
             'debug' => array_merge($immediateDebug, [
                 'message' => 'WeeklySummary API Response - DEBUG INFO',
-                'user_id' => $user->id,
-                'user_email' => $user->email,
-                'selected_year' => $selectedYear,
-                'selected_year_type' => gettype($selectedYear),
-                'selected_month' => $selectedMonth,
-                'selected_month_type' => gettype($selectedMonth),
-                'summaries_found_in_db' => $summariesBeforeKeyBy->count(),
-                'summaries_before_keyby' => $summariesBeforeKeyBy->map(function($s) {
-                    return [
-                        'id' => $s->id, 
-                        'week_number' => $s->week_number, 
-                        'has_summary' => !empty($s->summary),
-                        'summary_length' => strlen($s->summary ?? '')
-                    ];
-                })->toArray(),
-                'existing_summaries_after_keyby_count' => $existingSummaries->count(),
-                'existing_summaries_keys' => $existingSummaries->keys()->toArray(),
-                'weeks_in_result' => count($weeksInMonth),
-                'week_numbers_in_result' => array_column($weeksInMonth, 'week'),
-                'all_user_summaries_count' => $allUserSummaries->count(),
-                'all_user_summaries_sample' => $allUserSummaries->take(5)->map(function($s) {
-                    return ['id' => $s->id, 'year' => $s->year, 'month' => $s->month, 'week' => $s->week_number];
-                })->toArray(),
+                'user_details' => [
+                    'user_id' => $user->id,
+                    'user_email' => $user->email,
+                    'user_name' => $user->name ?? 'N/A',
+                    'user_created_at' => $user->created_at ? $user->created_at->toDateTimeString() : 'N/A',
+                ],
+                'query_params' => [
+                    'selected_year' => $selectedYear,
+                    'selected_year_type' => gettype($selectedYear),
+                    'selected_month' => $selectedMonth,
+                    'selected_month_type' => gettype($selectedMonth),
+                ],
+                'database_query_results' => [
+                    'summaries_found_in_db' => $summariesBeforeKeyBy->count(),
+                    'summaries_before_keyby' => $summariesBeforeKeyBy->map(function($s) {
+                        return [
+                            'id' => $s->id, 
+                            'week_number' => $s->week_number, 
+                            'year' => $s->year,
+                            'month' => $s->month,
+                            'has_summary' => !empty($s->summary),
+                            'summary_length' => strlen($s->summary ?? '')
+                        ];
+                    })->toArray(),
+                    'existing_summaries_after_keyby_count' => $existingSummaries->count(),
+                    'existing_summaries_keys' => $existingSummaries->keys()->toArray(),
+                ],
+                'processing_results' => [
+                    'weeks_in_result' => count($weeksInMonth),
+                    'week_numbers_in_result' => array_column($weeksInMonth, 'week'),
+                    'weeks_in_month_array' => $weeksInMonth,
+                ],
+                'all_user_summaries' => [
+                    'total_count' => $allUserSummaries->count(),
+                    'sample' => $allUserSummaries->take(10)->map(function($s) {
+                        return ['id' => $s->id, 'year' => $s->year, 'month' => $s->month, 'week' => $s->week_number];
+                    })->toArray(),
+                ],
             ]),
             'data' => [
                 'weeklySummaries' => array_values($weeksInMonth),
