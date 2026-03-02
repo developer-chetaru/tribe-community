@@ -438,8 +438,8 @@ class WeeklySummaryController extends Controller
                 'weeklySummaries' => array_values($weeksInMonth),
                 'validMonths' => $validMonths,
                 'validYears' => $validYears,
-                'selectedYear' => $selectedYear,
-                'selectedMonth' => $selectedMonth
+                'selectedYear' => (string)$selectedYear, // Convert to string for Flutter
+                'selectedMonth' => (string)$selectedMonth // Convert to string for Flutter
             ]
         ];
         

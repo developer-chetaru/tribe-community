@@ -124,16 +124,16 @@ class MonthlySummaryController extends Controller
         
         // If no user found, return empty data
         if (!$user) {
-            return response()->json([
-                'status' => true,
-                'data' => [
-                    'monthlySummaries' => [],
-                    'validMonths' => [],
-                    'validYears' => [],
-                    'selectedYear' => $request->input('year', now()->year),
-                    'selectedMonth' => $request->input('month', now()->month)
-                ]
-            ]);
+                return response()->json([
+                    'status' => true,
+                    'data' => [
+                        'monthlySummaries' => [],
+                        'validMonths' => [],
+                        'validYears' => [],
+                        'selectedYear' => (string)$request->input('year', now()->year), // Convert to string for Flutter
+                        'selectedMonth' => (string)$request->input('month', now()->month) // Convert to string for Flutter
+                    ]
+                ]);
         }
         
         $selectedYear = $request->input('year', now()->year);
@@ -221,8 +221,8 @@ class MonthlySummaryController extends Controller
                 'monthlySummaries' => $monthlySummaries,
                 'validMonths' => $validMonths,
                 'validYears' => $validYears,
-                'selectedYear' => $selectedYear,
-                'selectedMonth' => $selectedMonth
+                'selectedYear' => (string)$selectedYear, // Convert to string for Flutter
+                'selectedMonth' => (string)$selectedMonth // Convert to string for Flutter
             ]
         ];
         
