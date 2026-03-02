@@ -13,6 +13,13 @@ class WeeklySummaryController extends Controller
 {
     public function index(Request $request)
     {
+        // CRITICAL: Add debug message in response immediately
+        $immediateDebug = [
+            'controller_called' => true,
+            'timestamp' => now()->toDateTimeString(),
+            'path' => $request->path(),
+        ];
+        
         // CRITICAL: Log at the very start - MUST appear in logs
         Log::info("=== WeeklySummary API CALLED ===", [
             'timestamp' => now()->toDateTimeString(),
@@ -347,14 +354,45 @@ class WeeklySummaryController extends Controller
             ];
         }
 
+        // Get summaries before keyBy to show in debug - query again to be sure
+        $summariesBeforeKeyBy = WeeklySummary::where('user_id', $user->id)
+            ->where('year', $selectedYear)
+            ->where('month', $selectedMonth)
+            ->orderBy('week_number')
+            ->get();
+        
+        // Also get all summaries for this user to debug
+        $allUserSummaries = WeeklySummary::where('user_id', $user->id)
+            ->get(['id', 'year', 'month', 'week_number']);
+        
         $responseData = [
             'status' => true,
-            'debug' => [
+            'debug' => array_merge($immediateDebug, [
+                'message' => 'WeeklySummary API Response - DEBUG INFO',
                 'user_id' => $user->id,
-                'summaries_found_in_db' => $existingSummaries->count(),
+                'user_email' => $user->email,
+                'selected_year' => $selectedYear,
+                'selected_year_type' => gettype($selectedYear),
+                'selected_month' => $selectedMonth,
+                'selected_month_type' => gettype($selectedMonth),
+                'summaries_found_in_db' => $summariesBeforeKeyBy->count(),
+                'summaries_before_keyby' => $summariesBeforeKeyBy->map(function($s) {
+                    return [
+                        'id' => $s->id, 
+                        'week_number' => $s->week_number, 
+                        'has_summary' => !empty($s->summary),
+                        'summary_length' => strlen($s->summary ?? '')
+                    ];
+                })->toArray(),
+                'existing_summaries_after_keyby_count' => $existingSummaries->count(),
+                'existing_summaries_keys' => $existingSummaries->keys()->toArray(),
                 'weeks_in_result' => count($weeksInMonth),
-                'week_numbers_in_db' => $existingSummaries->pluck('week_number')->toArray(),
-            ],
+                'week_numbers_in_result' => array_column($weeksInMonth, 'week'),
+                'all_user_summaries_count' => $allUserSummaries->count(),
+                'all_user_summaries_sample' => $allUserSummaries->take(5)->map(function($s) {
+                    return ['id' => $s->id, 'year' => $s->year, 'month' => $s->month, 'week' => $s->week_number];
+                })->toArray(),
+            ]),
             'data' => [
                 'weeklySummaries' => array_values($weeksInMonth),
                 'validMonths' => $validMonths,
@@ -373,8 +411,14 @@ class WeeklySummaryController extends Controller
             'response_weekly_summaries_count' => count($responseData['data']['weeklySummaries']),
             'valid_months_count' => count($validMonths),
             'valid_years_count' => count($validYears),
+            'debug_field_included' => isset($responseData['debug']),
         ]);
         Log::info("=== WeeklySummary API Response Complete ===");
+        
+        // CRITICAL: Ensure debug field is always included
+        if (!isset($responseData['debug'])) {
+            $responseData['debug'] = ['error' => 'Debug field missing - this should not happen'];
+        }
         
         return response()->json($responseData);
     }
