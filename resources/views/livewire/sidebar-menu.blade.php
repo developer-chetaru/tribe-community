@@ -303,16 +303,36 @@
    class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
    :class="[
        $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
-       window.location.pathname === '' ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700'
+       window.location.pathname === '{{ route('admin.send-notification', [], false) }}' 
+           ? 'bg-red-100 text-red-600 font-semibold' 
+           : 'text-gray-700'
    ]">
     
     <img 
-        :src="window.location.pathname === '' 
+        :src="window.location.pathname === '{{ route('admin.send-notification', [], false) }}' 
             ? '{{ asset('images/notification-active.svg') }}' 
             : '{{ asset('images/notification.svg') }}'" 
         class="h-5 w-5" />
 
     <span x-show="$store.sidebar.open" x-transition class="text-sm">Send Notification</span>
+</a>
+
+    <a href="{{ route('admin.send-basecamp-notification') }}"
+   class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
+   :class="[
+       $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
+       window.location.pathname === '{{ route('admin.send-basecamp-notification', [], false) }}' 
+           ? 'bg-red-100 text-red-600 font-semibold' 
+           : 'text-gray-700'
+   ]">
+    
+    <img 
+        :src="window.location.pathname === '{{ route('admin.send-basecamp-notification', [], false) }}' 
+            ? '{{ asset('images/notification-active.svg') }}' 
+            : '{{ asset('images/notification.svg') }}'" 
+        class="h-5 w-5" />
+
+    <span x-show="$store.sidebar.open" x-transition class="text-sm">Send Basecamp Notification</span>
 </a>
     
     <a href="{{ route('admin.activity-log') }}"

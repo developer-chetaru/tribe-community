@@ -379,6 +379,7 @@ Route::middleware([
         
         // Admin Notification Features
         Route::get('admin/send-notification', SendNotifications::class)->name('admin.send-notification');
+        Route::get('admin/send-basecamp-notification', \App\Livewire\Admin\SendBasecampNotifications::class)->name('admin.send-basecamp-notification');
         Route::get('admin/send-notification-list', SendNotificationList::class)->name('admin.send-notification-list');
         Route::get('admin/activity-log', ActivityLogComponent::class)->name('admin.activity-log');
         Route::get('admin/login-sessions', LoginSessionsComponent::class)->name('admin.login-sessions');
