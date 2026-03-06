@@ -89,12 +89,79 @@ class MonthlySummaryController extends Controller
             }
         }
         
-        // Fallback: Try Auth::user() (in case middleware set it)
+        // Fallback: Try Auth::user() for session-based authentication (web requests)
+        // IMPORTANT: This block ONLY runs if no user was found from Bearer token
+        // App requests (with Bearer token) will have $user set above, so this block is SKIPPED
+        // Web requests (no Bearer token) will have $user = null, so this block executes
         if (!$user) {
             try {
-                $user = Auth::guard('api')->user() ?? Auth::user();
+                // CRITICAL: Manually start session for web requests
+                // The 'web' middleware should handle this, but let's ensure it works
+                $sessionCookieName = config('session.cookie', 'laravel_session');
+                $sessionId = $request->cookie($sessionCookieName);
+                
+                // Also check all cookies to see what's available
+                $allCookies = $request->cookies->all();
+                
+                Log::info("MonthlySummary: Session cookie check", [
+                    'session_cookie_name' => $sessionCookieName,
+                    'has_session_cookie' => $request->hasCookie($sessionCookieName),
+                    'session_cookie_value' => $sessionId ? substr($sessionId, 0, 20) . '...' : null,
+                    'has_session' => $request->hasSession(),
+                    'all_cookie_names' => array_keys($allCookies),
+                ]);
+                
+                // If session cookie exists but session not started, manually start it
+                if ($sessionId && !$request->hasSession()) {
+                    try {
+                        // Get session manager and start session
+                        $sessionManager = app('session');
+                        $sessionStore = $sessionManager->driver();
+                        $sessionStore->setId($sessionId);
+                        $sessionStore->start();
+                        $request->setLaravelSession($sessionStore);
+                        
+                        Log::info("MonthlySummary: Session manually started", [
+                            'session_id' => $sessionStore->getId(),
+                            'session_data_keys' => array_keys($sessionStore->all()),
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::warning("MonthlySummary: Could not manually start session", [
+                            'error' => $e->getMessage(),
+                            'session_id' => $sessionId,
+                        ]);
+                    }
+                }
+                
+                // Now try to get user from web session
+                // Try web session auth first (for web requests)
+                $user = Auth::guard('web')->user();
+                
+                if (!$user) {
+                    // Then try default guard
+                    $user = Auth::user();
+                }
+                
+                if (!$user) {
+                    // Finally try API guard
+                    $user = Auth::guard('api')->user();
+                }
+                
+                Log::info("MonthlySummary: Session auth check", [
+                    'user_found' => $user ? 'yes' : 'no',
+                    'user_id' => $user ? $user->id : null,
+                    'has_session' => $request->hasSession(),
+                    'has_session_cookie' => $request->hasCookie($sessionCookieName),
+                    'session_id' => $request->hasSession() ? $request->session()->getId() : null,
+                    'auth_guard_web' => Auth::guard('web')->check(),
+                    'auth_guard_default' => Auth::check(),
+                    'auth_guard_api' => Auth::guard('api')->check(),
+                ]);
             } catch (\Exception $e) {
-                // Continue
+                Log::warning("MonthlySummary: Auth::user() exception", [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
             }
         }
         

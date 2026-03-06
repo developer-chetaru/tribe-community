@@ -17,6 +17,11 @@ class VerifyCsrfToken extends Middleware
         // Webhook endpoints (handled by payment gateways)
         '/webhooks/stripe',
         '/webhooks/paypal',
+        // Summary API endpoints (used by web via session auth)
+        '/api/weekly-summaries',
+        '/api/monthly-summary',
+        '/api/monthly-summary/generate',
+        '/api/summary/*',
     ];
 
     /**

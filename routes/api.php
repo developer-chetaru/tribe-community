@@ -23,10 +23,14 @@ Route::post('/logout', [AuthController::class, 'logout']);
 
 // Summary APIs - no middleware (handle authentication in controller)
 // This allows expired tokens to work (auto logout disabled)
-Route::get('/weekly-summaries', [WeeklySummaryController::class, 'index']);
-Route::get('/monthly-summary', [MonthlySummaryController::class, 'index']);
-Route::post('/monthly-summary/generate', [MonthlySummaryController::class, 'generate']);
-Route::get('/summary/{filterType}', [SummaryController::class, 'getSummary']);
+// Add session middleware for web requests (web uses session auth, not Bearer token)
+// Using 'web' middleware to enable session support for these API endpoints
+Route::middleware(['web'])->group(function () {
+    Route::get('/weekly-summaries', [WeeklySummaryController::class, 'index']);
+    Route::get('/monthly-summary', [MonthlySummaryController::class, 'index']);
+    Route::post('/monthly-summary/generate', [MonthlySummaryController::class, 'generate']);
+    Route::get('/summary/{filterType}', [SummaryController::class, 'getSummary']);
+});
 
 Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     // flutter api

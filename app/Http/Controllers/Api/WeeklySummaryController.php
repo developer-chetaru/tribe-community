@@ -134,12 +134,94 @@ class WeeklySummaryController extends Controller
             }
         }
         
-        // Fallback: Try Auth::user() (in case middleware set it)
+        // Fallback: Try Auth::user() for session-based authentication (web requests)
+        // IMPORTANT: This block ONLY runs if no user was found from Bearer token
+        // App requests (with Bearer token) will have $user set above, so this block is SKIPPED
+        // Web requests (no Bearer token) will have $user = null, so this block executes
         if (!$user) {
             try {
-                $user = Auth::guard('api')->user() ?? Auth::user();
+                // CRITICAL: Manually start session for web requests
+                // The 'web' middleware should handle this, but let's ensure it works
+                $sessionCookieName = config('session.cookie', 'laravel_session');
+                $sessionId = $request->cookie($sessionCookieName);
+                
+                // Also check all cookies to see what's available
+                $allCookies = $request->cookies->all();
+                
+                Log::info("WeeklySummary: Session cookie check", [
+                    'session_cookie_name' => $sessionCookieName,
+                    'has_session_cookie' => $request->hasCookie($sessionCookieName),
+                    'session_cookie_value' => $sessionId ? substr($sessionId, 0, 20) . '...' : null,
+                    'has_session' => $request->hasSession(),
+                    'all_cookie_names' => array_keys($allCookies),
+                ]);
+                
+                // If session cookie exists but session not started, manually start it
+                if ($sessionId && !$request->hasSession()) {
+                    try {
+                        // Get session manager and start session
+                        $sessionManager = app('session');
+                        $sessionStore = $sessionManager->driver();
+                        $sessionStore->setId($sessionId);
+                        $sessionStore->start();
+                        $request->setLaravelSession($sessionStore);
+                        
+                        Log::info("WeeklySummary: Session manually started", [
+                            'session_id' => $sessionStore->getId(),
+                            'session_data_keys' => array_keys($sessionStore->all()),
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::warning("WeeklySummary: Could not manually start session", [
+                            'error' => $e->getMessage(),
+                            'session_id' => $sessionId,
+                        ]);
+                    }
+                }
+                
+                // If session is now available, try to get user ID from session directly
+                if ($request->hasSession()) {
+                    $sessionUserId = $request->session()->get('login_web_' . sha1('App\Models\User'));
+                    if (!$sessionUserId) {
+                        // Try alternative session key formats
+                        $sessionUserId = $request->session()->get('_token');
+                        // Check all session keys
+                        $sessionKeys = array_keys($request->session()->all());
+                        Log::info("WeeklySummary: Session keys", [
+                            'session_keys' => $sessionKeys,
+                            'session_user_id_key' => 'login_web_' . sha1('App\Models\User'),
+                        ]);
+                    }
+                }
+                
+                // Now try to get user from web session
+                // Try web session auth first (for web requests)
+                $user = Auth::guard('web')->user();
+                
+                if (!$user) {
+                    // Then try default guard
+                    $user = Auth::user();
+                }
+                
+                if (!$user) {
+                    // Finally try API guard
+                    $user = Auth::guard('api')->user();
+                }
+                
+                Log::info("WeeklySummary: Session auth check", [
+                    'user_found' => $user ? 'yes' : 'no',
+                    'user_id' => $user ? $user->id : null,
+                    'has_session' => $request->hasSession(),
+                    'has_session_cookie' => $request->hasCookie($sessionCookieName),
+                    'session_id' => $request->hasSession() ? $request->session()->getId() : null,
+                    'auth_guard_web' => Auth::guard('web')->check(),
+                    'auth_guard_default' => Auth::check(),
+                    'auth_guard_api' => Auth::guard('api')->check(),
+                ]);
             } catch (\Exception $e) {
-                // Continue
+                Log::warning("WeeklySummary: Auth::user() exception", [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
             }
         }
         
@@ -195,20 +277,33 @@ class WeeklySummaryController extends Controller
                 Log::error("WeeklySummary: ❌ NO USER FOUND - Returning empty data", [
                     'has_token' => !empty($token),
                     'user_id_from_token' => $userIdFromToken,
+                    'has_session' => $request->hasSession(),
+                    'has_session_cookie' => $request->hasCookie(config('session.cookie')),
+                    'session_id' => $request->hasSession() ? $request->session()->getId() : null,
+                    'auth_guard_web_check' => Auth::guard('web')->check(),
+                    'auth_guard_default_check' => Auth::check(),
+                    'auth_guard_api_check' => Auth::guard('api')->check(),
                 ]);
                 return response()->json([
                     'status' => true,
-                    'debug' => [
+                    'debug' => array_merge($immediateDebug, [
                         'user_found' => false,
                         'user_id_from_token' => $userIdFromToken,
                         'has_token' => !empty($token),
-                    ],
+                        'has_session' => $request->hasSession(),
+                        'has_session_cookie' => $request->hasCookie(config('session.cookie')),
+                        'session_id' => $request->hasSession() ? $request->session()->getId() : null,
+                        'auth_guard_web_check' => Auth::guard('web')->check(),
+                        'auth_guard_default_check' => Auth::check(),
+                        'auth_guard_api_check' => Auth::guard('api')->check(),
+                        'message' => 'No user found after all attempts. Check session/auth status above.',
+                    ]),
                     'data' => [
                         'weeklySummaries' => [],
                         'validMonths' => [],
                         'validYears' => [],
-                        'selectedYear' => $request->input('year', now()->year),
-                        'selectedMonth' => $request->input('month', now()->month)
+                        'selectedYear' => (string)$request->input('year', now()->year),
+                        'selectedMonth' => (string)$request->input('month', now()->month)
                     ]
                 ]);
             }
