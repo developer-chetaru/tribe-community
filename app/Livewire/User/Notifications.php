@@ -35,6 +35,7 @@ class Notifications extends Component
         // Base query to exclude sentiment reminder notifications
         // Exclude if notificationType = 'sentiment-reminder' OR title = 'Reminder: Please Update Your Sentiment Index'
         $baseQuery = IotNotification::where('to_bubble_user_id', $userId)
+            ->where('status', 'Active') // Only show active notifications
             ->where(function($q) {
                 // Show only notifications that are NOT sentiment reminders
                 // Both conditions must be true (notificationType != sentiment-reminder AND title != reminder title)
@@ -61,6 +62,16 @@ class Notifications extends Component
         } else {
             $this->notifications = $query->where('archive', true)->get();
         }
+
+        // Debug logging
+        Log::info('Notifications loaded for user', [
+            'user_id' => $userId,
+            'tab' => $this->tab,
+            'total_count' => $this->notificationCount,
+            'notifications_count' => $this->notifications->count(),
+            'notification_ids' => $this->notifications->pluck('id')->toArray(),
+            'send_notification_ids' => $this->notifications->pluck('sendNotificationId')->filter()->unique()->toArray(),
+        ]);
     }
 
     public function archiveAll()
