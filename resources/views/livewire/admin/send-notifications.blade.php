@@ -74,10 +74,24 @@
                 <div class="mb-6">
                     <label class="block text-sm font-medium mb-2">Basecamp Users</label>
                     <div class="relative">
+                        @php
+                            $selectedBasecampEmails = [];
+                            if (count($selectBasecampUsers) > 0) {
+                                foreach ($basecampUsers as $user) {
+                                    if (in_array($user['id'], $selectBasecampUsers)) {
+                                        $selectedBasecampEmails[] = $user['email'];
+                                    }
+                                }
+                            }
+                            $basecampDisplayText = count($selectBasecampUsers) > 0 
+                                ? count($selectBasecampUsers) . ' Selected: ' . implode(', ', array_slice($selectedBasecampEmails, 0, 3)) . (count($selectedBasecampEmails) > 3 ? '...' : '')
+                                : '';
+                        @endphp
                         <input type="text" readonly
                                placeholder="Basecamp Users Included"
                                class="w-full border border-[#808080] rounded-md px-3 py-3 pl-[24px] bg-white"
-                               value="{{ count($selectBasecampUsers) ? count($selectBasecampUsers).' Selected' : '' }}">
+                               value="{{ $basecampDisplayText }}"
+                               title="{{ count($selectBasecampUsers) > 0 ? implode(', ', $selectedBasecampEmails) : '' }}">
 
                         <button type="button"
                                 wire:click="$dispatch('open-basecamp-users-modal')"
@@ -88,6 +102,13 @@
                     </div>
                     @if(count($selectBasecampUsers) == 0)
                         <p class="text-xs text-red-500 mt-1">Please select at least one Basecamp user</p>
+                    @else
+                        <p class="text-xs text-gray-500 mt-1">
+                            {{ count($selectBasecampUsers) }} user(s) selected.
+                            @if(count($selectedBasecampEmails) > 3)
+                                Showing first 3 emails. Hover over the field to see all.
+                            @endif
+                        </p>
                     @endif
                 </div>
             @endif
@@ -149,10 +170,24 @@
                         <div class="mb-6">
                             <label class="block text-sm font-medium mb-2">All Users</label>
                             <div class="relative">
+                                @php
+                                    $selectedEmails = [];
+                                    if (count($selectStaff) > 0) {
+                                        foreach ($staffOptions as $user) {
+                                            if (in_array($user['id'], $selectStaff)) {
+                                                $selectedEmails[] = $user['email'];
+                                            }
+                                        }
+                                    }
+                                    $displayText = count($selectStaff) > 0 
+                                        ? count($selectStaff) . ' Selected: ' . implode(', ', array_slice($selectedEmails, 0, 3)) . (count($selectedEmails) > 3 ? '...' : '')
+                                        : '';
+                                @endphp
                                 <input type="text" readonly
                                        placeholder="Users Included"
                                        class="w-full border border-[#808080] rounded-md px-3 py-3 pl-[24px] bg-white"
-                                       value="{{ count($selectStaff) ? count($selectStaff).' Selected' : '' }}">
+                                       value="{{ $displayText }}"
+                                       title="{{ count($selectStaff) > 0 ? implode(', ', $selectedEmails) : '' }}">
 
                                 <button type="button"
                                         wire:click="$dispatch('open-users-modal')"
@@ -163,6 +198,13 @@
                             </div>
                             @if(count($selectStaff) == 0)
                                 <p class="text-xs text-red-500 mt-1">Please select at least one user or check "Send to all users in this organisation"</p>
+                            @else
+                                <p class="text-xs text-gray-500 mt-1">
+                                    {{ count($selectStaff) }} user(s) selected. 
+                                    @if(count($selectedEmails) > 3)
+                                        Showing first 3 emails. Hover over the field to see all.
+                                    @endif
+                                </p>
                             @endif
                         </div>
                     @endif

@@ -110,12 +110,16 @@ class SendNotifications extends Component
                 ->orderBy('name')
                 ->get()
                 ->toArray();
+            
+            // Automatically load all users from the selected organisation
+            $this->loadStaffOptions();
         } else {
             $this->offices = [];
+            $this->departments = [];
+            $this->staffOptions = [];
         }
 
         $this->departments = [];
-        $this->staffOptions = [];
     }
 
     public function updatedSendToAllOrgUsers($value)
@@ -198,27 +202,55 @@ class SendNotifications extends Component
         if ($propertyName === 'orgId') {
             $this->officeId = '';
             $this->departmentId = '';
-            $this->offices = Office::where('organisation_id', $this->orgId)
-                ->select('id','name')
-                ->orderBy('name')
-                ->get()
-                ->toArray();
+            $this->selectStaff = []; // Reset selected staff
+            
+            if (!empty($this->orgId)) {
+                $this->offices = Office::where('organisation_id', $this->orgId)
+                    ->select('id','name')
+                    ->orderBy('name')
+                    ->get()
+                    ->toArray();
 
-            $this->departments = [];
-            $this->staffOptions = [];
+                $this->departments = [];
+                
+                // Automatically load all users from the selected organisation
+                $this->loadStaffOptions();
+            } else {
+                $this->offices = [];
+                $this->departments = [];
+                $this->staffOptions = [];
+            }
         }
 
         if ($propertyName === 'officeId') {
             $this->departmentId = '';
-            $this->departments = Department::where('office_id', $this->officeId)
-                ->join('all_departments', 'departments.all_department_id', '=', 'all_departments.id')
-                ->select('all_departments.id as all_department_id','all_departments.name as department')
-                ->distinct()
-                ->orderBy('all_departments.name')
-                ->get()
-                ->toArray();
+            $this->selectStaff = []; // Reset selected staff
+            
+            if (!empty($this->officeId)) {
+                $this->departments = Department::where('office_id', $this->officeId)
+                    ->join('all_departments', 'departments.all_department_id', '=', 'all_departments.id')
+                    ->select('all_departments.id as all_department_id','all_departments.name as department')
+                    ->distinct()
+                    ->orderBy('all_departments.name')
+                    ->get()
+                    ->toArray();
 
-            $this->staffOptions = [];
+                // Reload staff options with office filter
+                $this->loadStaffOptions();
+            } else {
+                $this->departments = [];
+                // Reload staff options without office filter
+                $this->loadStaffOptions();
+            }
+        }
+        
+        if ($propertyName === 'departmentId') {
+            $this->selectStaff = []; // Reset selected staff
+            // If department is cleared, reload staff options without department filter
+            // If department is selected, loadUsersByDepartment will handle it
+            if (empty($this->departmentId)) {
+                $this->loadStaffOptions();
+            }
         }
     }
     // ------------------------------------------------------------------------
@@ -247,6 +279,9 @@ class SendNotifications extends Component
 
     public function loadDepartments()
     {
+        // Reset selected staff when filters change
+        $this->selectStaff = [];
+        
         // If office is selected → show unique departments under that office
         if (!empty($this->officeId)) {
             $this->departments = Department::join('all_departments', 'departments.all_department_id', '=', 'all_departments.id')
@@ -257,6 +292,8 @@ class SendNotifications extends Component
                 ->get()
                 ->toArray();
 
+            // Reload staff options with office filter
+            $this->loadStaffOptions();
             return;
         }
 
@@ -270,6 +307,8 @@ class SendNotifications extends Component
                 ->get()
                 ->toArray();
 
+            // Reload staff options for organisation
+            $this->loadStaffOptions();
             return;
         }
 
@@ -288,6 +327,7 @@ class SendNotifications extends Component
                 ->toArray();
 
             $users = User::whereIn('departmentId', $departmentIds)
+                ->whereIn('users.status', ['Active', 'active_verified', 'active_unverified', 'pending_payment'])
                 ->leftJoin('departments as d', 'users.departmentId', '=', 'd.id')
                 ->leftJoin('all_departments as ad', 'd.all_department_id', '=', 'ad.id')
                 ->leftJoin('offices as o', 'users.officeId', '=', 'o.id')
@@ -337,7 +377,7 @@ class SendNotifications extends Component
                 DB::raw('COALESCE(ad.name, "") as department'),
                 DB::raw('COALESCE(o.name, "") as office')
             )
-            ->whereIn('users.status', ['Active', 'active_verified', 'active_unverified'])
+            ->whereIn('users.status', ['Active', 'active_verified', 'active_unverified', 'pending_payment'])
             // Exclude Basecamp users from organisation staff using subquery
             ->whereNotIn('users.id', function($subQuery) {
                 $subQuery->select('model_has_roles.model_id')
