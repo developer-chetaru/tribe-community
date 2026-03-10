@@ -44,22 +44,22 @@
             <!-- Recipient Type Selection -->
             <div class="mb-6">
                 <label class="block text-sm font-medium mb-3">Select Recipient Type</label>
-                <div class="space-y-3">
-                    <label class="flex items-center gap-3 cursor-pointer">
+                <div class="flex flex-wrap items-center gap-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
                         <input type="radio" 
                                wire:model.live="recipientType"
                                value="basecamp"
                                class="h-4 w-4 text-[#EB1C24] border-gray-300 focus:ring-[#EB1C24]">
                         <span class="text-sm font-medium">Basecamp User</span>
                     </label>
-                    <label class="flex items-center gap-3 cursor-pointer">
+                    <label class="flex items-center gap-2 cursor-pointer">
                         <input type="radio" 
                                wire:model.live="recipientType"
                                value="organisation"
                                class="h-4 w-4 text-[#EB1C24] border-gray-300 focus:ring-[#EB1C24]">
                         <span class="text-sm font-medium">Organisation</span>
                     </label>
-                    <label class="flex items-center gap-3 cursor-pointer">
+                    <label class="flex items-center gap-2 cursor-pointer">
                         <input type="radio" 
                                wire:model.live="recipientType"
                                value="all_tribe365"
@@ -73,29 +73,44 @@
                 <!-- Basecamp User Selection -->
                 <div class="mb-6">
                     <label class="block text-sm font-medium mb-2">Basecamp Users</label>
-                    <div class="relative">
+                    <div class="border border-[#808080] rounded-md px-3 py-2 min-h-[48px] bg-white flex flex-wrap items-center gap-2">
                         @php
-                            $selectedBasecampEmails = [];
+                            $selectedBasecampUsers = [];
                             if (count($selectBasecampUsers) > 0) {
                                 foreach ($basecampUsers as $user) {
                                     if (in_array($user['id'], $selectBasecampUsers)) {
-                                        $selectedBasecampEmails[] = $user['email'];
+                                        $selectedBasecampUsers[] = $user;
                                     }
                                 }
                             }
-                            $basecampDisplayText = count($selectBasecampUsers) > 0 
-                                ? count($selectBasecampUsers) . ' Selected: ' . implode(', ', array_slice($selectedBasecampEmails, 0, 3)) . (count($selectedBasecampEmails) > 3 ? '...' : '')
-                                : '';
                         @endphp
-                        <input type="text" readonly
-                               placeholder="Basecamp Users Included"
-                               class="w-full border border-[#808080] rounded-md px-3 py-3 pl-[24px] bg-white"
-                               value="{{ $basecampDisplayText }}"
-                               title="{{ count($selectBasecampUsers) > 0 ? implode(', ', $selectedBasecampEmails) : '' }}">
-
+                        
+                        @if(count($selectedBasecampUsers) > 0)
+                            @foreach($selectedBasecampUsers as $user)
+                                <div class="inline-flex items-center gap-2 bg-gray-100 rounded-full px-3 py-1.5 text-sm">
+                                    @php
+                                        $initials = strtoupper(substr($user['first_name'] ?? '', 0, 1) . substr($user['last_name'] ?? '', 0, 1));
+                                    @endphp
+                                    <span class="w-6 h-6 rounded-full bg-[#EB1C24] text-white text-xs font-semibold flex items-center justify-center flex-shrink-0">
+                                        {{ $initials ?: 'U' }}
+                                    </span>
+                                    <span class="text-gray-700">{{ $user['email'] }}</span>
+                                    <button type="button"
+                                            wire:click="toggleBasecampUserSelection({{ $user['id'] }})"
+                                            class="ml-1 text-gray-400 hover:text-gray-600 focus:outline-none">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            @endforeach
+                        @else
+                            <span class="text-gray-400 text-sm">No users selected</span>
+                        @endif
+                        
                         <button type="button"
                                 wire:click="$dispatch('open-basecamp-users-modal')"
-                                class="absolute right-3 top-1/2 -translate-y-1/2 border items-center flex gap-2 text-white bg-[#808080] px-3 py-[10px] rounded-lg text-sm hover:bg-gray-500">
+                                class="ml-auto border items-center flex gap-2 text-white bg-[#808080] px-3 py-1.5 rounded-lg text-sm hover:bg-gray-500">
                             Expand
                             <img src="{{ asset('images/expand-ar.svg') }}">
                         </button>
@@ -104,10 +119,7 @@
                         <p class="text-xs text-red-500 mt-1">Please select at least one Basecamp user</p>
                     @else
                         <p class="text-xs text-gray-500 mt-1">
-                            {{ count($selectBasecampUsers) }} user(s) selected.
-                            @if(count($selectedBasecampEmails) > 3)
-                                Showing first 3 emails. Hover over the field to see all.
-                            @endif
+                            {{ count($selectBasecampUsers) }} user(s) selected
                         </p>
                     @endif
                 </div>
@@ -169,29 +181,44 @@
                         <!-- USERS -->
                         <div class="mb-6">
                             <label class="block text-sm font-medium mb-2">All Users</label>
-                            <div class="relative">
+                            <div class="border border-[#808080] rounded-md px-3 py-2 min-h-[48px] bg-white flex flex-wrap items-center gap-2">
                                 @php
-                                    $selectedEmails = [];
+                                    $selectedUsers = [];
                                     if (count($selectStaff) > 0) {
                                         foreach ($staffOptions as $user) {
                                             if (in_array($user['id'], $selectStaff)) {
-                                                $selectedEmails[] = $user['email'];
+                                                $selectedUsers[] = $user;
                                             }
                                         }
                                     }
-                                    $displayText = count($selectStaff) > 0 
-                                        ? count($selectStaff) . ' Selected: ' . implode(', ', array_slice($selectedEmails, 0, 3)) . (count($selectedEmails) > 3 ? '...' : '')
-                                        : '';
                                 @endphp
-                                <input type="text" readonly
-                                       placeholder="Users Included"
-                                       class="w-full border border-[#808080] rounded-md px-3 py-3 pl-[24px] bg-white"
-                                       value="{{ $displayText }}"
-                                       title="{{ count($selectStaff) > 0 ? implode(', ', $selectedEmails) : '' }}">
-
+                                
+                                @if(count($selectedUsers) > 0)
+                                    @foreach($selectedUsers as $user)
+                                        <div class="inline-flex items-center gap-2 bg-gray-100 rounded-full px-3 py-1.5 text-sm">
+                                            @php
+                                                $initials = strtoupper(substr($user['first_name'] ?? '', 0, 1) . substr($user['last_name'] ?? '', 0, 1));
+                                            @endphp
+                                            <span class="w-6 h-6 rounded-full bg-[#EB1C24] text-white text-xs font-semibold flex items-center justify-center flex-shrink-0">
+                                                {{ $initials ?: 'U' }}
+                                            </span>
+                                            <span class="text-gray-700">{{ $user['email'] }}</span>
+                                            <button type="button"
+                                                    wire:click="toggleUserSelection({{ $user['id'] }})"
+                                                    class="ml-1 text-gray-400 hover:text-gray-600 focus:outline-none">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    @endforeach
+                                @else
+                                    <span class="text-gray-400 text-sm">No users selected</span>
+                                @endif
+                                
                                 <button type="button"
                                         wire:click="$dispatch('open-users-modal')"
-                                        class="absolute right-3 top-1/2 -translate-y-1/2 border items-center flex gap-2 text-white bg-[#808080] px-3 py-[10px] rounded-lg text-sm hover:bg-gray-500">
+                                        class="ml-auto border items-center flex gap-2 text-white bg-[#808080] px-3 py-1.5 rounded-lg text-sm hover:bg-gray-500">
                                     Expand
                                     <img src="{{ asset('images/expand-ar.svg') }}">
                                 </button>
@@ -200,10 +227,7 @@
                                 <p class="text-xs text-red-500 mt-1">Please select at least one user or check "Send to all users in this organisation"</p>
                             @else
                                 <p class="text-xs text-gray-500 mt-1">
-                                    {{ count($selectStaff) }} user(s) selected. 
-                                    @if(count($selectedEmails) > 3)
-                                        Showing first 3 emails. Hover over the field to see all.
-                                    @endif
+                                    {{ count($selectStaff) }} user(s) selected
                                 </p>
                             @endif
                         </div>
