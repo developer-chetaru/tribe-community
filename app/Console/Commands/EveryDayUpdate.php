@@ -1060,7 +1060,20 @@ public function generateWeeklySummary()
             
             // Check if it's Sunday 23:00 in user's timezone
             $isSunday = $userNow->isSunday();
-            $is2300 = $userNow->format('H:i') === '23:00';
+            $currentHour = (int)$userNow->format('H');
+            $currentMinute = (int)$userNow->format('i');
+            $is2300 = ($currentHour === 23 && $currentMinute === 0);
+            
+            Log::info("WeeklySummary: Time check for user", [
+                'user_id' => $user->id,
+                'user_timezone' => $userTimezone,
+                'user_now' => $userNow->toDateTimeString(),
+                'is_sunday' => $isSunday,
+                'current_hour' => $currentHour,
+                'current_minute' => $currentMinute,
+                'is_2300' => $is2300,
+                'will_process' => ($isSunday && $is2300),
+            ]);
             
             if (!$isSunday || !$is2300) {
                 $skippedCount++;
@@ -1124,7 +1137,24 @@ Important writing requirements:
             $prompt = str_replace(['{weekLabel}', '{entries}'], [$weekLabel, $entries], $promptTemplate);
 
             // FIRST ATTEMPT
+            Log::info("WeeklySummary: Starting AI generation", [
+                'user_id' => $user->id,
+                'week_label' => $weekLabel,
+                'entries_count' => $allData->count(),
+                'prompt_length' => strlen($prompt),
+            ]);
+            
             $summaryText = $this->generateAIText($prompt, $user->id);
+            
+            Log::info("WeeklySummary: AI generation result", [
+                'user_id' => $user->id,
+                'week_label' => $weekLabel,
+                'summary_length' => strlen($summaryText),
+                'summary_preview' => substr($summaryText, 0, 100),
+                'is_quota_exceeded' => $summaryText === 'QUOTA_EXCEEDED',
+                'is_service_unavailable' => $summaryText === 'AI_SERVICE_UNAVAILABLE',
+                'is_empty' => empty(trim($summaryText)),
+            ]);
 
             // RETRY LOGIC
             if ($summaryText === 'QUOTA_EXCEEDED') {
@@ -1136,6 +1166,12 @@ Important writing requirements:
 
                     Log::warning("WeeklySummary: AI retry attempt for user {$user->id}");
                     $summaryText = $this->generateAIText($prompt, $user->id);
+                    
+                    Log::info("WeeklySummary: AI retry result", [
+                        'user_id' => $user->id,
+                        'summary_length' => strlen($summaryText),
+                        'is_valid' => $this->isValidSummary($summaryText),
+                    ]);
                 }
 
                 if ($summaryText === 'QUOTA_EXCEEDED') {
