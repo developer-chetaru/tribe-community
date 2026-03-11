@@ -217,8 +217,23 @@ class ReflectionList extends Component
         if ($reflection && $reflection->userId === $user->id) {
             $reflection->last_viewed_at = now();
             $reflection->save();
+            
+            // Mark all messages sent to this user as read
+            ReflectionMessage::where('reflectionId', $this->reflectionId)
+                ->where('sendTo', $user->id)
+                ->whereNull('read_at')
+                ->update(['read_at' => now()]);
+            
             // Refresh component to update unread count badge immediately
             $this->dispatch('$refresh');
+        }
+        
+        // If admin is viewing, mark messages sent to admin as read
+        if ($reflection && $user->hasRole('super_admin')) {
+            ReflectionMessage::where('reflectionId', $this->reflectionId)
+                ->where('sendTo', $user->id)
+                ->whereNull('read_at')
+                ->update(['read_at' => now()]);
         }
 
         $messages = ReflectionMessage::where('reflectionId', $this->reflectionId)
@@ -259,6 +274,8 @@ class ReflectionList extends Component
                     ? asset('storage/' . $msg->user->profile_photo_path)
                     : null,
                 'user_name' => $msg->user ? $msg->user->name : 'Unknown',
+                'read_at' => $msg->read_at, // Read status for blue tick
+                'is_read' => !is_null($msg->read_at), // Boolean for easy check
             ];
         })->toArray();
     }

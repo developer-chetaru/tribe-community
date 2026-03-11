@@ -18,6 +18,11 @@ class ReflectionMessage extends Model
         'message',
         'file',
         'status',
+        'read_at',
+    ];
+    
+    protected $casts = [
+        'read_at' => 'datetime',
     ];
 
     public function user()
