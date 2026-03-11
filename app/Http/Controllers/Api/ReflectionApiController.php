@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Reflection;
 use App\Models\ReflectionMessage;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
@@ -235,6 +236,9 @@ class ReflectionApiController extends Controller
             'status' => 'new',
         ]);
 
+        // Send notification to all admins about new reflection
+        $this->sendNotificationToAdminOnCreate($reflection, $user);
+
         // Add image URLs to response
         $reflection->images = $imageUrls;
         $reflection->image = !empty($imageUrls) ? $imageUrls[0] : null; // Backward compatibility
@@ -424,9 +428,17 @@ class ReflectionApiController extends Controller
     {
         $user = Auth::user();
 
-        $reflection = Reflection::where('id', $reflectionId)
-            ->where('userId', $user->id)
-            ->first();
+        // Check if user is admin - admins can send to any reflection
+        $isAdmin = $user->hasRole('super_admin');
+        
+        if ($isAdmin) {
+            $reflection = Reflection::where('id', $reflectionId)->first();
+        } else {
+            // Regular users can only send to their own reflections
+            $reflection = Reflection::where('id', $reflectionId)
+                ->where('userId', $user->id)
+                ->first();
+        }
 
         if (!$reflection) {
             return response()->json(['status' => false, 'message' => 'Reflection not found'], 404);
@@ -439,9 +451,12 @@ class ReflectionApiController extends Controller
             'files.*' => 'nullable|file|max:2048', // Each file max 2MB
         ]);
 
+        // Determine sendTo: if admin, send to reflection owner; if user, send to reflection owner (for consistency)
+        $sendTo = $reflection->userId;
+        
         $data = [
             'sendFrom' => $user->id,
-            'sendTo' => $reflection->userId,
+            'sendTo' => $sendTo,
             'reflectionId' => $reflection->id,
             'status' => 'Active',
             'created_at' => now(),
@@ -481,6 +496,15 @@ class ReflectionApiController extends Controller
         }
 
         $msg = ReflectionMessage::create($data);
+
+        // Send notifications based on who is sending
+        if ($isAdmin) {
+            // Admin is replying - notify the user
+            $this->sendNotificationToUserOnAdminReply($reflectionId, $user, $reflection);
+        } else {
+            // User is replying - notify admin
+            $this->sendNotificationToAdminOnReply($reflectionId, $user);
+        }
 
         // Add file URLs to response
         $msg->files = $fileUrls;
@@ -721,5 +745,305 @@ class ReflectionApiController extends Controller
                 'last_viewed_at' => $reflection->last_viewed_at->toIso8601String(),
             ]
         ]);
+    }
+
+    private function sendNotificationToAdminOnCreate($reflection, $user)
+    {
+        if (!$reflection) return;
+
+        // Don't send notification if the user creating reflection is an admin
+        if ($user->hasRole('super_admin')) {
+            return;
+        }
+
+        $userName = $user->name ?? 'User';
+
+        // Get all active super_admin users
+        try {
+            $adminIds = User::role('super_admin', 'web')
+                ->whereIn('status', ['active_verified', 'active_unverified'])
+                ->pluck('id')
+                ->toArray();
+        } catch (\Spatie\Permission\Exceptions\RoleDoesNotExist $e) {
+            // Try to create the role if it doesn't exist
+            try {
+                $role = \Spatie\Permission\Models\Role::firstOrCreate(
+                    ['name' => 'super_admin', 'guard_name' => 'web']
+                );
+                
+                // Now try to get admin users again
+                $adminIds = User::role('super_admin', 'web')
+                    ->where('status', 'Active')
+                    ->pluck('id')
+                    ->toArray();
+            } catch (\Exception $createException) {
+                $adminIds = [];
+            }
+        }
+
+        if (empty($adminIds)) {
+            return;
+        }
+
+        // Send notification to each admin
+        foreach ($adminIds as $adminId) {
+            $adminUser = User::where('id', $adminId)
+                ->whereIn('status', ['active_verified', 'active_unverified'])
+                ->first();
+            if (!$adminUser) continue;
+
+            $notificationTitle = 'New Reflection Created';
+            $notificationDescription = "{$userName} has created a new reflection: {$reflection->topic}";
+
+            // Get notification badge count
+            $totbadge = \App\Models\IotNotification::where('to_bubble_user_id', $adminId)
+                ->where('archive', false)
+                ->where('status', 'Active')
+                ->where(function($q) {
+                    $q->where(function($subQuery) {
+                        $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                                 ->orWhereNull('notificationType');
+                    })
+                    ->where(function($subQuery) {
+                        $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                                 ->orWhereNull('title');
+                    });
+                })
+                ->count();
+
+            $notificationArray = [
+                'to_bubble_user_id' => $adminId,
+                'from_bubble_user_id' => $user->id,
+                'title' => $notificationTitle,
+                'description' => $notificationDescription,
+                'notificationType' => 'reflectionChat',
+                'notificationLinks' => route('admin.reflections.index'), // Link to reflection list
+                'status' => 'Active',
+                'archive' => false,
+                'created_at' => now(),
+                'updated_at' => now()
+            ];
+
+            $notificationId = DB::table('iot_notifications')->insertGetId($notificationArray);
+
+            // Send push notification via OneSignal if admin has fcmToken
+            if (!empty($adminUser->fcmToken) && preg_match('/^[a-z0-9-]{8,}$/i', $adminUser->fcmToken)) {
+                try {
+                    $oneSignal = app(\App\Services\OneSignalService::class);
+                    $oneSignal->sendNotification(
+                        $notificationTitle,
+                        $notificationDescription,
+                        [$adminUser->fcmToken]
+                    );
+                    \Log::info('✅ OneSignal notification sent to admin on reflection create', [
+                        'admin_id' => $adminId,
+                        'reflection_id' => $reflection->id,
+                    ]);
+                } catch (\Throwable $e) {
+                    \Log::error('❌ Failed to send OneSignal notification to admin on reflection create', [
+                        'admin_id' => $adminId,
+                        'reflection_id' => $reflection->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+    }
+
+    private function sendNotificationToAdminOnReply($reflectionId, $user)
+    {
+        $reflection = Reflection::find($reflectionId);
+        if (!$reflection) return;
+
+        $userName = $user->name ?? 'User';
+
+        // Find all admins who have sent messages in this reflection
+        $adminIds = ReflectionMessage::where('reflectionId', $reflectionId)
+            ->where('sendFrom', '!=', $reflection->userId) // Messages not from reflection owner (i.e., from admin)
+            ->where('status', 'Active')
+            ->distinct()
+            ->pluck('sendFrom')
+            ->toArray();
+
+        // Also include all super_admin users if no admin has messaged yet
+        if (empty($adminIds)) {
+            try {
+                $adminIds = User::role('super_admin', 'web')
+                    ->whereIn('status', ['active_verified', 'active_unverified'])
+                    ->pluck('id')
+                    ->toArray();
+            } catch (\Spatie\Permission\Exceptions\RoleDoesNotExist $e) {
+                // Try to create the role if it doesn't exist
+                try {
+                    $role = \Spatie\Permission\Models\Role::firstOrCreate(
+                        ['name' => 'super_admin', 'guard_name' => 'web']
+                    );
+                    $adminIds = User::role('super_admin', 'web')
+                        ->whereIn('status', ['active_verified', 'active_unverified'])
+                        ->pluck('id')
+                        ->toArray();
+                } catch (\Exception $createException) {
+                    $adminIds = [];
+                }
+            }
+        }
+
+        // Remove duplicates
+        $adminIds = array_unique($adminIds);
+
+        // Send notification to each admin
+        foreach ($adminIds as $adminId) {
+            $adminUser = User::where('id', $adminId)
+                ->whereIn('status', ['active_verified', 'active_unverified'])
+                ->first();
+            if (!$adminUser) continue;
+
+            $notificationTitle = 'New Reflection Reply';
+            $notificationDescription = "{$userName} has replied to reflection: {$reflection->topic}";
+
+            // Get notification badge count
+            $totbadge = \App\Models\IotNotification::where('to_bubble_user_id', $adminId)
+                ->where('archive', false)
+                ->where('status', 'Active')
+                ->where(function($q) {
+                    $q->where(function($subQuery) {
+                        $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                                 ->orWhereNull('notificationType');
+                    })
+                    ->where(function($subQuery) {
+                        $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                                 ->orWhereNull('title');
+                    });
+                })
+                ->count();
+
+            $notificationArray = [
+                'to_bubble_user_id' => $adminId,
+                'from_bubble_user_id' => $user->id,
+                'title' => $notificationTitle,
+                'description' => $notificationDescription,
+                'notificationType' => 'reflectionChat',
+                'notificationLinks' => route('admin.reflections.index'),
+                'status' => 'Active',
+                'archive' => false,
+                'created_at' => now(),
+                'updated_at' => now()
+            ];
+
+            try {
+                $notificationId = DB::table('iot_notifications')->insertGetId($notificationArray);
+
+                // Send push notification via OneSignal if admin has fcmToken
+                if (!empty($adminUser->fcmToken) && preg_match('/^[a-z0-9-]{8,}$/i', $adminUser->fcmToken)) {
+                    try {
+                        $oneSignal = app(\App\Services\OneSignalService::class);
+                        $oneSignal->sendNotification(
+                            $notificationTitle,
+                            $notificationDescription,
+                            [$adminUser->fcmToken]
+                        );
+                    } catch (\Throwable $e) {
+                        \Log::error('❌ Failed to send OneSignal notification to admin on reply', [
+                            'admin_id' => $adminId,
+                            'reflection_id' => $reflectionId,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::error('❌ Failed to send FCM notification to admin on reply', [
+                    'admin_id' => $adminId,
+                    'reflection_id' => $reflectionId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    private function sendNotificationToUserOnAdminReply($reflectionId, $adminUser, $reflection)
+    {
+        if (!$reflection) return;
+
+        $user = User::where('id', $reflection->userId)
+            ->whereIn('status', ['active_verified', 'active_unverified'])
+            ->first();
+        if (!$user) return;
+
+        $adminName = $adminUser->name ?? 'Admin';
+
+        // Check if this is the first admin message
+        $isFirstAdminMessage = ReflectionMessage::where('reflectionId', $reflectionId)
+            ->where('sendFrom', '!=', $reflection->userId) // Messages from admin
+            ->where('id', '!=', ReflectionMessage::where('reflectionId', $reflectionId)->latest()->first()?->id) // Exclude current message
+            ->count() == 0;
+
+        $notificationTitle = $isFirstAdminMessage 
+            ? 'Admin Started Conversation' 
+            : 'New Reflection Message';
+        
+        $notificationDescription = $isFirstAdminMessage
+            ? "Admin {$adminName} has started a conversation about your reflection: {$reflection->topic}"
+            : "You have received a new message from {$adminName} about your reflection: {$reflection->topic}";
+
+        // Get notification badge count
+        $totbadge = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
+            ->where('archive', false)
+            ->where('status', 'Active')
+            ->where(function($q) {
+                $q->where(function($subQuery) {
+                    $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                             ->orWhereNull('notificationType');
+                })
+                ->where(function($subQuery) {
+                    $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                             ->orWhereNull('title');
+                });
+            })
+            ->count();
+
+        $notificationArray = [
+            'to_bubble_user_id' => $user->id,
+            'from_bubble_user_id' => $adminUser->id,
+            'title' => $notificationTitle,
+            'description' => $notificationDescription,
+            'notificationType' => 'reflectionChat',
+            'notificationLinks' => route('admin.reflections.index'),
+            'status' => 'Active',
+            'archive' => false,
+            'created_at' => now(),
+            'updated_at' => now()
+        ];
+
+        try {
+            $notificationId = DB::table('iot_notifications')->insertGetId($notificationArray);
+
+            // Send push notification via OneSignal if user has fcmToken
+            if (!empty($user->fcmToken) && preg_match('/^[a-z0-9-]{8,}$/i', $user->fcmToken)) {
+                try {
+                    $oneSignal = app(\App\Services\OneSignalService::class);
+                    $oneSignal->sendNotification(
+                        $notificationTitle,
+                        $notificationDescription,
+                        [$user->fcmToken]
+                    );
+                    \Log::info('✅ OneSignal notification sent to user on admin reply', [
+                        'user_id' => $user->id,
+                        'reflection_id' => $reflectionId,
+                    ]);
+                } catch (\Throwable $e) {
+                    \Log::error('❌ Failed to send OneSignal notification to user on admin reply', [
+                        'user_id' => $user->id,
+                        'reflection_id' => $reflectionId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::error('❌ Failed to send FCM notification to user on admin reply', [
+                'user_id' => $user->id,
+                'reflection_id' => $reflectionId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

@@ -3,7 +3,7 @@
 </x-slot>
 
 <div>
-    @hasanyrole('organisation_user|basecamp|organisation_admin|director')
+    @hasanyrole('organisation_user|basecamp|organisation_admin|director|super_admin')
     <main class=" flex-1">
         <div class="bg-white shadow-sm rounded-lg p-6 border border-[#E5E5E5]">
 

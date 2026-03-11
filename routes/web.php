@@ -378,6 +378,7 @@ Route::middleware([
         Route::get('/basecampuser/edit/{id}', UpdateBasecampUser::class)->name('basecampuser.edit');
         
         // Admin Notification Features
+        Route::get('admin/notifications', Notifications::class)->name('admin.notifications');
         Route::get('admin/send-notification', SendNotifications::class)->name('admin.send-notification');
         Route::get('admin/send-basecamp-notification', \App\Livewire\Admin\SendBasecampNotifications::class)->name('admin.send-basecamp-notification');
         Route::get('admin/send-notification-list', SendNotificationList::class)->name('admin.send-notification-list');
