@@ -20,7 +20,7 @@ class UpdateUserProfileInformation implements UpdatesUserProfileInformation
     {
         $rules = [
             'first_name' => ['required', 'string', 'max:255'],
-            'last_name'  => ['required', 'string', 'max:255'],
+            'last_name'  => ['nullable', 'string', 'max:255'],
             'email'      => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
           	'country_code' => ['nullable', 'string', 'max:10'],
             'phone'      => ['nullable', 'string', 'max:20'],
