@@ -13,31 +13,43 @@
     <div class="flex items-center space-x-2 ml-auto">
  @hasanyrole('basecamp|organisation_user|organisation_admin|director')
 		{{-- Notification Badge --}}
-        <a href="{{ route('user.notifications') }}"
-        class="flex items-center bg-red-50 border border-red-200 text-red-700 font-semibold text-[0px] px-1 py-1 sm:px-4 sm:py-2 rounded-md sm:rounded-full shadow-sm hover:bg-red-100 transition duration-200 sm:text-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 sm:h-4 sm:w-4 sm:mr-2 text-red-600" fill="none" viewBox="0 0 24 24"
-                stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14V11a6 6 0 10-12 0v3c0 .386-.149.754-.405 1.029L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-            </svg>
-            Notifications:
-            <span class="ml-1 sm:ml-2 bg-red-600 text-white p-1 w-[13px] h-[13px] sm:w-[18px] sm:h-[18px] rounded-full text-[10px]  sm:text-xs" style="display: flex; align-items: center; justify-content: center; line-height: normal;">
-                {{ \App\Models\IotNotification::where('to_bubble_user_id', auth()->id())
-                    ->where('archive', false)
-                    ->where(function($q) {
-                        // Exclude sentiment reminder notifications
-                        $q->where(function($subQuery) {
-                            $subQuery->where('notificationType', '!=', 'sentiment-reminder')
-                                     ->orWhereNull('notificationType');
-                        })
-                        ->where(function($subQuery) {
-                            $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
-                                     ->orWhereNull('title');
-                        });
+        @php
+            $notificationCount = \App\Models\IotNotification::where('to_bubble_user_id', auth()->id())
+                ->where('archive', false)
+                ->where(function($q) {
+                    // Exclude sentiment reminder notifications
+                    $q->where(function($subQuery) {
+                        $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                                 ->orWhereNull('notificationType');
                     })
-                    ->count() }}
-            </span>
-        </a>
+                    ->where(function($subQuery) {
+                        $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                                 ->orWhereNull('title');
+                    });
+                })
+                ->count();
+        @endphp
+        @if($notificationCount > 0)
+            <a href="{{ route('user.notifications') }}"
+            class="relative flex items-center justify-center p-2 rounded-full hover:bg-red-50 transition duration-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sm:h-6 sm:w-6 text-red-600" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14V11a6 6 0 10-12 0v3c0 .386-.149.754-.405 1.029L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+                <span class="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] sm:text-xs font-bold rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center" style="line-height: normal;">
+                    {{ $notificationCount > 9 ? '9+' : $notificationCount }}
+                </span>
+            </a>
+        @else
+            <div class="relative flex items-center justify-center p-2 rounded-full opacity-50 cursor-not-allowed">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sm:h-6 sm:w-6 text-gray-400" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14V11a6 6 0 10-12 0v3c0 .386-.149.754-.405 1.029L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+            </div>
+        @endif
         {{-- HPTM Button --}}
         <button 
             x-data="{ 
@@ -120,31 +132,43 @@
      @endhasanyrole
      @hasanyrole('super_admin')
         {{-- Notification Badge for Admin --}}
-        <a href="{{ route('admin.notifications') }}"
-        class="flex items-center bg-red-50 border border-red-200 text-red-700 font-semibold text-[0px] px-1 py-1 sm:px-4 sm:py-2 rounded-md sm:rounded-full shadow-sm hover:bg-red-100 transition duration-200 sm:text-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 sm:h-4 sm:w-4 sm:mr-2 text-red-600" fill="none" viewBox="0 0 24 24"
-                stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14V11a6 6 0 10-12 0v3c0 .386-.149.754-.405 1.029L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-            </svg>
-            Notifications:
-            <span class="ml-1 sm:ml-2 bg-red-600 text-white p-1 w-[13px] h-[13px] sm:w-[18px] sm:h-[18px] rounded-full text-[10px]  sm:text-xs" style="display: flex; align-items: center; justify-content: center; line-height: normal;">
-                {{ \App\Models\IotNotification::where('to_bubble_user_id', auth()->id())
-                    ->where('archive', false)
-                    ->where(function($q) {
-                        // Exclude sentiment reminder notifications
-                        $q->where(function($subQuery) {
-                            $subQuery->where('notificationType', '!=', 'sentiment-reminder')
-                                     ->orWhereNull('notificationType');
-                        })
-                        ->where(function($subQuery) {
-                            $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
-                                     ->orWhereNull('title');
-                        });
+        @php
+            $adminNotificationCount = \App\Models\IotNotification::where('to_bubble_user_id', auth()->id())
+                ->where('archive', false)
+                ->where(function($q) {
+                    // Exclude sentiment reminder notifications
+                    $q->where(function($subQuery) {
+                        $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                                 ->orWhereNull('notificationType');
                     })
-                    ->count() }}
-            </span>
-        </a>
+                    ->where(function($subQuery) {
+                        $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                                 ->orWhereNull('title');
+                    });
+                })
+                ->count();
+        @endphp
+        @if($adminNotificationCount > 0)
+            <a href="{{ route('admin.notifications') }}"
+            class="relative flex items-center justify-center p-2 rounded-full hover:bg-red-50 transition duration-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sm:h-6 sm:w-6 text-red-600" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14V11a6 6 0 10-12 0v3c0 .386-.149.754-.405 1.029L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+                <span class="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] sm:text-xs font-bold rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center" style="line-height: normal;">
+                    {{ $adminNotificationCount > 9 ? '9+' : $adminNotificationCount }}
+                </span>
+            </a>
+        @else
+            <div class="relative flex items-center justify-center p-2 rounded-full opacity-50 cursor-not-allowed">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 sm:h-6 sm:w-6 text-gray-400" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14V11a6 6 0 10-12 0v3c0 .386-.149.754-.405 1.029L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                </svg>
+            </div>
+        @endif
      @endhasanyrole
         {{-- Profile Dropdown --}}
         <div x-data="{ 

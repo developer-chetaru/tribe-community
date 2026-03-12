@@ -81,9 +81,8 @@ class ViewBasecampUser extends Component
         // Get HPTM Score (raw score - lifetime, never resets)
         $hptmScore = $this->hptmData['totalRawScore'] ?? 0;
         
-        // Calculate Engagement Index: (EI Score % / 100 x 200) + HPTM Score
-        // Simplified: (EI Score % x 2) + HPTM Score
-        $engagementIndex = ($eiScorePercentage * 2) + $hptmScore;
+        // Calculate Engagement Index: (EI Score % / 100 x HPTM Score) + HPTM Score
+        $engagementIndex = ($eiScorePercentage / 100 * $hptmScore) + $hptmScore;
         
         // Calculate total engagement score (for display - same as Engagement Index)
         $totalEngagementScore = $engagementIndex;

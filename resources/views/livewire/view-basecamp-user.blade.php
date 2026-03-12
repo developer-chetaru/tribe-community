@@ -207,15 +207,15 @@
                         <p class="text-xs text-gray-600">Engagement Index</p>
                         <div class="mt-1.5 pt-1.5 border-t border-blue-200">
                             <p class="text-xs text-gray-600 leading-tight">
-                                <strong>Formula:</strong> (EI Score % / 100 × 200) + HPTM Score<br>
+                                <strong>Formula:</strong> (EI Score % / 100 × HPTM Score) + HPTM Score<br>
                                 <span class="text-gray-500">
-                                    (<span class="font-bold text-green-700">{{ number_format($hptmData['engagement']['eiScore'] ?? 0, 2) }}</span>% / 100 × 200) + 
+                                    (<span class="font-bold text-green-700">{{ number_format($hptmData['engagement']['eiScore'] ?? 0, 2) }}</span>% / 100 × <span class="font-bold text-purple-700">{{ number_format($hptmData['engagement']['hptmScore'] ?? 0, 2) }}</span>) + 
                                     <span class="font-bold text-purple-700">{{ number_format($hptmData['engagement']['hptmScore'] ?? 0, 2) }}</span> = 
                                     <span class="font-bold text-blue-900 text-sm">{{ number_format($hptmData['engagement']['totalScore'] ?? 0, 2) }}</span>
                                 </span>
                                 <div class="mt-1 bg-blue-50 rounded p-1 text-xs">
                                     <p class="mb-0 text-gray-600">
-                                        <strong>Example:</strong> (<span class="font-bold text-green-700">50</span>% × 2) + <span class="font-bold text-purple-700">230</span> = <span class="font-bold text-blue-900">330</span>
+                                        <strong>Example:</strong> (<span class="font-bold text-green-700">50</span>% / 100 × <span class="font-bold text-purple-700">230</span>) + <span class="font-bold text-purple-700">230</span> = <span class="font-bold text-blue-900">345</span>
                                     </p>
                                 </div>
                             </p>
