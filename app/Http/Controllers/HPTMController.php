@@ -1,0 +1,1890 @@
+<?php
+namespace App\Http\Controllers;
+
+use App\Models\CotRoleMapOption;
+use Illuminate\Support\Facades\DB;
+use App\Models\Department;
+use App\Models\HappyIndex;
+use App\Models\HappyIndexDashboardGraph;
+use App\Models\HptmLearningChecklist;
+use App\Models\HptmLearningChecklistForUserReadStatus;
+use App\Models\HptmLearningType;
+use App\Models\Office;
+use App\Models\Organisation;
+use App\Models\SotMotivationValueRecord;
+use App\Models\IotNotification;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
+use App\Http\Controllers\Concerns\UpdatesUserTimezone;
+use Carbon\Carbon;
+
+/**
+ * @OA\Tag(
+ *     name="User Profile",
+ *     description="User profile management endpoints"
+ * )
+ */
+class HPTMController extends Controller
+{
+    use UpdatesUserTimezone;
+   /**
+    * Get the authenticated user's profile with role, office,
+    * department, organisation, COT/SOT data, etc.
+    *
+    * @OA\Get(
+    *     path="/api/user-profile",
+    *     tags={"User Profile"},
+    *     summary="Get user profile",
+    *     description="Retrieve the authenticated user's complete profile information including personal details, organization, role, COT/SOT data, and timezone",
+    *     security={{"bearerAuth":{}}},
+    *     @OA\Response(
+    *         response=200,
+    *         description="User profile retrieved successfully",
+    *         @OA\JsonContent(
+    *             @OA\Property(property="status", type="boolean", example=true),
+    *             @OA\Property(property="message", type="string", example="User Profile"),
+    *             @OA\Property(
+    *                 property="data",
+    *                 type="object",
+    *                 @OA\Property(property="id", type="integer", example=1),
+    *                 @OA\Property(property="first_name", type="string", example="John"),
+    *                 @OA\Property(property="last_name", type="string", example="Doe"),
+    *                 @OA\Property(property="email", type="string", format="email", example="john.doe@example.com"),
+    *                 @OA\Property(property="officeId", type="integer", nullable=true, example=1),
+    *                 @OA\Property(property="departmentId", type="integer", nullable=true, example=1),
+    *                 @OA\Property(property="orgId", type="integer", nullable=true, example=1),
+    *                 @OA\Property(property="officeName", type="string", nullable=true, example="Main Office"),
+    *                 @OA\Property(property="departmentName", type="string", nullable=true, example="Engineering"),
+    *                 @OA\Property(property="profileImage", type="string", nullable=true, example="http://example.com/storage/profile-photos/image.jpg"),
+    *                 @OA\Property(property="organisation_logo", type="string", nullable=true),
+    *                 @OA\Property(property="personaliseData", type="string", nullable=true),
+    *                 @OA\Property(property="status", type="string", example="Active"),
+    *                 @OA\Property(property="userContact", type="string", nullable=true, example="+1234567890"),
+    *                 @OA\Property(property="country_code", type="string", nullable=true, example="+1"),
+    *                 @OA\Property(property="timezone", type="string", nullable=true, example="America/New_York", description="User's timezone from profile"),
+    *                 @OA\Property(property="organisationName", type="string", nullable=true, example="Acme Corp"),
+    *                 @OA\Property(property="role", type="string", example="organisation_user"),
+    *                 @OA\Property(property="created_at", type="string", format="date-time", example="2024-01-01T00:00:00.000000Z"),
+    *                 @OA\Property(property="cotTeamRoleMap", type="string", example="Leader, Collaborator, Innovator"),
+    *                 @OA\Property(property="cotTeamRoleMapArr", type="array", @OA\Items(type="string")),
+    *                 @OA\Property(property="sotMotivationDetail", type="string", example="Growth, Recognition, Autonomy"),
+    *                 @OA\Property(property="sotMotivationDetailArr", type="array", @OA\Items(type="string")),
+    *                 @OA\Property(property="sotDetail", type="string", example=""),
+    *                 @OA\Property(property="perTypeStatus", type="boolean", example=false),
+    *                 @OA\Property(property="personalityTypeDetails", type="string", example="You have not submitted your answers yet."),
+    *                 @OA\Property(property="personalityTypeDetailsArr", type="array", @OA\Items(type="string"))
+    *             )
+    *         )
+    *     ),
+    *     @OA\Response(
+    *         response=401,
+    *         description="Unauthorized",
+    *         @OA\JsonContent(
+    *             @OA\Property(property="status", type="boolean", example=false),
+    *             @OA\Property(property="message", type="string", example="User not authenticated")
+    *         )
+    *     ),
+    *     @OA\Response(
+    *         response=500,
+    *         description="Server error",
+    *         @OA\JsonContent(
+    *             @OA\Property(property="status", type="boolean", example=false),
+    *             @OA\Property(property="message", type="string", example="Failed to fetch user profile"),
+    *             @OA\Property(property="error", type="string", example="Error message")
+    *         )
+    *     )
+    * )
+    *
+    * @param Request $request
+    * @return \Illuminate\Http\JsonResponse
+    */
+    public function userProfile(Request $request)
+    {
+        try {
+            // COMMENTED OUT: Automatic timezone update from request
+            // Timezone should be set from user profile instead
+            // Update user timezone from request if provided
+            // $this->updateUserTimezoneIfNeeded($request);
+            
+            $user = auth()->user();
+
+            if (! $user) {
+                return response()->json(['status' => false, 'message' => 'User not authenticated'], 401);
+            }
+
+            $user->load(['office', 'department', 'organisation']);
+
+            $roleName = $user->getRoleNames()->first() ?? 'No role assigned';
+
+            $resultArray = [
+                'id'                => (int) $user->id,
+                'first_name'        => $user->first_name,
+                'last_name'         => $user->last_name,
+                'email'             => $user->email,
+                'officeId'          => $user->office ? (int) $user->office->id : null,
+                'departmentId'      => $user->department ? (int) $user->department->id : null,
+                'orgId'             => $user->organisation ? (int) $user->organisation->id : null,
+                'officeName'        => optional($user->office)->name,
+                'departmentName'    => optional($user->department->allDepartment ?? null)->name ?? '',
+   		        'profileImage' => $user->profile_photo_path ? url('storage/' . $user->profile_photo_path) : null,
+                'organisation_logo' => optional($user->organisation)->image,
+                'personaliseData'   => optional($user->organisation)->personaliseData,
+                'status'            => $user->status ? 1 : 0,
+                'userContact'       => $user->phone,
+              	'country_code'      => $user->country_code,
+                'timezone'          => \App\Helpers\TimezoneHelper::getUserTimezone($user),
+                "organisationName"  => optional($user->organisation)->name,
+                "role"              => $roleName,
+              	"created_at"        => $user->created_at ? $user->created_at->toIso8601String() : null,
+                // Working days (for Basecamp users only - users without orgId)
+                'working_monday'    => $user->orgId ? null : (bool)($user->working_monday ?? true),
+                'working_tuesday'   => $user->orgId ? null : (bool)($user->working_tuesday ?? true),
+                'working_wednesday' => $user->orgId ? null : (bool)($user->working_wednesday ?? true),
+                'working_thursday'  => $user->orgId ? null : (bool)($user->working_thursday ?? true),
+                'working_friday'    => $user->orgId ? null : (bool)($user->working_friday ?? true),
+                'HI_include_saturday' => $user->orgId ? null : (bool)($user->HI_include_saturday ?? false),
+                'HI_include_sunday'   => $user->orgId ? null : (bool)($user->HI_include_sunday ?? false),
+            ];
+
+            $resultArray['cotTeamRoleMap']    = '';
+            $resultArray['cotTeamRoleMapArr'] = [];
+
+            $Value  = [];
+            $mapers = CotRoleMapOption::where('status', 'Active')->orderBy('id')->get();
+
+            foreach ($mapers as $maper) {
+                $maperCount = $user->cotAnswers()
+                    ->where('cot_role_map_option_id', $maper->id)
+                    ->where('status', 'Active')
+                    ->sum('answer');
+                $Value[$maper->maper_key] = $maperCount;
+            }
+
+            arsort($Value);
+
+            $teamArr = [];
+            foreach (array_keys($Value) as $i => $key) {
+                if ($i == 3) {
+                    break;
+                }
+
+                $mapersObj = CotRoleMapOption::where('maper_key', $key)->where('status', 'Active')->first();
+                if ($mapersObj) {
+                    $teamArr[] = $mapersObj->maper;
+                }
+            }
+
+            if ($user->cotAnswers()->where('status', 'Active')->exists()) {
+                $resultArray['cotTeamRoleMap']    = implode(', ', $teamArr);
+                $resultArray['cotTeamRoleMapArr'] = $teamArr;
+            } else {
+                $resultArray['cotTeamRoleMap']    = "You have not submitted your answers yet.";
+                $resultArray['cotTeamRoleMapArr'] = [];
+            }
+
+            $categories = SotMotivationValueRecord::where('status', 'Active')->get();
+            $resultArr  = [];
+
+            foreach ($categories as $category) {
+                $sum = $user->sotMotivationAnswers()
+                    ->whereHas('option', function ($query) use ($category) {
+                        $query->where('category_id', $category->id);
+                    })
+                    ->where('status', 'Active')
+                    ->sum('answer');
+                $resultArr[$category->title] = (string) $sum;
+            }
+
+            arsort($resultArr);
+
+            $finalMotArr = array_slice(array_keys($resultArr), 0, 3);
+
+            if ($user->sotMotivationAnswers()->where('status', 'Active')->exists()) {
+                $resultArray['sotMotivationDetail']    = implode(', ', $finalMotArr);
+                $resultArray['sotMotivationDetailArr'] = $finalMotArr;
+            } else {
+                $resultArray['sotMotivationDetail']    = "You have not submitted your answers yet.";
+                $resultArray['sotMotivationDetailArr'] = [];
+            }
+
+            $resultArray['sotDetail']                 = '';
+            $resultArray['perTypeStatus']             = false;
+            $resultArray['personalityTypeDetails']    = "You have not submitted your answers yet.";
+            $resultArray['personalityTypeDetailsArr'] = [];
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'User Profile',
+                'data'    => $resultArray,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['status' => false, 'message' => 'Failed to fetch user profile', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+   /**
+    * Get department list for authenticated user's organisation.
+    *
+    * @return \Illuminate\Http\JsonResponse
+    */
+    public function getDepartmentList()
+    {
+        $user = auth()->user();
+
+        $orgId = $user->orgId;
+
+        $departments = Department::with('allDepartment')
+            ->where('organisation_id', $orgId)
+            ->get(['id', 'all_department_id', 'status'])
+            ->unique('all_department_id')
+            ->values();
+
+        $resultArray = [];
+
+        foreach ($departments as $dep) {
+            $resultArray[] = [
+                'id'           => (string) $dep->id,
+                'department' => optional($dep->allDepartment)->name,
+            ];
+        }
+
+        return response()->json([
+            'status'  => count($resultArray) > 0,
+            'message' => count($resultArray) > 0 ? 'Department list' : 'Department not found',
+            'data'    => $resultArray,
+        ]);
+    }
+  
+    /**
+     * Get all offices with their departments and distinct org-wide departments.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+	public function getAllOfficenDepartments(Request $request)
+	{
+    	$orgId = $request->input('orgId');
+
+    	if (!$orgId) {
+        	return response()->json([
+            	'status'  => false,
+            	'message' => 'Missing organisation ID',
+            	'data'    => [],
+        	]);
+    	}
+
+    	$resultArray = [];
+	 $offices = Office::where('organisation_id', $orgId)
+        ->with('departments')
+        ->get();
+
+    	$officeArray = [];
+
+    	foreach ($offices as $office) {
+        	$departmentsArray = collect();
+
+	        foreach ($office->departments as $department) {
+            	$deptData = [
+                	'id'         => (string) $department->id,
+                	'department' => $department->name ?? optional($department->allDepartment)->name,
+            	];
+            	$departmentsArray->push($deptData);
+        	}
+
+     	   $departmentsArray = $departmentsArray->unique('department')->values();
+
+        	$officeArray[] = [
+            	'officeId'    => (string) $office->id,
+            	'office'      => $office->name,
+            	'departments' => $departmentsArray,
+        	];
+    	}
+
+    	$allDepartments = Department::where('organisation_id', $orgId)
+        	->get()
+        	->map(function ($dep) {
+            	return [
+                	'id'         => (string) $dep->id,
+                	'department' => $dep->name ?? optional($dep->allDepartment)->name,
+            	];
+        	})
+        	->unique('department')
+        	->values();
+
+  	  $resultArray['offices']     = $officeArray;
+    	$resultArray['departments'] = $allDepartments;
+
+    	return response()->json([
+        	'status'  => true,
+        	'message' => 'All office and departments.',
+        	'data'    => $resultArray,
+    	]);
+	}
+
+
+    /**
+     * @OA\Post(
+     *     path="/api/get-free-version-home-details",
+     *     tags={"Basecamp Users", "User Profile"},
+     *     summary="Get basecamp user dashboard details",
+     *     description="Get comprehensive dashboard details for basecamp (free version) users. Returns happy index monthly data, user feedback status, year list, notification count, and other dashboard metrics. For basecamp users, returns only their personal data. For organisation users, returns aggregated team data based on filters.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=false,
+     *         @OA\JsonContent(
+     *             @OA\Property(property="orgId", type="integer", nullable=true, example=1, description="Organisation ID (for organisation users only)"),
+     *             @OA\Property(property="officeId", type="integer", nullable=true, example=1, description="Office ID (for organisation users only)"),
+     *             @OA\Property(property="departmentId", type="integer", nullable=true, example=1, description="Department ID (for organisation users only)"),
+     *             @OA\Property(property="deviceType", type="string", nullable=true, example="ios", description="Device type (ios/android)"),
+     *             @OA\Property(property="year", type="integer", nullable=true, example=2024, description="Year for data (defaults to current year)"),
+     *             @OA\Property(property="month", type="integer", nullable=true, example=1, description="Month for data (1-12, defaults to current month)")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Dashboard details retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="code", type="integer", example=200),
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="service_name", type="string", example="free-version-home-detail"),
+     *             @OA\Property(property="message", type="string", example=""),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="userGivenfeedback", type="boolean", example=false, description="Whether user has given happy index feedback today"),
+     *                 @OA\Property(
+     *                     property="happyIndexMonthly",
+     *                     type="array",
+     *                     description="Monthly happy index data with daily scores",
+     *                     @OA\Items(
+     *                         type="object",
+     *                         @OA\Property(property="date", type="string", example="01", description="Day of month (DD)"),
+     *                         @OA\Property(property="score", type="integer", nullable=true, example=100, description="Happy index score (0-100)"),
+     *                         @OA\Property(property="mood_value", type="integer", nullable=true, example=3, description="Mood value (1=low, 2=medium, 3=high)"),
+     *                         @OA\Property(property="description", type="string", nullable=true, example="Feeling great today!", description="User's description for the day")
+     *                     )
+     *                 ),
+     *                 @OA\Property(property="firstDayOfMonth", type="string", example="Monday", description="Day of week for first day of month"),
+     *                 @OA\Property(property="orgYearList", type="array", @OA\Items(type="integer"), example={2024, 2025}, description="List of available years from account creation to current year"),
+     *                 @OA\Property(property="notWorkingDays", type="array", @OA\Items(type="string"), example={"saturday", "sunday"}, description="Days excluded from happy index (saturday/sunday)"),
+     *                 @OA\Property(property="appPaymentVersion", type="string", example="1", description="App payment version"),
+     *                 @OA\Property(property="leaveStatus", type="integer", example=0, description="User's leave status (0=not on leave, 1=on leave)"),
+     *                 @OA\Property(property="notificationCount", type="integer", example=5, description="Count of unread active notifications")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="code", type="integer", example=401),
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthorized")
+     *         )
+     *     )
+     * )
+     */
+    /**
+     * Get free version home dashboard details
+     * including HI values, graphs, feedback, year list, etc.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+ 	public function getFreeVersionHomeDetails(Request $request)
+    {
+        try {
+            // COMMENTED OUT: Automatic timezone update from request
+            // Timezone should be set from user profile instead
+            // Update user timezone from request if provided
+            // $this->updateUserTimezoneIfNeeded($request);
+            
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json([
+                    'code'    => 401,
+                    'status'  => false,
+                    'message' => 'Unauthorized',
+                ], 401);
+            }
+
+        $userId              = $user->id;
+        $orgId               = $request->input('orgId') ?? $user->orgId;
+        $officeId            = $request->input('officeId');
+        $departmentId        = $request->input('departmentId');
+        $deviceType          = $request->input('deviceType');
+        $HI_include_saturday = $user->HI_include_saturday ?? 2;
+        $HI_include_sunday   = $user->HI_include_sunday ?? 2;
+        $year                = $request->input('year') ?? now()->year;
+        $month               = sprintf("%02d", $request->input('month') ?? now()->month);
+        $yearAndMonth        = $year . "-" . $month;
+
+        $user->deviceType = $deviceType;
+        $user->save();
+
+        // ✅ Update OneSignal tags when user accesses dashboard (mobile API)
+        try {
+            $oneSignal = new \App\Services\OneSignalService();
+            $oneSignal->setUserTagsOnLogin($user);
+            Log::info('OneSignal tags updated on mobile dashboard access', [
+                'user_id' => $user->id,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('OneSignal tag update failed on mobile dashboard access', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $resultArray['userGivenfeedback'] = $this->userGivenfeedbackOnHIValueORM($userId, $HI_include_saturday, $HI_include_sunday, $orgId);
+
+        $todayStr = date('Y-m-d');
+
+        $noOfDaysInMonth = ($yearAndMonth == date('Y-m')) ? date('j') - 1 : cal_days_in_month(CAL_GREGORIAN, $month, $year);
+
+        $happyIndexArr = [];
+        $filteredUserIds = []; // Initialize to avoid undefined variable errors
+
+        $officeIds     = $officeId ? [$officeId] : [];
+        $departmentIds = $departmentId ? [$departmentId] : [];
+
+        if ($user->hasRole('basecamp')) {
+            // Basecamp user: use DashboardService for consistent logic with web view
+            // This ensures timezone-based data is handled correctly
+            $dashboardService = new \App\Services\DashboardService();
+            $filters = [
+                'month' => (int) $month,
+                'year' => (int) $year,
+                'orgId' => null, // Basecamp users have no orgId
+            ];
+            $serviceData = $dashboardService->getFreeVersionHomeDetails($filters);
+            $happyIndexArr = $serviceData['happyIndexMonthly'] ?? [];
+            
+            // Convert date format from integer to string with leading zero (for API compatibility)
+            // Also ensure mood_value is included in response
+            foreach ($happyIndexArr as &$dayData) {
+                if (isset($dayData['date'])) {
+                    $dayData['date'] = sprintf("%02d", $dayData['date']);
+                }
+                // Ensure mood_value is set (DashboardService should provide this)
+                if (!isset($dayData['mood_value']) && isset($dayData['score'])) {
+                    // Derive mood_value from score if not set
+                    if ($dayData['score'] >= 81) {
+                        $dayData['mood_value'] = 3;
+                    } elseif ($dayData['score'] >= 51) {
+                        $dayData['mood_value'] = 2;
+                    } else {
+                        $dayData['mood_value'] = 1;
+                    }
+                }
+            }
+            unset($dayData); // Unset reference
+        } else {
+            // Organisation users: use DashboardService for consistent logic with web view
+            // This ensures timezone-based data is handled correctly
+            $dashboardService = new \App\Services\DashboardService();
+            $filters = [
+                'month' => (int) $month,
+                'year' => (int) $year,
+                'orgId' => $orgId,
+                'officeId' => $officeId,
+                'departmentId' => $departmentId,
+            ];
+            $serviceData = $dashboardService->getFreeVersionHomeDetails($filters);
+            $happyIndexArr = $serviceData['happyIndexMonthly'] ?? [];
+            
+            // Convert date format from integer to string with leading zero (for API compatibility)
+            foreach ($happyIndexArr as &$dayData) {
+                if (isset($dayData['date'])) {
+                    $dayData['date'] = sprintf("%02d", $dayData['date']);
+                }
+            }
+            unset($dayData); // Unset reference
+        }
+
+        // Include today's data if viewing current month
+        // DashboardService hides today's data from calendar array (sets to null), so we replace it here for API
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+        $userToday = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
+        $userTodayYear = (int) $userToday->format('Y');
+        $userTodayMonth = (int) $userToday->format('m');
+        
+        // Only process today's data if viewing current month
+        if ($year == $userTodayYear && (int)$month == $userTodayMonth) {
+            $todayDay = (int) $userToday->format('d');
+            $todayStr = sprintf("%02d", $todayDay);
+            $todayIndex = $todayDay - 1; // Array is 0-indexed, day 6 is at index 5
+            
+            // Check if today's entry exists in the array (it should, but with null values)
+            if (isset($happyIndexArr[$todayIndex]) && $happyIndexArr[$todayIndex]['date'] == $todayStr) {
+                $score = null;
+                $mood_value = null;
+                $descriptionToday = '';
+
+                if ($user->hasRole('basecamp')) {
+                    // Get today's entry using stored timezone
+                    $todayEntry = HappyIndex::where('user_id', $userId)
+                        ->get()
+                        ->filter(function ($entry) use ($userTimezone) {
+                            // Use stored timezone if available, otherwise fallback to current user timezone
+                            $entryTimezone = $entry->timezone ?? $userTimezone;
+                            // Convert entry's created_at (UTC) to entry's stored timezone and compare dates
+                            $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone)->toDateString();
+                            // Compare with today's date in the entry's timezone
+                            $entryTodayDate = \App\Helpers\TimezoneHelper::carbon(null, $entryTimezone)->toDateString();
+                            return $entryDate === $entryTodayDate;
+                        })
+                        ->first();
+
+                    if ($todayEntry) {
+                        $mood_value = $todayEntry->mood_value;
+                        if ($todayEntry->mood_value == 3) $score = 100;
+                        elseif ($todayEntry->mood_value == 2) $score = 51;
+                        elseif ($todayEntry->mood_value == 1) $score = 0;
+                        $descriptionToday = $todayEntry->description ?? '';
+                    }
+                } else {
+                    // For organization, get filtered user IDs
+                    $usersQuery = User::where('status', true)->where('orgId', $orgId);
+                    if ($officeId) $usersQuery->where('officeId', $officeId);
+                    if ($departmentId) $usersQuery->where('departmentId', $departmentId);
+                    $filteredUserIds = $usersQuery->pluck('id')->toArray();
+                    if (!in_array($userId, $filteredUserIds)) {
+                        $filteredUserIds[] = $userId;
+                    }
+                    
+                    // Get today's entries for all filtered users using stored timezone
+                    $happyToday = HappyIndex::whereIn('user_id', $filteredUserIds)
+                        ->get()
+                        ->filter(function ($entry) use ($userTimezone) {
+                            // Use stored timezone if available, otherwise fallback to entry user's current timezone
+                            $entryUser = User::find($entry->user_id);
+                            $entryTimezone = $entry->timezone ?? ($entryUser && $entryUser->timezone && in_array($entryUser->timezone, timezone_identifiers_list()) 
+                                ? $entryUser->timezone 
+                                : $userTimezone);
+                            // Convert entry's created_at (UTC) to entry's stored timezone and compare dates
+                            $entryDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($entry->created_at), $entryTimezone)->toDateString();
+                            // Compare with today's date in the entry's timezone
+                            $entryTodayDate = \App\Helpers\TimezoneHelper::carbon(null, $entryTimezone)->toDateString();
+                            return $entryDate === $entryTodayDate;
+                        });
+
+                    // Get logged-in user's entry first (for individual mood)
+                    $userTodayEntry = $happyToday->where('user_id', $userId)->first();
+                    if ($userTodayEntry) {
+                        // Use logged-in user's individual mood
+                        $mood_value = $userTodayEntry->mood_value;
+                        if ($userTodayEntry->mood_value == 3) $score = 100;
+                        elseif ($userTodayEntry->mood_value == 2) $score = 51;
+                        elseif ($userTodayEntry->mood_value == 1) $score = 0;
+                        $descriptionToday = $userTodayEntry->description ?? '';
+                    } else {
+                        // Fallback to organization average if no individual entry
+                        $totalUsers = $happyToday->count();
+                        $happyUsers = $happyToday->where('mood_value', 3)->count();
+                        $score = $totalUsers > 0 ? round(($happyUsers / $totalUsers) * 100) : null;
+                        $mood_value = $score !== null ? ($score >= 81 ? 3 : ($score >= 51 ? 2 : 1)) : null;
+                    }
+                }
+
+                // Replace today's entry in the array (only if we have data)
+                if ($score !== null || $mood_value !== null) {
+                    $happyIndexArr[$todayIndex] = [
+                        'date'        => $todayStr,
+                        'score'       => $score,
+                        'mood_value'  => $mood_value,
+                        'description' => $descriptionToday ?? '',
+                    ];
+                }
+            }
+        }
+
+        $resultArray['happyIndexMonthly'] = $happyIndexArr;
+        $resultArray['firstDayOfMonth']   = date('l', strtotime($yearAndMonth . "-01"));
+
+        // Year list
+        $orgYearList = [];
+        $organisation = null; // Initialize organisation variable
+        if ($user->hasRole('basecamp')) {
+            $createdYear = (int) date('Y', strtotime($user->created_at));
+        } else {
+            $organisation = Organisation::find($orgId);
+            $createdYear = $organisation && $organisation->created_at
+                ? (int) date('Y', strtotime($organisation->created_at))
+                : (int) date('Y');
+        }
+        for ($i = $createdYear; $i <= (int) date('Y'); $i++) {
+            $orgYearList[] = $i;
+        }
+        $resultArray['orgYearList'] = $orgYearList;
+
+        $notWorkingDays = [];
+        if ($HI_include_saturday == 2) $notWorkingDays[] = 'saturday';
+        if ($HI_include_sunday == 2) $notWorkingDays[] = 'sunday';
+
+        $resultArray['notWorkingDays']    = $notWorkingDays;
+        // Get appPaymentVersion from organisation if exists, otherwise default to '1'
+        // For basecamp users, organisation might be null, so use default
+        if (!$organisation && $orgId) {
+            $organisation = Organisation::find($orgId);
+        }
+        $resultArray['appPaymentVersion'] = $organisation->appPaymentVersion ?? '1';
+        $resultArray['leaveStatus']       = $user->onLeave ?? 0;
+		$resultArray['notificationCount'] = IotNotification::where('to_bubble_user_id', $userId)
+            ->where('status', 'Active')
+            ->where('archive', false)
+            ->where(function($q) {
+                // Exclude sentiment reminder notifications
+                $q->where(function($subQuery) {
+                    $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                             ->orWhereNull('notificationType');
+                })
+                ->where(function($subQuery) {
+                    $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                             ->orWhereNull('title');
+                });
+            })
+            ->count();
+        return response()->json([
+            'code'         => 200,
+            'status'       => true,
+            'service_name' => 'free-version-home-detail',
+            'message'      => '',
+            'data'         => $resultArray,
+        ]);
+        } catch (\Exception $e) {
+            Log::error('Error in getFreeVersionHomeDetails API', [
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'code'         => 500,
+                'status'       => false,
+                'service_name' => 'free-version-home-detail',
+                'message'      => 'Failed to fetch dashboard details',
+                'error'        => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+  	/**
+     * Check whether the user has given HI feedback today
+     * considering working days and weekends.
+     *
+     * @param int $userId
+     * @param int $HI_include_saturday
+     * @param int $HI_include_sunday
+     * @param int|null $orgId
+     * @return bool
+     */
+	public function userGivenfeedbackOnHIValueORM($userId, $HI_include_saturday, $HI_include_sunday, $orgId = null)
+	{
+    	$user = Auth::user();
+    	if (!$user) {
+    	    return false;
+    	}
+    	
+    	// Get user's timezone
+    	$userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+    	
+    	// Get "today" in user's timezone
+    	$userToday = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
+    	$todayDate = $userToday->toDateString(); // Y-m-d format
+    	$dayOfWeek = $userToday->format('D'); // Day of week in user's timezone
+    	
+    	// Get start and end of today in user's timezone, then convert to UTC for database query
+    	$todayStart = $userToday->copy()->startOfDay()->utc();
+    	$todayEnd = $userToday->copy()->endOfDay()->utc();
+    	
+    	// Check if user has given feedback today (in their timezone)
+    	// Query entries that fall within today's date range in user's timezone
+    	$isUser = HappyIndex::where('user_id', $userId)
+            ->where('status', 'active')
+            ->whereBetween('created_at', [$todayStart, $todayEnd])
+            ->exists();
+
+    	$HIFeedback = false;
+
+    	if ($user && $user->hasRole('basecamp')) {
+        	$HIFeedback = $isUser;
+    	} else {
+        	$organisation = Organisation::where('id', $orgId)->first();
+        	
+        	// Check if organization has working_days set
+        	if ($organisation && $organisation->working_days) {
+            	// working_days is already cast to array in model, but handle both array and JSON string
+            	$workingDays = is_array($organisation->working_days) 
+                	? $organisation->working_days 
+                	: json_decode($organisation->working_days, true);
+            	
+            	// If organization has working_days, check if today is a working day (in user's timezone)
+            	if (is_array($workingDays) && !empty($workingDays)) {
+                	if (in_array($dayOfWeek, $workingDays)) {
+                    	// Today is a working day, check if user gave feedback
+                    	$HIFeedback = $isUser;
+                	} else {
+                    	// Today is not a working day (working day off), return true
+                    	$HIFeedback = true;
+                	}
+            	} else {
+                	// Invalid working_days data, treat as all days are working days
+                	$HIFeedback = $isUser;
+            	}
+        	} else {
+            	// Organization doesn't have working_days set, all days are working days (sare din jay)
+            	$HIFeedback = $isUser;
+        	}
+    	}
+
+    	return $HIFeedback;
+	}
+
+    /**
+     * Get principles with team feedback scores and learning checklist completion percentages.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getPrinciplesList()
+    {
+        $principleArray = [];
+        $user           = auth()->user();
+        $userId         = $user->id;
+		
+        $teamFeedbackStatus = \App\Models\HptmTeamFeedbackStatus::where('fromUserId', $userId)
+            ->where('created_at', 'LIKE', date('Y-m') . '%')
+            ->first();
+
+        $lastFeedbackDate = '';
+        if (! empty($teamFeedbackStatus)) {
+            $lastFeedbackDate = $teamFeedbackStatus->created_at;
+        } else {
+            $lastFeedData = \App\Models\HptmTeamFeedbackStatus::where('fromUserId', $userId)
+                ->orderBy('created_at', 'DESC')
+                ->first();
+
+            if (! empty($lastFeedData)) {
+                $lastFeedbackDate = $lastFeedData->created_at;
+            }
+        }
+
+        $teamFeedbackData = 0;
+        if (! empty($lastFeedbackDate)) {
+            $teamFeedbackData = \App\Models\HptmTeamFeedbackStatus::where('fromUserId', $userId)
+                ->where('completeStatus', 2)
+                ->where('created_at', 'LIKE', date('Y-m', strtotime($lastFeedbackDate)) . '%')
+                ->count();
+        }
+
+        $principles = \App\Models\HptmPrinciple::orderBy('priority', 'ASC')->get();
+
+        $resultArray = [];
+        foreach ($principles as $priciVal) {
+            $result                = [];
+            $result['id']          = $priciVal->id;
+            $result['title']       = $priciVal->title;
+            $result['description'] = $priciVal->description;
+            $result['priority']     = $priciVal->priority;
+            $principleId           = $priciVal->id;
+
+            $result['teamFeedbackScorePercent'] = 0;
+            if (! empty($lastFeedbackDate)) {
+                $teamFeedback1 = \App\Models\HptmTeamFeedbackAnswer::where('toUserId', $userId)
+                    ->whereHas('question', function ($q) use ($principleId) {
+                        $q->where('principleId', $principleId);
+                    })
+                    ->where('date', 'LIKE', date('Y-m', strtotime($lastFeedbackDate)) . '%')
+                    ->with('option')
+                    ->get()
+                    ->sum(function ($answer) {
+                        return $answer->option->option_rating ?? 0;
+                    });
+
+                $completionScore = 0;
+                if (! empty($teamFeedback1) && ! empty($teamFeedbackData)) {
+                    $completionScore = str_replace(',', '', number_format($teamFeedback1 / $teamFeedbackData, 2));
+                }
+                $result['teamFeedbackScorePercent'] = $completionScore;
+            }
+
+            $totalLearningChecklist = \App\Models\HptmLearningChecklist::where(function ($query) use ($principleId) {
+                $query->where('principleId', $principleId)
+                    ->orWhereNull('principleId');
+            })
+                ->count();
+
+            $readLearningChecklist = \App\Models\HptmLearningChecklist::where(function ($query) use ($principleId) {
+                $query->where('principleId', $principleId)
+                    ->orWhereNull('principleId');
+            })
+                ->whereHas('userReadStatus', function ($q) use ($userId) {
+                    $q->where('userId', $userId)->where('readStatus', 1);
+                })
+                ->count();
+
+            $completionPercent = 0;
+            if (! empty($readLearningChecklist) && ! empty($totalLearningChecklist)) {
+                $completionPercent = str_replace(',', '', number_format(($readLearningChecklist / $totalLearningChecklist) * 100, 2));
+            }
+            $result['completionPercent'] = $completionPercent;
+
+            $resultArray[] = $result;
+        }
+
+        $principleArray['principleData'] = $resultArray;
+
+        // Use the already authenticated user instead of querying again
+        $userHptmScore = 0;
+        if ($user) {
+            $userHptmScore = ($user->hptmScore ?? 0) + ($user->hptmEvaluationScore ?? 0);
+        }
+
+        $principleArray['hptmScore'] = $userHptmScore;
+
+        return response()->json([
+            'code'         => 200,
+            'status'       => true,
+            'service_name' => 'get-principles-list',
+            'message'      => '',
+            'data'         => $principleArray,
+        ]);
+    }
+  
+   /**
+    * Get learning checklist grouped by learning type and principleId.
+    *
+    * @param Request $request
+    * @return \Illuminate\Http\JsonResponse
+    */
+  	public function getLearningCheckList(Request $request)
+	{
+    	$userId      = Auth::id(); 
+    	$principleId = $request->input('principleId');
+		$learningTypes = HptmLearningType::orderBy('priority', 'ASC')->get();
+		$learningCheckListArray = [];
+    	$learningTypeArr        = [];
+
+    	foreach ($learningTypes as $learningType) {
+        	$checklists = HptmLearningChecklist::where('output', $learningType->id)
+            	->where(function ($query) use ($principleId) {
+                	$query->where('principleId', $principleId)
+                      ->orWhereNull('principleId');
+           	 })
+            ->orderBy('created_at', 'ASC')
+            ->get();
+
+        	$learningCheckListArr = [];
+        	$seenChecklists = []; // Track unique checklists to avoid duplicates
+
+        	foreach ($checklists as $checkVal) {
+            	// Create a unique key based on title, output, description, link, and document
+            	// This prevents showing the same checklist multiple times
+            	$uniqueKey = md5(
+                	($checkVal->title ?? '') . '|' . 
+                	($checkVal->output ?? '') . '|' . 
+                	($checkVal->description ?? '') . '|' . 
+                	($checkVal->link ?? '') . '|' . 
+                	($checkVal->document ?? '')
+            	);
+
+            	// Skip if we've already seen this checklist
+            	if (isset($seenChecklists[$uniqueKey])) {
+                	continue;
+            	}
+
+            	$seenChecklists[$uniqueKey] = true;
+
+            	// Get read status - check all related checklists (same title, output, etc.)
+            	$relatedChecklistIds = HptmLearningChecklist::where('title', $checkVal->title)
+                	->where('output', $checkVal->output)
+                	->where(function($q) use ($checkVal) {
+                    	if ($checkVal->description) {
+                        	$q->where('description', $checkVal->description);
+                    	} else {
+                        	$q->whereNull('description');
+                    	}
+                	})
+                	->where(function($q) use ($checkVal) {
+                    	if ($checkVal->link) {
+                        	$q->where('link', $checkVal->link);
+                    	} else {
+                        	$q->whereNull('link');
+                    	}
+                	})
+                	->where(function($q) use ($checkVal) {
+                    	if ($checkVal->document) {
+                        	$q->where('document', $checkVal->document);
+                    	} else {
+                        	$q->whereNull('document');
+                    	}
+                	})
+                	->pluck('id')
+                	->toArray();
+
+            	// Check if any of the related checklists is read
+            	$userReadChecklist = DB::table('hptm_learning_checklist_for_user_read_status')
+                	->where('userId', $userId)
+                	->whereIn('checklistId', $relatedChecklistIds)
+                	->where('readStatus', 1)
+                	->exists();
+
+            	// Use the first checklist ID from related checklists as the primary ID
+            	$primaryChecklistId = $relatedChecklistIds[0] ?? $checkVal->id;
+
+            	$learningCheckListArr[] = [
+                	'checklistId'       => $primaryChecklistId,
+                	'principleId'       => $checkVal->principleId,
+                	'typeId'            => $checkVal->output,
+                	'link'              => $checkVal->link ?? '',
+                	'document'          => $checkVal->document
+                    	                        ? url("storage/" . $checkVal->document)
+                        	                    : '',
+                	'checklistTitle'    => $checkVal->title ?? '',
+                	'description'       => $checkVal->description ?? '',
+                	'learningTypeTitle' => $learningType->title ?? '',
+                	'userReadChecklist' => $userReadChecklist,
+            	];
+        	}
+
+        	$learningCheckListArray[$learningType->title] = $learningCheckListArr;
+        	$learningTypeArr[] = $learningType->title;
+    	}
+
+    	$resultArray = [
+        	'learningCheckList' => $learningCheckListArray,
+        	'learningTypeArr'   => $learningTypeArr,
+    	];
+
+    	return response()->json([
+        	'code'         => 200,
+        	'status'       => true,
+        	'service_name' => 'get-learning-checklist',
+        	'message'      => '',
+        	'data'         => $resultArray,
+    	]);
+	}
+
+   	/**
+     * Change the read status of a user's checklist,
+     * update HPTM score, and return updated score.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function changeReadStatusOfUserChecklist(Request $request)
+    {
+        $checklistId = $request->input('checklistId');
+        $readStatus  = $request->input('readStatus');
+        $userId      = Auth::id();
+
+        if (! $checklistId || $readStatus === null) {
+            return response()->json([
+                'code'    => 400,
+                'status'  => false,
+                'message' => 'Checklist ID and read status are required.',
+            ]);
+        }
+
+        $checklist = HptmLearningChecklist::find($checklistId);
+        if (! $checklist) {
+            return response()->json([
+                'code'    => 400,
+                'status'  => false,
+                'message' => 'Invalid checklist ID.',
+            ]);
+        }
+
+        // Use authenticated user
+        $user = auth()->user();
+        if (!$user || $user->id != $userId) {
+            return response()->json([
+                'code'    => 401,
+                'status'  => false,
+                'message' => 'Unauthorized.',
+            ]);
+        }
+
+        // Find all checklist items with the same title, output, description, link, and document
+        // This groups items that were created together with multiple principles
+        $relatedChecklists = HptmLearningChecklist::where('title', $checklist->title)
+            ->where('output', $checklist->output)
+            ->where(function($q) use ($checklist) {
+                if ($checklist->description) {
+                    $q->where('description', $checklist->description);
+                } else {
+                    $q->whereNull('description');
+                }
+            })
+            ->where(function($q) use ($checklist) {
+                if ($checklist->link) {
+                    $q->where('link', $checklist->link);
+                } else {
+                    $q->whereNull('link');
+                }
+            })
+            ->where(function($q) use ($checklist) {
+                if ($checklist->document) {
+                    $q->where('document', $checklist->document);
+                } else {
+                    $q->whereNull('document');
+                }
+            })
+            ->pluck('id')
+            ->toArray();
+
+        // Update read status for all related checklist items
+        foreach ($relatedChecklists as $relatedChecklistId) {
+            $existingStatus = HptmLearningChecklistForUserReadStatus::where('checklistId', $relatedChecklistId)
+                ->where('userId', $userId)
+                ->first();
+
+            if ($existingStatus) {
+                $existingStatus->update([
+                    'readStatus' => $readStatus,
+                    'updated_at' => now(),
+                ]);
+            } else {
+                HptmLearningChecklistForUserReadStatus::create([
+                    'checklistId' => $relatedChecklistId,
+                    'userId'      => $userId,
+                    'readStatus'  => $readStatus,
+                    'created_at'  => now(),
+                    'updated_at'  => now(),
+                ]);
+            }
+        }
+
+        // Recalculate total score based on all checked checklists
+        // Score = (Count of unique checked items per learning type) × (Learning type score)
+        $readChecklistIds = DB::table('hptm_learning_checklist_for_user_read_status')
+            ->where('userId', $userId)
+            ->where('readStatus', 1)
+            ->pluck('checklistId')
+            ->toArray();
+
+        $totalScore = 0;
+        if (!empty($readChecklistIds)) {
+            $checkedChecklists = HptmLearningChecklist::whereIn('id', $readChecklistIds)
+                ->with('learningType')
+                ->get();
+
+            // Group by learning type and deduplicate by unique checklist
+            $typeGroups = [];
+            $seenChecklists = [];
+
+            foreach ($checkedChecklists as $checklist) {
+                if (!$checklist->learningType || !$checklist->learningType->score) {
+                    continue;
+                }
+
+                $learningTypeId = $checklist->output;
+
+                // Create unique key for deduplication
+                $uniqueKey = md5(
+                    ($checklist->title ?? '') . '|' . 
+                    ($checklist->output ?? '') . '|' . 
+                    ($checklist->description ?? '') . '|' . 
+                    ($checklist->link ?? '') . '|' . 
+                    ($checklist->document ?? '')
+                );
+
+                // Skip if we've already counted this unique checklist
+                if (isset($seenChecklists[$uniqueKey])) {
+                    continue;
+                }
+
+                $seenChecklists[$uniqueKey] = true;
+
+                // Initialize type group if not exists
+                if (!isset($typeGroups[$learningTypeId])) {
+                    $typeGroups[$learningTypeId] = [
+                        'count' => 0,
+                        'score' => $checklist->learningType->score
+                    ];
+                }
+
+                // Count unique items per type
+                $typeGroups[$learningTypeId]['count']++;
+            }
+
+            // Calculate total score: (Count per type) × (Type score)
+            foreach ($typeGroups as $typeGroup) {
+                $totalScore += $typeGroup['count'] * $typeGroup['score'];
+            }
+        }
+
+        // Update user's hptmScore
+        $user->update([
+            'hptmScore'  => $totalScore,
+            'updated_at' => now(),
+        ]);
+
+        // Refresh user to get updated hptmScore
+        $user->refresh();
+
+        $userScore = 0;
+        if ($user) {
+            $userScore += $user->hptmScore ?? 0;
+            $userScore += $user->hptmEvaluationScore ?? 0;
+        }
+
+        return response()->json([
+            'code'         => 200,
+            'status'       => true,
+            'service_name' => 'change-read-status-of-user-checklist',
+            'message'      => '',
+            'data'         => ['hptmScore' => $userScore],
+        ]);
+    }
+
+   /**
+    * Set/reset password for user using token and email.
+    *
+    * @param Request $request
+    * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
+    */
+    public function setPassword(Request $request)
+    {
+        $request->validate([
+            'email'    => 'required|email',
+            'token'    => 'required',
+            'password' => 'required|min:6|confirmed',
+        ]);
+
+        $status = Password::broker()->reset(
+            $request->only('email', 'password', 'password_confirmation', 'token'),
+            function ($user, $password) {
+                $user->password = Hash::make($password);
+                $user->save();
+            }
+        );
+
+        if ($status == Password::PASSWORD_RESET) {
+            return response()->json(['message' => 'Password set successfully!']);
+        }
+
+        return response()->json(['message' => __($status)], 400);
+    }
+  
+  	/**
+	* Update the authenticated user's profile.
+	*
+	* @OA\Post(
+	*     path="/api/update-user-profile",
+	*     tags={"User Profile"},
+	*     summary="Update user profile",
+	*     description="Update the authenticated user's profile information including name, phone, country code, timezone, and profile image",
+	*     security={{"bearerAuth":{}}},
+	*     @OA\RequestBody(
+	*         required=false,
+	*         @OA\MediaType(
+	*             mediaType="multipart/form-data",
+	*             @OA\Schema(
+	*                 @OA\Property(property="first_name", type="string", maxLength=255, example="John"),
+	*                 @OA\Property(property="last_name", type="string", maxLength=255, example="Doe"),
+	*                 @OA\Property(property="phone", type="string", maxLength=20, example="+1234567890"),
+	*                 @OA\Property(property="country_code", type="string", example="+1"),
+	*                 @OA\Property(property="timezone", type="string", maxLength=50, example="America/New_York", description="Valid timezone identifier (e.g., America/New_York, Europe/London, Asia/Kolkata)"),
+	*                 @OA\Property(property="profileImage", type="string", format="binary", description="Profile image file (jpg, jpeg, png, max 2MB)")
+	*             )
+	*         ),
+	*         @OA\MediaType(
+	*             mediaType="application/json",
+	*             @OA\Schema(
+	*                 @OA\Property(property="first_name", type="string", maxLength=255, example="John"),
+	*                 @OA\Property(property="last_name", type="string", maxLength=255, example="Doe"),
+	*                 @OA\Property(property="phone", type="string", maxLength=20, example="+1234567890"),
+	*                 @OA\Property(property="country_code", type="string", example="+1"),
+	*                 @OA\Property(property="timezone", type="string", maxLength=50, example="America/New_York", description="Valid timezone identifier")
+	*             )
+	*         )
+	*     ),
+	*     @OA\Response(
+	*         response=200,
+	*         description="Profile updated successfully",
+	*         @OA\JsonContent(
+	*             @OA\Property(property="status", type="boolean", example=true),
+	*             @OA\Property(property="message", type="string", example="Profile updated successfully"),
+	*             @OA\Property(
+	*                 property="data",
+	*                 type="object",
+	*                 @OA\Property(property="id", type="integer", example=1),
+	*                 @OA\Property(property="first_name", type="string", example="John"),
+	*                 @OA\Property(property="last_name", type="string", example="Doe"),
+	*                 @OA\Property(property="email", type="string", format="email", example="john.doe@example.com"),
+	*                 @OA\Property(property="phone", type="string", nullable=true, example="+1234567890"),
+	*                 @OA\Property(property="country_code", type="string", nullable=true, example="+1"),
+	*                 @OA\Property(property="timezone", type="string", nullable=true, example="America/New_York", description="User's timezone from profile"),
+	*                 @OA\Property(property="profileImage", type="string", nullable=true, example="http://example.com/storage/profile-photos/image.jpg")
+	*             )
+	*         )
+	*     ),
+	*     @OA\Response(
+	*         response=401,
+	*         description="Unauthorized",
+	*         @OA\JsonContent(
+	*             @OA\Property(property="status", type="boolean", example=false),
+	*             @OA\Property(property="message", type="string", example="User not authenticated")
+	*         )
+	*     ),
+	*     @OA\Response(
+	*         response=422,
+	*         description="Validation error",
+	*         @OA\JsonContent(
+	*             @OA\Property(property="message", type="string", example="The given data was invalid."),
+	*             @OA\Property(property="errors", type="object")
+	*         )
+	*     ),
+	*     @OA\Response(
+	*         response=500,
+	*         description="Server error",
+	*         @OA\JsonContent(
+	*             @OA\Property(property="status", type="boolean", example=false),
+	*             @OA\Property(property="message", type="string", example="Failed to update profile"),
+	*             @OA\Property(property="error", type="string", example="Error message")
+	*         )
+	*     )
+	* )
+	*
+	* @param \Illuminate\Http\Request $request
+	* @return \Illuminate\Http\JsonResponse
+	*/
+	public function updateUserProfile(Request $request)
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'User not authenticated'
+                ], 401);
+            }
+
+            // Validate input (added country_code and working days)
+            $validated = $request->validate([
+                'first_name'   => 'sometimes|string|max:255',
+                'last_name'    => 'sometimes|string|max:255',
+                'phone'        => 'sometimes|string|max:20',
+                'country_code' => 'sometimes|string|min:1',
+                'timezone'     => ['sometimes', 'string', 'max:50', \Illuminate\Validation\Rule::in(timezone_identifiers_list())],
+                'profileImage' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+                // Working days (for Basecamp users only - users without orgId)
+                'working_monday'    => 'sometimes|boolean',
+                'working_tuesday'   => 'sometimes|boolean',
+                'working_wednesday' => 'sometimes|boolean',
+                'working_thursday'  => 'sometimes|boolean',
+                'working_friday'    => 'sometimes|boolean',
+                'HI_include_saturday' => 'sometimes|boolean',
+                'HI_include_sunday'   => 'sometimes|boolean',
+            ]);
+
+            if (isset($validated['first_name'])) {
+                $user->first_name = $validated['first_name'];
+            }
+
+            if (isset($validated['last_name'])) {
+                $user->last_name = $validated['last_name'];
+            }
+
+            if (isset($validated['phone'])) {
+                $user->phone = $validated['phone'];
+            }
+
+            if (isset($validated['country_code'])) {
+                $user->country_code = $validated['country_code'];
+            }
+
+            if (isset($validated['timezone'])) {
+                $user->timezone = $validated['timezone'];
+            }
+
+            // Update working days (only for Basecamp users - users without orgId)
+            if (!$user->orgId) {
+                if (isset($validated['working_monday'])) {
+                    $user->working_monday = $validated['working_monday'];
+                }
+                if (isset($validated['working_tuesday'])) {
+                    $user->working_tuesday = $validated['working_tuesday'];
+                }
+                if (isset($validated['working_wednesday'])) {
+                    $user->working_wednesday = $validated['working_wednesday'];
+                }
+                if (isset($validated['working_thursday'])) {
+                    $user->working_thursday = $validated['working_thursday'];
+                }
+                if (isset($validated['working_friday'])) {
+                    $user->working_friday = $validated['working_friday'];
+                }
+                if (isset($validated['HI_include_saturday'])) {
+                    $user->HI_include_saturday = $validated['HI_include_saturday'];
+                }
+                if (isset($validated['HI_include_sunday'])) {
+                    $user->HI_include_sunday = $validated['HI_include_sunday'];
+                }
+            }
+
+            // Handle profile image upload
+            if ($request->hasFile('profileImage')) {
+                $image = $request->file('profileImage');
+
+                if ($user->profile_photo_path && Storage::disk('public')->exists($user->profile_photo_path)) {
+                    Storage::disk('public')->delete($user->profile_photo_path);
+                }
+
+                $path = $image->store('profile-photos', 'public');
+                $user->profile_photo_path = $path;
+            }
+
+            $user->save();
+
+            $responseData = [
+                'id'            => $user->id,
+                'first_name'    => $user->first_name,
+                'last_name'     => $user->last_name,
+                'email'         => $user->email,
+                'phone'         => $user->phone,
+                'country_code'  => $user->country_code,
+                'timezone'      => \App\Helpers\TimezoneHelper::getUserTimezone($user),
+                'profileImage'  => $user->profile_photo_path 
+                                        ? url('storage/' . $user->profile_photo_path) 
+                                        : null,
+            ];
+
+            // Add working days to response (only for Basecamp users)
+            if (!$user->orgId) {
+                $responseData['working_monday'] = (bool)($user->working_monday ?? true);
+                $responseData['working_tuesday'] = (bool)($user->working_tuesday ?? true);
+                $responseData['working_wednesday'] = (bool)($user->working_wednesday ?? true);
+                $responseData['working_thursday'] = (bool)($user->working_thursday ?? true);
+                $responseData['working_friday'] = (bool)($user->working_friday ?? true);
+                $responseData['HI_include_saturday'] = (bool)($user->HI_include_saturday ?? false);
+                $responseData['HI_include_sunday'] = (bool)($user->HI_include_sunday ?? false);
+            }
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Profile updated successfully',
+                'data'    => $responseData,
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Failed to update profile',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete user profile photo.
+     *
+     * @OA\Delete(
+     *     path="/api/delete-profile-photo",
+     *     tags={"User Profile"},
+     *     summary="Delete user profile photo",
+     *     description="Delete the authenticated user's profile photo. This will remove the photo from storage and set profile_photo_path to null.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Profile photo deleted successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Profile photo deleted successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="profileImage", type="string", nullable=true, example=null, description="Profile photo URL (null after deletion)")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="User not authenticated")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Profile photo not found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Profile photo not found")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Server error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Failed to delete profile photo"),
+     *             @OA\Property(property="error", type="string", example="Error message")
+     *         )
+     *     )
+     * )
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function deleteProfilePhoto(Request $request)
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'User not authenticated'
+                ], 401);
+            }
+
+            // Check if user has a profile photo
+            if (!$user->profile_photo_path) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Profile photo not found'
+                ], 404);
+            }
+
+            // Delete photo from storage
+            if (Storage::disk('public')->exists($user->profile_photo_path)) {
+                Storage::disk('public')->delete($user->profile_photo_path);
+            }
+
+            // Update user record
+            $user->profile_photo_path = null;
+            $user->save();
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Profile photo deleted successfully',
+                'data'    => [
+                    'id'            => $user->id,
+                    'profileImage'  => null,
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Failed to delete profile photo',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete user account.
+     *
+     * @OA\Delete(
+     *     path="/api/delete-account",
+     *     tags={"User Profile"},
+     *     summary="Delete user account",
+     *     description="Permanently delete the authenticated user's account. Requires password confirmation. Once deleted, all user data will be permanently removed.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"password"},
+     *             @OA\Property(property="password", type="string", format="password", example="userpassword123", description="User's current password for confirmation")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Account deleted successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Account deleted successfully")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized - Invalid password or user not authenticated",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="The provided password is incorrect.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Validation error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Validation failed"),
+     *             @OA\Property(property="errors", type="object")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Server error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Failed to delete account")
+     *         )
+     *     )
+     * )
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function deleteAccount(Request $request)
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'User not authenticated'
+                ], 401);
+            }
+
+            // Validate password
+            $validated = $request->validate([
+                'password' => ['required', 'string'],
+            ]);
+
+            // Verify password
+            if (!Hash::check($validated['password'], $user->password)) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'The provided password is incorrect.'
+                ], 401);
+            }
+
+            // Use Jetstream's DeleteUser action
+            app(\Laravel\Jetstream\Contracts\DeletesUsers::class)->delete($user);
+
+            // Revoke all tokens for this user (if using Sanctum)
+            if (method_exists($user, 'tokens')) {
+                $user->tokens()->delete();
+            }
+
+            return response()->json([
+                'status'  => true,
+                'message' => 'Account deleted successfully'
+            ], 200);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Validation failed',
+                'errors'  => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Error deleting user account via API: ' . $e->getMessage(), [
+                'user_id' => $user->id ?? null,
+                'trace'   => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'status'  => false,
+                'message' => 'Failed to delete account. Please try again.'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get timezone from latitude and longitude (for mobile and web)
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTimezoneFromLocation(Request $request)
+    {
+        try {
+            $request->validate([
+                'latitude' => 'required|numeric|between:-90,90',
+                'longitude' => 'required|numeric|between:-180,180',
+            ]);
+
+            $latitude = $request->input('latitude');
+            $longitude = $request->input('longitude');
+
+            $timezoneService = app(\App\Services\TimezoneService::class);
+            $timezone = $timezoneService->getTimezoneFromLocation($latitude, $longitude);
+
+            // If external APIs failed to detect timezone, fall back gracefully
+            if (!$timezone) {
+                // 1) Try browser / client provided timezone header if any
+                $headerTz = $request->header('X-Timezone') ?? $request->input('timezone');
+                if (!empty($headerTz) && in_array($headerTz, timezone_identifiers_list())) {
+                    $timezone = $headerTz;
+                    \Log::warning("getTimezoneFromLocation: Falling back to timezone from request header/body: {$timezone}");
+                } else {
+                    // 2) Safe default – Asia/Kolkata (used for most of your users)
+                    $timezone = 'Asia/Kolkata';
+                    \Log::warning("getTimezoneFromLocation: Timezone API failed, falling back to default {$timezone} for ({$latitude}, {$longitude})");
+                }
+            }
+
+            // COMMENTED OUT: Automatic timezone update
+            // Timezone should be set from user profile instead
+            // Update user's timezone if authenticated
+            // $user = auth()->user();
+            // if ($user && $user->timezone !== $timezone) {
+            //     $user->timezone = $timezone;
+            //     $user->save();
+            // }
+
+            return response()->json([
+                'status' => true,
+                'timezone' => $timezone,
+                'message' => 'Timezone detected successfully',
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to get timezone from location',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get list of all available timezones.
+     *
+     * @OA\Get(
+     *     path="/api/timezone-list",
+     *     tags={"User Profile"},
+     *     summary="Get timezone list",
+     *     description="Retrieve a list of all available timezone identifiers that can be used for user profile timezone setting",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Timezone list retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Timezone list retrieved successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="array",
+     *                 @OA\Items(
+     *                     type="object",
+     *                     @OA\Property(property="value", type="string", example="Asia/Kolkata", description="IANA timezone identifier"),
+     *                     @OA\Property(property="display", type="string", example="IN - Kolkata (UTC+05:30) - Asia/Kolkata", description="Formatted display string"),
+     *                     @OA\Property(property="search", type="string", example="asia/kolkata kolkata in india asia utc+05:30", description="Searchable text"),
+     *                     @OA\Property(property="countryCode", type="string", example="IN", description="ISO country code"),
+     *                     @OA\Property(property="countryName", type="string", example="India", description="Country name"),
+     *                     @OA\Property(property="continent", type="string", example="Asia", description="Continent name"),
+     *                     @OA\Property(property="city", type="string", example="kolkata", description="City name in lowercase"),
+     *                     @OA\Property(property="utcOffset", type="string", example="UTC+05:30", description="UTC offset string")
+     *                 ),
+     *                 example={{
+     *                     "value": "Asia/Kolkata",
+     *                     "display": "IN - Kolkata (UTC+05:30) - Asia/Kolkata",
+     *                     "search": "asia/kolkata kolkata in india asia utc+05:30",
+     *                     "countryCode": "IN",
+     *                     "countryName": "India",
+     *                     "continent": "Asia",
+     *                     "city": "kolkata",
+     *                     "utcOffset": "UTC+05:30"
+     *                 }, {
+     *                     "value": "America/New_York",
+     *                     "display": "US - New York (UTC-05:00) - America/New_York",
+     *                     "search": "america/new_york new york us united states america utc-05:00",
+     *                     "countryCode": "US",
+     *                     "countryName": "United States",
+     *                     "continent": "America",
+     *                     "city": "new york",
+     *                     "utcOffset": "UTC-05:00"
+     *                 }}
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthenticated")
+     *         )
+     *     )
+     * )
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTimezoneList()
+    {
+        try {
+            // Country code to country name mapping
+            $countryNames = [
+                'IN' => 'India', 'AE' => 'United Arab Emirates', 'SG' => 'Singapore',
+                'JP' => 'Japan', 'CN' => 'China', 'HK' => 'Hong Kong',
+                'TH' => 'Thailand', 'ID' => 'Indonesia', 'PH' => 'Philippines',
+                'KR' => 'South Korea', 'MY' => 'Malaysia',
+                'GB' => 'United Kingdom', 'FR' => 'France', 'DE' => 'Germany',
+                'IT' => 'Italy', 'ES' => 'Spain', 'NL' => 'Netherlands',
+                'BE' => 'Belgium', 'AT' => 'Austria', 'CH' => 'Switzerland',
+                'SE' => 'Sweden', 'NO' => 'Norway', 'DK' => 'Denmark',
+                'FI' => 'Finland', 'PL' => 'Poland', 'CZ' => 'Czech Republic',
+                'HU' => 'Hungary', 'GR' => 'Greece', 'PT' => 'Portugal',
+                'IE' => 'Ireland',
+                'US' => 'United States', 'CA' => 'Canada',
+                'MX' => 'Mexico', 'BR' => 'Brazil', 'AR' => 'Argentina',
+                'CL' => 'Chile', 'PE' => 'Peru', 'CO' => 'Colombia',
+                'AU' => 'Australia',
+                'NZ' => 'New Zealand',
+                'EG' => 'Egypt', 'ZA' => 'South Africa', 'NG' => 'Nigeria',
+                'KE' => 'Kenya',
+                'PK' => 'Pakistan', 'NP' => 'Nepal', 'BD' => 'Bangladesh',
+                'LK' => 'Sri Lanka', 'VN' => 'Vietnam', 'TW' => 'Taiwan',
+                'IL' => 'Israel', 'SA' => 'Saudi Arabia', 'JO' => 'Jordan',
+                'KW' => 'Kuwait', 'QA' => 'Qatar', 'BH' => 'Bahrain',
+                'OM' => 'Oman', 'YE' => 'Yemen', 'IQ' => 'Iraq',
+                'IR' => 'Iran', 'AF' => 'Afghanistan',
+            ];
+            
+            $tzToCountry = [
+                'Asia/Kolkata' => 'IN', 'Asia/Dubai' => 'AE', 'Asia/Singapore' => 'SG',
+                'Asia/Tokyo' => 'JP', 'Asia/Shanghai' => 'CN', 'Asia/Hong_Kong' => 'HK',
+                'Asia/Bangkok' => 'TH', 'Asia/Jakarta' => 'ID', 'Asia/Manila' => 'PH',
+                'Asia/Seoul' => 'KR', 'Asia/Kuala_Lumpur' => 'MY',
+                'Asia/Karachi' => 'PK', 'Asia/Islamabad' => 'PK',
+                'Asia/Kathmandu' => 'NP',
+                'Europe/London' => 'GB', 'Europe/Paris' => 'FR', 'Europe/Berlin' => 'DE',
+                'Europe/Rome' => 'IT', 'Europe/Madrid' => 'ES', 'Europe/Amsterdam' => 'NL',
+                'Europe/Brussels' => 'BE', 'Europe/Vienna' => 'AT', 'Europe/Zurich' => 'CH',
+                'Europe/Stockholm' => 'SE', 'Europe/Oslo' => 'NO', 'Europe/Copenhagen' => 'DK',
+                'Europe/Helsinki' => 'FI', 'Europe/Warsaw' => 'PL', 'Europe/Prague' => 'CZ',
+                'Europe/Budapest' => 'HU', 'Europe/Athens' => 'GR', 'Europe/Lisbon' => 'PT',
+                'Europe/Dublin' => 'IE',
+                'America/New_York' => 'US', 'America/Chicago' => 'US', 'America/Denver' => 'US',
+                'America/Los_Angeles' => 'US', 'America/Toronto' => 'CA', 'America/Vancouver' => 'CA',
+                'America/Mexico_City' => 'MX', 'America/Sao_Paulo' => 'BR', 'America/Buenos_Aires' => 'AR',
+                'America/Santiago' => 'CL', 'America/Lima' => 'PE', 'America/Bogota' => 'CO',
+                'Australia/Sydney' => 'AU', 'Australia/Melbourne' => 'AU', 'Australia/Brisbane' => 'AU',
+                'Australia/Perth' => 'AU', 'Australia/Adelaide' => 'AU',
+                'Pacific/Auckland' => 'NZ',
+                'Africa/Cairo' => 'EG', 'Africa/Johannesburg' => 'ZA', 'Africa/Lagos' => 'NG',
+                'Africa/Nairobi' => 'KE',
+            ];
+            
+            // Add more timezones for common countries - especially India
+            $allTimezones = timezone_identifiers_list();
+            foreach ($allTimezones as $tz) {
+                $parts = explode('/', $tz);
+                $continent = $parts[0] ?? '';
+                
+                // Auto-detect country for Asia timezones
+                if ($continent === 'Asia' && !isset($tzToCountry[$tz])) {
+                    // India timezones
+                    $indiaCities = ['Kolkata', 'Calcutta', 'Mumbai', 'Bombay', 'Delhi', 'New_Delhi', 
+                                   'Chennai', 'Madras', 'Bangalore', 'Bangalore', 'Hyderabad', 
+                                   'Pune', 'Ahmedabad', 'Jaipur', 'Lucknow', 'Kanpur'];
+                    foreach ($indiaCities as $city) {
+                        if (strpos($tz, $city) !== false) {
+                            $tzToCountry[$tz] = 'IN';
+                            break;
+                        }
+                    }
+                    
+                    // Pakistan timezones
+                    if (!isset($tzToCountry[$tz])) {
+                        $pakistanCities = ['Karachi', 'Islamabad', 'Lahore', 'Rawalpindi', 'Quetta', 'Peshawar'];
+                        foreach ($pakistanCities as $city) {
+                            if (strpos($tz, $city) !== false) {
+                                $tzToCountry[$tz] = 'PK';
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Nepal timezones
+                    if (!isset($tzToCountry[$tz])) {
+                        $nepalCities = ['Kathmandu'];
+                        foreach ($nepalCities as $city) {
+                            if (strpos($tz, $city) !== false) {
+                                $tzToCountry[$tz] = 'NP';
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Bangladesh timezones
+                    if (!isset($tzToCountry[$tz])) {
+                        $bangladeshCities = ['Dhaka', 'Chittagong'];
+                        foreach ($bangladeshCities as $city) {
+                            if (strpos($tz, $city) !== false) {
+                                $tzToCountry[$tz] = 'BD';
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Also check if it's the main India timezone
+                    if ($tz === 'Asia/Kolkata' || $tz === 'Asia/Calcutta') {
+                        $tzToCountry[$tz] = 'IN';
+                    }
+                }
+            }
+            
+            $timezones = collect(timezone_identifiers_list())->map(function($tz) use ($tzToCountry, $countryNames) {
+                try {
+                    $dt = new \DateTime('now', new \DateTimeZone($tz));
+                    $offset = $dt->getOffset();
+                    $hours = intval(abs($offset) / 3600);
+                    $minutes = intval((abs($offset) % 3600) / 60);
+                    $sign = $offset >= 0 ? '+' : '-';
+                    $utcOffset = sprintf('UTC%s%02d:%02d', $sign, $hours, $minutes);
+                } catch (\Exception $e) {
+                    $utcOffset = '';
+                }
+                
+                $countryCode = $tzToCountry[$tz] ?? '';
+                $countryName = $countryNames[$countryCode] ?? '';
+                $parts = explode('/', $tz);
+                $continent = $parts[0] ?? '';
+                $city = str_replace('_', ' ', end($parts));
+                $city = ucwords(strtolower($city));
+                
+                // Standard display format: Country Code - City (UTC Offset) - IANA Identifier
+                if ($countryCode && $utcOffset) {
+                    $display = $countryCode . ' - ' . $city . ' (' . $utcOffset . ') - ' . $tz;
+                } elseif ($countryCode) {
+                    $display = $countryCode . ' - ' . $city . ' (' . $tz . ')';
+                } elseif ($utcOffset) {
+                    $display = $city . ' (' . $utcOffset . ') - ' . $tz;
+                } else {
+                    $display = $tz;
+                }
+                
+                // Enhanced search field includes: timezone, city, country code, country name, continent, UTC offset
+                $searchTerms = strtolower($tz . ' ' . $city . ' ' . ($countryCode ?? '') . ' ' . ($countryName ?? '') . ' ' . ($continent ?? '') . ' ' . ($utcOffset ?? ''));
+                
+                return [
+                    'value' => $tz, 
+                    'display' => $display, 
+                    'search' => $searchTerms,
+                    'countryCode' => $countryCode,
+                    'countryName' => $countryName,
+                    'continent' => $continent,
+                    'city' => strtolower($city),
+                    'utcOffset' => $utcOffset
+                ];
+            })->values()->all();
+            
+            return response()->json([
+                'status'  => true,
+                'message' => 'Timezone list retrieved successfully',
+                'data'    => $timezones,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status'  => false,
+                'message' => 'Failed to retrieve timezone list',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+}

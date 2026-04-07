@@ -1,0 +1,105 @@
+<?php
+
+use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
+
+Artisan::command('inspire', function () {
+    $this->comment(Inspiring::quote());
+})->purpose('Display an inspiring quote')->hourly();
+
+// NOTE: notification and report schedules moved to Kernel.php for timezone-based scheduling
+// They now run every minute and filter users based on their individual timezones
+
+// COMMENTED OUT: 4pm notification cron
+// Run every minute to check each user's timezone for notification time (16:00)
+// Schedule::command('notification:send --only=notification')
+//         ->everyMinute()
+//         ->withoutOverlapping()
+//         ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+// Run every minute to check each user's timezone for report time (23:59)
+Schedule::command('notification:send --only=report')
+        ->everyMinute()
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+// COMMENTED OUT: 6pm email cron for sentiment reminder
+// Schedule::command('notification:send --only=sentiment')
+//         ->dailyAt('18:00')
+//         ->timezone('Asia/Kolkata');
+
+// Monthly summary - runs hourly to check last day of month at 22:00 in each user's timezone
+// The notification:send command already filters by user timezone inside
+Schedule::command('notification:send --only=monthly-summary')
+        ->hourly()
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/monthly_summary.log'));
+
+// Weekly summary - runs hourly to check Sunday 23:00 in each user's timezone
+// The notification:send command already filters by user timezone inside
+Schedule::command('notification:send --only=weeklySummary')
+        ->hourly()
+        ->withoutOverlapping();
+
+// Weekly summary for month - runs on weekends (Saturday and Sunday) to generate all missing weekly summaries
+// This ensures all weeks in the current month get summaries generated, not just the current week
+Schedule::call(function () {
+    $month = now()->month;
+    $year = now()->year;
+    \Illuminate\Support\Facades\Artisan::call('weekly:generate-for-month', [
+        '--month' => $month,
+        '--year' => $year,
+    ]);
+})
+        ->name('weekly-summary-saturday')
+        ->saturdays()
+        ->at('02:00')
+        ->timezone('UTC')
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/weekly_summary.log'));
+
+Schedule::call(function () {
+    $month = now()->month;
+    $year = now()->year;
+    \Illuminate\Support\Facades\Artisan::call('weekly:generate-for-month', [
+        '--month' => $month,
+        '--year' => $year,
+    ]);
+})
+        ->name('weekly-summary-sunday')
+        ->sundays()
+        ->at('02:00')
+        ->timezone('UTC')
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/weekly_summary.log'));
+
+// Update has_working_today tag for users at midnight (00:00) in their timezone
+Schedule::command('onesignal:update-working-day-status --time=00:00')
+        ->hourly() // Changed from dailyAt to hourly for timezone-based filtering
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+// Update has_working_today tag for users at 11:10 AM in their timezone
+Schedule::command('onesignal:update-working-day-status --time=11:10')
+        ->hourly() // Changed from dailyAt to hourly for timezone-based filtering
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/scheduler.log'));
+
+// -------------------------
+// Sync all user tags to OneSignal every 5 minutes
+// This ensures all tags (user_type, has_working_today, timezone, has_submitted_today, 
+// email_subscribed, status, name) are up to date in OneSignal
+// Changed from everyMinute() to everyFiveMinutes() to avoid API rate limits
+// -------------------------
+Schedule::command('onesignal:sync-all-tags')
+        ->everyFiveMinutes()
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/onesignal-sync.log'));
+
+// Keep OneSignal subscriptions in sync with billing access.
+// Users with no active subscription access are removed/unsubscribed from OneSignal.
+Schedule::command('onesignal:sync-subscription-status')
+        ->hourly()
+        ->withoutOverlapping()
+        ->appendOutputTo(storage_path('logs/onesignal-subscription-sync.log'));

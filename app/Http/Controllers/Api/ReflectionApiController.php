@@ -1,0 +1,1049 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use App\Models\Reflection;
+use App\Models\ReflectionMessage;
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * @OA\Tag(
+ *     name="Reflections",
+ *     description="Reflection management endpoints for creating, viewing, and managing user reflections and chat messages"
+ * )
+ */
+class ReflectionApiController extends Controller
+{
+    /**
+     * @OA\Get(
+     *     path="/api/reflections",
+     *     tags={"Reflections"},
+     *     summary="Get user's reflection list",
+     *     description="Retrieve all reflections for the authenticated user. Returns reflections ordered by most recent first.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Response(
+     *         response=200,
+     *         description="Reflections retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="array",
+     *                 @OA\Items(
+     *                     @OA\Property(property="id", type="integer", example=1),
+     *                     @OA\Property(property="topic", type="string", example="Work-life balance"),
+     *                     @OA\Property(property="message", type="string", example="I need to improve my work-life balance"),
+     *                     @OA\Property(property="status", type="string", example="new", enum={"new", "inprogress", "resolved"}),
+     *                     @OA\Property(property="image", type="string", nullable=true, example="http://example.com/storage/hptm_files/image1.jpg", description="First image URL (for backward compatibility)"),
+     *                     @OA\Property(property="images", type="array", @OA\Items(type="string", example="http://example.com/storage/hptm_files/image1.jpg"), description="Array of all image URLs"),
+     *                     @OA\Property(property="created_at", type="string", example="2026-01-13 10:30 AM"),
+     *                     @OA\Property(property="unread_count", type="integer", example=2, description="Number of unread messages from admin/other users")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthenticated")
+     *         )
+     *     )
+     * )
+     */
+    public function list(Request $request)
+    {
+        $user = Auth::user();
+
+        $reflections = Reflection::where('userId', $user->id)
+            ->orderByDesc('id')
+            ->get()
+            ->map(function($r) use ($user){
+                // Handle multiple images (JSON array) or single image
+                $images = [];
+                if ($r->image) {
+                    $decoded = json_decode($r->image, true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                        // Multiple images stored as JSON array
+                        foreach ($decoded as $fileName) {
+                            $images[] = url('storage/hptm_files/' . $fileName);
+                        }
+                    } else {
+                        // Single image stored as string (backward compatibility)
+                        $images[] = url('storage/hptm_files/' . $r->image);
+                    }
+                }
+
+                // Count unread messages (messages from admin/other users created after last_viewed_at)
+                $unreadCount = 0;
+                if ($r->userId === $user->id) {
+                    $unreadQuery = ReflectionMessage::where('reflectionId', $r->id)
+                        ->where('sendFrom', '!=', $r->userId) // Messages not from reflection owner (i.e., from admin)
+                        ->where('status', 'Active');
+                    
+                    // Only count messages created after last_viewed_at
+                    // If last_viewed_at is null, count all admin messages as unread
+                    if ($r->last_viewed_at) {
+                        $unreadQuery->where('created_at', '>', $r->last_viewed_at);
+                    }
+                    
+                    $unreadCount = $unreadQuery->count();
+                }
+
+                return [
+                    'id' => $r->id,
+                    'topic' => $r->topic,
+                    'message' => $r->message,
+                    'status' => $r->status,
+                    'image' => !empty($images) ? $images[0] : null, // Keep for backward compatibility
+                    'images' => $images, // Array of all image URLs
+                    'created_at' => $r->created_at->format('Y-m-d H:i A'),
+                    'unread_count' => $unreadCount, // Unread message count
+                ];
+            });
+
+        return response()->json(['status' => true, 'data' => $reflections]);
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/reflections",
+     *     tags={"Reflections"},
+     *     summary="Create a new reflection",
+     *     description="Create a new reflection for the authenticated user. Supports multiple image attachments (up to 10 images, max 5MB each). For mobile apps, send images as 'images[]' array in multipart/form-data.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 required={"topic", "message"},
+     *                 @OA\Property(property="topic", type="string", maxLength=255, example="Work-life balance", description="Reflection topic"),
+     *                 @OA\Property(property="message", type="string", example="I need to improve my work-life balance", description="Reflection message"),
+     *                 @OA\Property(property="image", type="string", format="binary", description="Optional single image file (for backward compatibility, max 5MB)"),
+     *                 @OA\Property(property="images[]", type="array", @OA\Items(type="string", format="binary"), description="Optional multiple image files (up to 10 images, max 5MB each). Use this for mobile apps.")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Reflection created successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Reflection created successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="userId", type="integer", example=1),
+     *                 @OA\Property(property="orgId", type="integer", nullable=true, example=1),
+     *                 @OA\Property(property="topic", type="string", example="Work-life balance"),
+     *                 @OA\Property(property="message", type="string", example="I need to improve my work-life balance"),
+     *                 @OA\Property(property="status", type="string", example="new"),
+     *                 @OA\Property(property="image", type="string", nullable=true, example="image1.jpg", description="First image filename (for backward compatibility)"),
+     *                 @OA\Property(property="images", type="array", @OA\Items(type="string", example="http://example.com/storage/hptm_files/image1.jpg"), description="Array of all image URLs"),
+     *                 @OA\Property(property="created_at", type="string", format="date-time"),
+     *                 @OA\Property(property="updated_at", type="string", format="date-time")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthenticated")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Validation error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="The given data was invalid."),
+     *             @OA\Property(
+     *                 property="errors",
+     *                 type="object",
+     *                 @OA\Property(
+     *                     property="topic",
+     *                     type="array",
+     *                     @OA\Items(type="string", example="The topic field is required.")
+     *                 ),
+     *                 @OA\Property(
+     *                     property="message",
+     *                     type="array",
+     *                     @OA\Items(type="string", example="The message field is required.")
+     *                 ),
+     *                 @OA\Property(
+     *                     property="images.0",
+     *                     type="array",
+     *                     @OA\Items(type="string", example="The images.0 may not be greater than 5120 kilobytes.")
+     *                 )
+     *             )
+     *         )
+     *     )
+     * )
+     */
+    public function create(Request $request)
+    {
+        $user = Auth::user();
+
+        $validated = $request->validate([
+            'topic' => 'required|string|max:255',
+            'message' => 'required|string',
+            'image' => 'nullable|image|max:5120', // Single image (backward compatibility, max 5MB)
+            'images' => 'nullable|array|max:10', // Multiple images array (up to 10 images)
+            'images.*' => 'nullable|image|max:5120', // Each image max 5MB
+        ]);
+
+        $imageData = null;
+        $imageUrls = [];
+
+        // Handle multiple images (preferred for mobile apps)
+        if ($request->hasFile('images')) {
+            $imageFiles = $request->file('images');
+            $imageNames = [];
+            
+            foreach ($imageFiles as $imageFile) {
+                $path = $imageFile->store('public/hptm_files');
+                $fileName = basename($path);
+                $imageNames[] = $fileName;
+                $imageUrls[] = url('storage/hptm_files/' . $fileName);
+            }
+            
+            // Store as JSON array
+            $imageData = json_encode($imageNames);
+        }
+        // Handle single image (backward compatibility)
+        elseif ($request->hasFile('image')) {
+            $path = $request->file('image')->store('public/hptm_files');
+            $fileName = basename($path);
+            $imageData = $fileName; // Store as string for backward compatibility
+            $imageUrls[] = url('storage/hptm_files/' . $fileName);
+        }
+
+        $reflection = Reflection::create([
+            'userId' => $user->id,
+            'orgId' => $user->orgId,
+            'topic' => $validated['topic'],
+            'message' => $validated['message'],
+            'image' => $imageData,
+            'status' => 'new',
+        ]);
+
+        // Send notification to all admins about new reflection
+        $this->sendNotificationToAdminOnCreate($reflection, $user);
+
+        // Add image URLs to response
+        $reflection->images = $imageUrls;
+        $reflection->image = !empty($imageUrls) ? $imageUrls[0] : null; // Backward compatibility
+
+        return response()->json(['status' => true, 'message' => 'Reflection created successfully', 'data' => $reflection]);
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/api/reflections/{reflection}/chats",
+     *     tags={"Reflections"},
+     *     summary="Get chat messages for a reflection",
+     *     description="Retrieve all chat messages for a specific reflection. Only the reflection owner can access the chat.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="reflection",
+     *         in="path",
+     *         required=true,
+     *         description="Reflection ID",
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Chat messages retrieved successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="array",
+     *                 @OA\Items(
+     *                     @OA\Property(property="from", type="integer", example=1, description="User ID who sent the message"),
+     *                     @OA\Property(property="message", type="string", example="How can I help you with this?", description="Chat message text"),
+     *                     @OA\Property(property="file", type="string", nullable=true, example="http://example.com/storage/hptm_files/file.jpg", description="First file URL (for backward compatibility)"),
+     *                     @OA\Property(property="files", type="array", @OA\Items(type="string", example="http://example.com/storage/hptm_files/file.jpg"), description="Array of all file URLs if message has attachments"),
+     *                     @OA\Property(property="time", type="string", example="2026-01-13 10:30 AM", description="Message timestamp"),
+     *                     @OA\Property(property="isMe", type="boolean", example=true, description="Whether the message is from the authenticated user")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthenticated")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Reflection not found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Reflection not found")
+     *         )
+     *     )
+     * )
+     */
+    public function chats($reflectionId)
+    {
+        $user = Auth::user();
+
+        $reflection = Reflection::where('id', $reflectionId)
+            ->where('userId', $user->id)
+            ->first();
+
+        if (!$reflection) {
+            return response()->json(['status' => false, 'message' => 'Reflection not found'], 404);
+        }
+
+        $messages = ReflectionMessage::where('reflectionId', $reflectionId)
+            ->where('status', 'Active')
+            ->with('user')
+            ->orderBy('id', 'asc')
+            ->get()
+            ->map(function($msg) use ($user) {
+                // Handle multiple files (JSON array) or single file
+                $files = [];
+                if ($msg->file) {
+                    $decoded = json_decode($msg->file, true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                        // Multiple files stored as JSON array
+                        foreach ($decoded as $fileName) {
+                            $files[] = url('storage/hptm_files/' . $fileName);
+                        }
+                    } else {
+                        // Single file stored as string (backward compatibility)
+                        $files[] = url('storage/hptm_files/' . $msg->file);
+                    }
+                }
+
+                return [
+                    'from' => $msg->sendFrom,
+                    'message' => $msg->message,
+                    'file' => !empty($files) ? $files[0] : null, // Keep for backward compatibility
+                    'files' => $files, // Array of all file URLs
+                    'time' => $msg->created_at->format('Y-m-d H:i A'),
+                    'isMe' => $msg->sendFrom == $user->id,
+                ];
+            });
+
+        return response()->json(['status' => true, 'data' => $messages]);
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/reflections/{reflection}/chats",
+     *     tags={"Reflections"},
+     *     summary="Send a chat message to a reflection",
+     *     description="Send a chat message (text and/or file) to a specific reflection. Only the reflection owner can send messages.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="reflection",
+     *         in="path",
+     *         required=true,
+     *         description="Reflection ID",
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\MediaType(
+     *             mediaType="multipart/form-data",
+     *             @OA\Schema(
+     *                 @OA\Property(property="message", type="string", nullable=true, example="How can I help you with this?", description="Chat message text (required if files are not provided)"),
+     *                 @OA\Property(property="file", type="string", format="binary", nullable=true, description="Optional single file attachment (max 2MB, for backward compatibility)"),
+     *                 @OA\Property(property="files[]", type="array", @OA\Items(type="string", format="binary"), nullable=true, description="Optional multiple file attachments (up to 10 files, max 2MB each). Use this for mobile apps.")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Message sent successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Message sent successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="sendFrom", type="integer", example=1),
+     *                 @OA\Property(property="sendTo", type="integer", example=1),
+     *                 @OA\Property(property="reflectionId", type="integer", example=1),
+     *                 @OA\Property(property="message", type="string", nullable=true, example="How can I help you with this?"),
+     *                 @OA\Property(property="file", type="string", nullable=true, example="file.jpg", description="First file filename (for backward compatibility)"),
+     *                 @OA\Property(property="files", type="array", @OA\Items(type="string", example="http://example.com/storage/hptm_files/file.jpg"), description="Array of all file URLs"),
+     *                 @OA\Property(property="status", type="string", example="Active"),
+     *                 @OA\Property(property="created_at", type="string", format="date-time"),
+     *                 @OA\Property(property="updated_at", type="string", format="date-time")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthenticated")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Reflection not found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Reflection not found")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Validation error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="The given data was invalid."),
+     *             @OA\Property(
+     *                 property="errors",
+     *                 type="object",
+     *                 @OA\Property(
+     *                     property="file",
+     *                     type="array",
+     *                     @OA\Items(type="string", example="The file may not be greater than 2048 kilobytes.")
+     *                 )
+     *             )
+     *         )
+     *     )
+     * )
+     */
+    public function sendChat(Request $request, $reflectionId)
+    {
+        $user = Auth::user();
+
+        // Check if user is admin - admins can send to any reflection
+        $isAdmin = $user->hasRole('super_admin');
+        
+        if ($isAdmin) {
+            $reflection = Reflection::where('id', $reflectionId)->first();
+        } else {
+            // Regular users can only send to their own reflections
+            $reflection = Reflection::where('id', $reflectionId)
+                ->where('userId', $user->id)
+                ->first();
+        }
+
+        if (!$reflection) {
+            return response()->json(['status' => false, 'message' => 'Reflection not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'message' => 'nullable|string',
+            'file' => 'nullable|file|max:2048', // Single file (backward compatibility)
+            'files' => 'nullable|array|max:10', // Multiple files array (up to 10 files)
+            'files.*' => 'nullable|file|max:2048', // Each file max 2MB
+        ]);
+
+        // Determine sendTo: if admin, send to reflection owner; if user, send to reflection owner (for consistency)
+        $sendTo = $reflection->userId;
+        
+        $data = [
+            'sendFrom' => $user->id,
+            'sendTo' => $sendTo,
+            'reflectionId' => $reflection->id,
+            'status' => 'Active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        if (!empty($validated['message'])) $data['message'] = $validated['message'];
+
+        $fileData = null;
+        $fileUrls = [];
+
+        // Handle multiple files (preferred for mobile apps)
+        if ($request->hasFile('files')) {
+            $fileUploads = $request->file('files');
+            $fileNames = [];
+            
+            foreach ($fileUploads as $fileUpload) {
+                $path = $fileUpload->store('public/hptm_files');
+                $fileName = basename($path);
+                $fileNames[] = $fileName;
+                $fileUrls[] = url('storage/hptm_files/' . $fileName);
+            }
+            
+            // Store as JSON array
+            $fileData = json_encode($fileNames);
+        }
+        // Handle single file (backward compatibility)
+        elseif ($request->hasFile('file')) {
+            $path = $request->file('file')->store('public/hptm_files');
+            $fileName = basename($path);
+            $fileData = $fileName; // Store as string for backward compatibility
+            $fileUrls[] = url('storage/hptm_files/' . $fileName);
+        }
+
+        if ($fileData) {
+            $data['file'] = $fileData;
+        }
+
+        $msg = ReflectionMessage::create($data);
+
+        // Send notifications based on who is sending
+        if ($isAdmin) {
+            // Admin is replying - notify the user
+            $this->sendNotificationToUserOnAdminReply($reflectionId, $user, $reflection);
+        } else {
+            // User is replying - notify admin
+            $this->sendNotificationToAdminOnReply($reflectionId, $user);
+        }
+
+        // Add file URLs to response
+        $msg->files = $fileUrls;
+        $msg->file = !empty($fileUrls) ? $fileUrls[0] : null; // Backward compatibility
+
+        return response()->json(['status' => true, 'message' => 'Message sent successfully', 'data' => $msg]);
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/reflections/update-status",
+     *     tags={"Reflections"},
+     *     summary="Update reflection status",
+     *     description="Update the status of a reflection. Users can only update their own reflections, unless they are super_admin.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"status", "id"},
+     *             @OA\Property(property="id", type="integer", example=1, description="Reflection ID"),
+     *             @OA\Property(property="status", type="string", enum={"inprogress", "resolved"}, example="inprogress", description="New status for the reflection")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Reflection status updated successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Reflection status updated successfully."),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="reflection_id", type="integer", example=1),
+     *                 @OA\Property(property="status", type="string", example="inprogress")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthorized")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Forbidden - User does not have permission to update this reflection",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Forbidden: You do not have permission to update this reflection.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Reflection not found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Reflection not found")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Validation error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="message", type="string", example="The given data was invalid."),
+     *             @OA\Property(
+     *                 property="errors",
+     *                 type="object",
+     *                 @OA\Property(
+     *                     property="status",
+     *                     type="array",
+     *                     @OA\Items(type="string", example="The selected status is invalid.")
+     *                 ),
+     *                 @OA\Property(
+     *                     property="id",
+     *                     type="array",
+     *                     @OA\Items(type="string", example="The id field is required.")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Server error",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Something went wrong. Please try again later.")
+     *         )
+     *     )
+     * )
+     */
+	public function statusReflection(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 401);
+            }
+
+            $request->validate([
+                'status' => 'required|in:inprogress,resolved',
+                'id' => 'required',
+            ]);
+
+            $newStatus = $request->input('status');
+            $id = $request->input('id');
+
+            $reflection = Reflection::find($id);
+            if (!$reflection) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Reflection not found'
+                ], 404);
+            }
+
+            if ($reflection->userId !== $user->id && !$user->hasRole('super_admin')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Forbidden: You do not have permission to update this reflection.'
+                ], 403);
+            }
+
+            $reflection->status = $newStatus;
+            $reflection->save();
+
+            \Log::info('Reflection status updated by user', [
+                'reflection_id' => $reflection->id,
+                'new_status' => $newStatus,
+                'user_id' => $user->id,
+                'user_role' => $user->getRoleNames()->first()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Reflection status updated successfully.',
+                'data' => [
+                    'reflection_id' => $reflection->id,
+                    'status' => $reflection->status,
+                ]
+            ], 200);
+        } catch (\Throwable $e) {
+            \Log::error('Error updating reflection status', ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Something went wrong. Please try again later.'
+            ], 500);
+        }
+    }
+
+    /**
+     * @OA\Post(
+     *     path="/api/reflections/{reflection}/mark-read",
+     *     tags={"Reflections"},
+     *     summary="Mark reflection messages as read",
+     *     description="Mark all messages for a specific reflection as read by updating the last_viewed_at timestamp. Only the reflection owner can mark messages as read.",
+     *     security={{"bearerAuth":{}}},
+     *     @OA\Parameter(
+     *         name="reflection",
+     *         in="path",
+     *         required=true,
+     *         description="Reflection ID",
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Messages marked as read successfully",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Messages marked as read successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="reflection_id", type="integer", example=1),
+     *                 @OA\Property(property="last_viewed_at", type="string", format="date-time", example="2026-01-27T16:30:00.000000Z")
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Unauthorized",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Unauthenticated")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=403,
+     *         description="Forbidden - User does not have permission to mark messages as read for this reflection",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="You do not have permission to mark messages as read for this reflection.")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Reflection not found",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Reflection not found")
+     *         )
+     *     )
+     * )
+     */
+    public function markAsRead($reflectionId)
+    {
+        $user = Auth::user();
+
+        $reflection = Reflection::where('id', $reflectionId)
+            ->where('userId', $user->id)
+            ->first();
+
+        if (!$reflection) {
+            return response()->json(['status' => false, 'message' => 'Reflection not found'], 404);
+        }
+
+        // Security check: only reflection owner can mark messages as read
+        if ($reflection->userId !== $user->id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission to mark messages as read for this reflection.'
+            ], 403);
+        }
+
+        // Update last_viewed_at to mark all messages as read
+        $reflection->last_viewed_at = now();
+        $reflection->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Messages marked as read successfully',
+            'data' => [
+                'reflection_id' => $reflection->id,
+                'last_viewed_at' => $reflection->last_viewed_at->toIso8601String(),
+            ]
+        ]);
+    }
+
+    private function sendNotificationToAdminOnCreate($reflection, $user)
+    {
+        if (!$reflection) return;
+
+        // Don't send notification if the user creating reflection is an admin
+        if ($user->hasRole('super_admin')) {
+            return;
+        }
+
+        $userName = $user->name ?? 'User';
+
+        // Get all active super_admin users
+        try {
+            $adminIds = User::role('super_admin', 'web')
+                ->whereIn('status', ['active_verified', 'active_unverified'])
+                ->pluck('id')
+                ->toArray();
+        } catch (\Spatie\Permission\Exceptions\RoleDoesNotExist $e) {
+            // Try to create the role if it doesn't exist
+            try {
+                $role = \Spatie\Permission\Models\Role::firstOrCreate(
+                    ['name' => 'super_admin', 'guard_name' => 'web']
+                );
+                
+                // Now try to get admin users again
+                $adminIds = User::role('super_admin', 'web')
+                    ->where('status', 'Active')
+                    ->pluck('id')
+                    ->toArray();
+            } catch (\Exception $createException) {
+                $adminIds = [];
+            }
+        }
+
+        if (empty($adminIds)) {
+            return;
+        }
+
+        // Send notification to each admin
+        foreach ($adminIds as $adminId) {
+            $adminUser = User::where('id', $adminId)
+                ->whereIn('status', ['active_verified', 'active_unverified'])
+                ->first();
+            if (!$adminUser) continue;
+
+            $notificationTitle = 'New Reflection Created';
+            $notificationDescription = "{$userName} has created a new reflection: {$reflection->topic}";
+
+            // Get notification badge count
+            $totbadge = \App\Models\IotNotification::where('to_bubble_user_id', $adminId)
+                ->where('archive', false)
+                ->where('status', 'Active')
+                ->where(function($q) {
+                    $q->where(function($subQuery) {
+                        $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                                 ->orWhereNull('notificationType');
+                    })
+                    ->where(function($subQuery) {
+                        $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                                 ->orWhereNull('title');
+                    });
+                })
+                ->count();
+
+            $notificationArray = [
+                'to_bubble_user_id' => $adminId,
+                'from_bubble_user_id' => $user->id,
+                'title' => $notificationTitle,
+                'description' => $notificationDescription,
+                'notificationType' => 'reflectionChat',
+                'notificationLinks' => route('admin.reflections.index'), // Link to reflection list
+                'status' => 'Active',
+                'archive' => false,
+                'created_at' => now(),
+                'updated_at' => now()
+            ];
+
+            $notificationId = DB::table('iot_notifications')->insertGetId($notificationArray);
+
+            // Send push notification via OneSignal if admin has fcmToken
+            if (!empty($adminUser->fcmToken) && preg_match('/^[a-z0-9-]{8,}$/i', $adminUser->fcmToken)) {
+                try {
+                    $oneSignal = app(\App\Services\OneSignalService::class);
+                    $oneSignal->sendNotification(
+                        $notificationTitle,
+                        $notificationDescription,
+                        [$adminUser->fcmToken]
+                    );
+                    \Log::info('✅ OneSignal notification sent to admin on reflection create', [
+                        'admin_id' => $adminId,
+                        'reflection_id' => $reflection->id,
+                    ]);
+                } catch (\Throwable $e) {
+                    \Log::error('❌ Failed to send OneSignal notification to admin on reflection create', [
+                        'admin_id' => $adminId,
+                        'reflection_id' => $reflection->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+    }
+
+    private function sendNotificationToAdminOnReply($reflectionId, $user)
+    {
+        $reflection = Reflection::find($reflectionId);
+        if (!$reflection) return;
+
+        $userName = $user->name ?? 'User';
+
+        // Find all admins who have sent messages in this reflection
+        $adminIds = ReflectionMessage::where('reflectionId', $reflectionId)
+            ->where('sendFrom', '!=', $reflection->userId) // Messages not from reflection owner (i.e., from admin)
+            ->where('status', 'Active')
+            ->distinct()
+            ->pluck('sendFrom')
+            ->toArray();
+
+        // Also include all super_admin users if no admin has messaged yet
+        if (empty($adminIds)) {
+            try {
+                $adminIds = User::role('super_admin', 'web')
+                    ->whereIn('status', ['active_verified', 'active_unverified'])
+                    ->pluck('id')
+                    ->toArray();
+            } catch (\Spatie\Permission\Exceptions\RoleDoesNotExist $e) {
+                // Try to create the role if it doesn't exist
+                try {
+                    $role = \Spatie\Permission\Models\Role::firstOrCreate(
+                        ['name' => 'super_admin', 'guard_name' => 'web']
+                    );
+                    $adminIds = User::role('super_admin', 'web')
+                        ->whereIn('status', ['active_verified', 'active_unverified'])
+                        ->pluck('id')
+                        ->toArray();
+                } catch (\Exception $createException) {
+                    $adminIds = [];
+                }
+            }
+        }
+
+        // Remove duplicates
+        $adminIds = array_unique($adminIds);
+
+        // Send notification to each admin
+        foreach ($adminIds as $adminId) {
+            $adminUser = User::where('id', $adminId)
+                ->whereIn('status', ['active_verified', 'active_unverified'])
+                ->first();
+            if (!$adminUser) continue;
+
+            $notificationTitle = 'New Reflection Reply';
+            $notificationDescription = "{$userName} has replied to reflection: {$reflection->topic}";
+
+            // Get notification badge count
+            $totbadge = \App\Models\IotNotification::where('to_bubble_user_id', $adminId)
+                ->where('archive', false)
+                ->where('status', 'Active')
+                ->where(function($q) {
+                    $q->where(function($subQuery) {
+                        $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                                 ->orWhereNull('notificationType');
+                    })
+                    ->where(function($subQuery) {
+                        $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                                 ->orWhereNull('title');
+                    });
+                })
+                ->count();
+
+            $notificationArray = [
+                'to_bubble_user_id' => $adminId,
+                'from_bubble_user_id' => $user->id,
+                'title' => $notificationTitle,
+                'description' => $notificationDescription,
+                'notificationType' => 'reflectionChat',
+                'notificationLinks' => route('admin.reflections.index'),
+                'status' => 'Active',
+                'archive' => false,
+                'created_at' => now(),
+                'updated_at' => now()
+            ];
+
+            try {
+                $notificationId = DB::table('iot_notifications')->insertGetId($notificationArray);
+
+                // Send push notification via OneSignal if admin has fcmToken
+                if (!empty($adminUser->fcmToken) && preg_match('/^[a-z0-9-]{8,}$/i', $adminUser->fcmToken)) {
+                    try {
+                        $oneSignal = app(\App\Services\OneSignalService::class);
+                        $oneSignal->sendNotification(
+                            $notificationTitle,
+                            $notificationDescription,
+                            [$adminUser->fcmToken]
+                        );
+                    } catch (\Throwable $e) {
+                        \Log::error('❌ Failed to send OneSignal notification to admin on reply', [
+                            'admin_id' => $adminId,
+                            'reflection_id' => $reflectionId,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::error('❌ Failed to send FCM notification to admin on reply', [
+                    'admin_id' => $adminId,
+                    'reflection_id' => $reflectionId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    private function sendNotificationToUserOnAdminReply($reflectionId, $adminUser, $reflection)
+    {
+        if (!$reflection) return;
+
+        $user = User::where('id', $reflection->userId)
+            ->whereIn('status', ['active_verified', 'active_unverified'])
+            ->first();
+        if (!$user) return;
+
+        $adminName = $adminUser->name ?? 'Admin';
+
+        // Check if this is the first admin message
+        $isFirstAdminMessage = ReflectionMessage::where('reflectionId', $reflectionId)
+            ->where('sendFrom', '!=', $reflection->userId) // Messages from admin
+            ->where('id', '!=', ReflectionMessage::where('reflectionId', $reflectionId)->latest()->first()?->id) // Exclude current message
+            ->count() == 0;
+
+        $notificationTitle = $isFirstAdminMessage 
+            ? 'Admin Started Conversation' 
+            : 'New Reflection Message';
+        
+        $notificationDescription = $isFirstAdminMessage
+            ? "Admin {$adminName} has started a conversation about your reflection: {$reflection->topic}"
+            : "You have received a new message from {$adminName} about your reflection: {$reflection->topic}";
+
+        // Get notification badge count
+        $totbadge = \App\Models\IotNotification::where('to_bubble_user_id', $user->id)
+            ->where('archive', false)
+            ->where('status', 'Active')
+            ->where(function($q) {
+                $q->where(function($subQuery) {
+                    $subQuery->where('notificationType', '!=', 'sentiment-reminder')
+                             ->orWhereNull('notificationType');
+                })
+                ->where(function($subQuery) {
+                    $subQuery->where('title', '!=', 'Reminder: Please Update Your Sentiment Index')
+                             ->orWhereNull('title');
+                });
+            })
+            ->count();
+
+        $notificationArray = [
+            'to_bubble_user_id' => $user->id,
+            'from_bubble_user_id' => $adminUser->id,
+            'title' => $notificationTitle,
+            'description' => $notificationDescription,
+            'notificationType' => 'reflectionChat',
+            'notificationLinks' => route('admin.reflections.index'),
+            'status' => 'Active',
+            'archive' => false,
+            'created_at' => now(),
+            'updated_at' => now()
+        ];
+
+        try {
+            $notificationId = DB::table('iot_notifications')->insertGetId($notificationArray);
+
+            // Send push notification via OneSignal if user has fcmToken
+            if (!empty($user->fcmToken) && preg_match('/^[a-z0-9-]{8,}$/i', $user->fcmToken)) {
+                try {
+                    $oneSignal = app(\App\Services\OneSignalService::class);
+                    $oneSignal->sendNotification(
+                        $notificationTitle,
+                        $notificationDescription,
+                        [$user->fcmToken]
+                    );
+                    \Log::info('✅ OneSignal notification sent to user on admin reply', [
+                        'user_id' => $user->id,
+                        'reflection_id' => $reflectionId,
+                    ]);
+                } catch (\Throwable $e) {
+                    \Log::error('❌ Failed to send OneSignal notification to user on admin reply', [
+                        'user_id' => $user->id,
+                        'reflection_id' => $reflectionId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::error('❌ Failed to send FCM notification to user on admin reply', [
+                'user_id' => $user->id,
+                'reflection_id' => $reflectionId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+}

@@ -1,0 +1,900 @@
+<?php
+
+namespace App\Livewire\Admin;
+
+use Livewire\Component;
+use Livewire\WithPagination;
+use App\Models\SubscriptionRecord;
+use App\Models\Organisation;
+use App\Models\Invoice;
+use App\Models\Payment;
+use App\Models\User;
+use App\Services\SubscriptionService;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+
+class ManageSubscriptions extends Component
+{
+    use WithPagination;
+
+    protected $paginationTheme = 'tailwind';
+
+    public $showCreateModal = false;
+    public $showEditModal = false;
+    public $selectedSubscription = null;
+    public $selectedOrganisation = null;
+
+    // Form fields
+    public $organisation_id;
+    public $tier = 'spark';
+    public $user_count = 0;
+    public $status = 'active';
+    public $payment_status = 'paid';
+    public $current_period_start;
+    public $current_period_end;
+    public $next_billing_date;
+    public $notes;
+
+    public $search = '';
+    public $activeTab = 'organisation'; // 'organisation', 'basecamp'
+    
+    // Filter properties
+    public $accountStatusFilter = '';
+    public $paymentStatusFilter = '';
+    public $nextBillingDateFilter = '';
+    
+    // Sorting properties
+    public $sortField = 'created_at'; // Default: latest first
+    public $sortDirection = 'desc'; // 'asc' or 'desc'
+    
+    // Pagination state
+    public $page = 1;
+
+    public function mount()
+    {
+        if (!auth()->user()->hasRole('super_admin')) {
+            abort(403, 'Unauthorized access.');
+        }
+    }
+
+    /**
+     * Validate and sanitize search input to prevent SQL injection
+     */
+    public function updatedSearch()
+    {
+        // Validate search input
+        $this->validate(['search' => 'nullable|string|max:255']);
+        
+        // Escape special characters for LIKE queries to prevent SQL injection
+        if ($this->search) {
+            $this->search = addcslashes($this->search, '%_\\');
+        }
+        $this->resetPage();
+    }
+    
+    public function updatedAccountStatusFilter()
+    {
+        $this->resetPage();
+    }
+    
+    public function updatedPaymentStatusFilter()
+    {
+        $this->resetPage();
+    }
+    
+    public function updatedNextBillingDateFilter()
+    {
+        $this->resetPage();
+    }
+    
+    public function updatedActiveTab()
+    {
+        $this->resetPage();
+    }
+    
+    public function updatedCurrentPeriodStart($value)
+    {
+        // Clear errors when period start changes
+        $this->resetErrorBag(['current_period_start', 'current_period_end', 'next_billing_date']);
+        
+        // If period end is set and is now invalid, adjust or clear it
+        if ($this->current_period_end && $this->current_period_start) {
+            try {
+                $periodStart = \Carbon\Carbon::parse($this->current_period_start);
+                $periodEnd = \Carbon\Carbon::parse($this->current_period_end);
+                
+                // If period end is before or equal to period start, set it to period start + 1 day
+                if ($periodEnd->lte($periodStart)) {
+                    $this->current_period_end = $periodStart->copy()->addDay()->format('Y-m-d');
+                }
+            } catch (\Exception $e) {
+                // If parsing fails, clear the field
+                $this->current_period_end = null;
+            }
+        }
+        
+        // If next billing date is set and is now invalid, adjust it
+        if ($this->next_billing_date && $this->current_period_start) {
+            try {
+                $periodStart = \Carbon\Carbon::parse($this->current_period_start);
+                $nextBilling = \Carbon\Carbon::parse($this->next_billing_date);
+                
+                // If next billing is before period start, set it to period start
+                if ($nextBilling->lt($periodStart)) {
+                    $this->next_billing_date = $periodStart->format('Y-m-d');
+                }
+            } catch (\Exception $e) {
+                // If parsing fails, set to period start
+                if ($this->current_period_start) {
+                    try {
+                        $periodStart = \Carbon\Carbon::parse($this->current_period_start);
+                        $this->next_billing_date = $periodStart->format('Y-m-d');
+                    } catch (\Exception $e2) {
+                        $this->next_billing_date = null;
+                    }
+                }
+            }
+        }
+    }
+    
+    public function updatedCurrentPeriodEnd($value)
+    {
+        // Clear errors first
+        $this->resetErrorBag('current_period_end');
+        
+        // Validate period end when it changes
+        if ($this->current_period_start && $this->current_period_end) {
+            try {
+                $periodStart = \Carbon\Carbon::parse($this->current_period_start);
+                $periodEnd = \Carbon\Carbon::parse($this->current_period_end);
+                
+                if ($periodEnd->lte($periodStart)) {
+                    $this->addError('current_period_end', 'Period End must be after Period Start.');
+                } else {
+                    // Auto-fill Next Billing Date with Period End date
+                    // User can still change it if needed
+                    $this->next_billing_date = $this->current_period_end;
+                    $this->resetErrorBag('next_billing_date');
+                }
+            } catch (\Exception $e) {
+                $this->addError('current_period_end', 'Invalid date format.');
+            }
+        } elseif ($this->current_period_end) {
+            // If Period End is set but Period Start is not, still auto-fill Next Billing Date
+            $this->next_billing_date = $this->current_period_end;
+        }
+    }
+    
+    public function updatedNextBillingDate($value)
+    {
+        // Clear errors first
+        $this->resetErrorBag('next_billing_date');
+        
+        // Validate next billing date when it changes
+        if ($this->current_period_start && $this->next_billing_date) {
+            try {
+                $periodStart = \Carbon\Carbon::parse($this->current_period_start);
+                $nextBilling = \Carbon\Carbon::parse($this->next_billing_date);
+                
+                if ($nextBilling->lt($periodStart)) {
+                    $this->addError('next_billing_date', 'Next Billing Date must be on or after Period Start.');
+                }
+            } catch (\Exception $e) {
+                $this->addError('next_billing_date', 'Invalid date format.');
+            }
+        }
+    }
+    
+    public function clearFilters()
+    {
+        $this->accountStatusFilter = '';
+        $this->paymentStatusFilter = '';
+        $this->nextBillingDateFilter = '';
+        $this->resetPage();
+    }
+    
+    public function sortBy($field)
+    {
+        if ($this->sortField === $field) {
+            // Toggle direction if same field
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            // New field, default to desc for dates, asc for names
+            $this->sortField = $field;
+            $this->sortDirection = in_array($field, ['created_at', 'updated_at', 'next_billing_date', 'current_period_end']) ? 'desc' : 'asc';
+        }
+        $this->resetPage();
+    }
+
+    public function updatedOrganisationId()
+    {
+        if ($this->organisation_id) {
+            // Auto-calculate user count when organisation is selected
+            $this->user_count = \App\Models\User::where('orgId', $this->organisation_id)
+                ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+                ->count();
+            
+            // Get organisation's tier if set
+            $org = Organisation::find($this->organisation_id);
+            if ($org && $org->subscription_tier) {
+                $this->tier = $org->subscription_tier;
+            }
+        }
+    }
+
+    public function openCreateModal()
+    {
+        $this->resetForm();
+        $this->showCreateModal = true;
+        $this->showEditModal = false;
+        $this->current_period_start = now()->toDateString();
+        $this->current_period_end = now()->addMonth()->toDateString();
+        $this->next_billing_date = now()->addMonth()->toDateString();
+    }
+
+    public function openCreateModalForOrganisation($organisationId)
+    {
+        $this->resetForm();
+        $this->organisation_id = $organisationId;
+        
+        // Auto-calculate user count
+        $this->user_count = \App\Models\User::where('orgId', $organisationId)
+            ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+            ->count();
+        
+        // Get organisation's tier if set
+        $org = Organisation::find($organisationId);
+        if ($org && $org->subscription_tier) {
+            $this->tier = $org->subscription_tier;
+        }
+        
+        $this->showCreateModal = true;
+        $this->showEditModal = false;
+        $this->current_period_start = now()->toDateString();
+        $this->current_period_end = now()->addMonth()->toDateString();
+        $this->next_billing_date = now()->addMonth()->toDateString();
+    }
+
+    public function openEditModal($subscriptionId)
+    {
+        \Log::info('openEditModal called with ID: ' . $subscriptionId);
+        $subscription = SubscriptionRecord::findOrFail($subscriptionId);
+        $this->selectedSubscription = $subscription;
+        $this->organisation_id = $subscription->organisation_id;
+        $this->tier = $subscription->tier;
+        $this->user_count = $subscription->user_count;
+        $this->status = $subscription->status;
+        $this->current_period_start = $subscription->current_period_start?->format('Y-m-d');
+        $this->current_period_end = $subscription->current_period_end?->format('Y-m-d');
+        $this->next_billing_date = $subscription->next_billing_date?->format('Y-m-d');
+        
+        // Get payment status from latest invoice
+        $latestInvoice = Invoice::where(function($q) use ($subscription) {
+            if ($subscription->organisation_id) {
+                $q->where('subscription_id', $subscription->id);
+            } else {
+                $q->where('user_id', $subscription->user_id)
+                  ->where('tier', 'basecamp');
+            }
+        })
+        ->orderBy('created_at', 'desc')
+        ->first();
+        
+        $this->payment_status = $latestInvoice && $latestInvoice->status === 'paid' ? 'paid' : 'unpaid';
+        
+        // Reset all modals first
+        $this->showCreateModal = false;
+        
+        // Then set edit modal to true
+        $this->showEditModal = true;
+        
+        \Log::info('Modal state - showEditModal: ' . ($this->showEditModal ? 'true' : 'false'));
+        
+        // Force a render
+        $this->dispatch('modal-opened', ['type' => 'edit']);
+    }
+
+    public function closeModal()
+    {
+        $this->showCreateModal = false;
+        $this->showEditModal = false;
+        $this->resetForm();
+        $this->selectedSubscription = null;
+        $this->selectedOrganisation = null;
+    }
+
+    public function resetForm()
+    {
+        $this->organisation_id = null;
+        $this->tier = 'spark';
+        $this->user_count = 0;
+        $this->status = 'active';
+        $this->payment_status = 'paid';
+        $this->current_period_start = null;
+        $this->current_period_end = null;
+        $this->next_billing_date = null;
+    }
+
+    public function createSubscription()
+    {
+        $this->validate([
+            'organisation_id' => 'required|exists:organisations,id',
+            'tier' => 'required|in:spark,momentum,vision,basecamp',
+            'user_count' => 'required|integer|min:1',
+            'current_period_start' => 'required|date',
+            'current_period_end' => 'required|date|after:current_period_start',
+            'next_billing_date' => 'required|date|after:current_period_start',
+        ]);
+
+        // Get actual user count from organisation
+        $actualUserCount = \App\Models\User::where('orgId', $this->organisation_id)
+            ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+            ->count();
+
+        SubscriptionRecord::create([
+            'organisation_id' => $this->organisation_id,
+            'tier' => $this->tier,
+            'user_count' => $actualUserCount > 0 ? $actualUserCount : $this->user_count,
+            'status' => $this->status,
+            'current_period_start' => $this->current_period_start,
+            'current_period_end' => $this->current_period_end,
+            'next_billing_date' => $this->next_billing_date,
+            'activated_at' => now(),
+        ]);
+
+        // Update organisation tier
+        Organisation::where('id', $this->organisation_id)->update([
+            'subscription_tier' => $this->tier,
+        ]);
+
+        session()->flash('success', 'Subscription created successfully.');
+        $this->closeModal();
+    }
+
+    public function updateSubscription()
+    {
+        // For basecamp tier, organisation_id is not required
+        $rules = [
+            'tier' => 'required|in:spark,momentum,vision,basecamp',
+            'current_period_start' => 'required|date',
+            'current_period_end' => 'required|date',
+            'next_billing_date' => 'required|date',
+        ];
+        
+        // User count is only required for non-basecamp subscriptions
+        if ($this->tier !== 'basecamp') {
+            $rules['organisation_id'] = 'required|exists:organisations,id';
+            $rules['user_count'] = 'required|integer|min:1';
+        }
+        
+        // First validate basic rules
+        $this->validate($rules);
+        
+        // Custom date validation with proper error messages
+        $periodStart = \Carbon\Carbon::parse($this->current_period_start);
+        $periodEnd = \Carbon\Carbon::parse($this->current_period_end);
+        $nextBilling = \Carbon\Carbon::parse($this->next_billing_date);
+        
+        // Validate Period End must be after Period Start
+        if ($periodEnd->lte($periodStart)) {
+            $this->addError('current_period_end', 'Period End must be after Period Start.');
+            return;
+        }
+        
+        // Validate Next Billing Date must be on or after Period Start
+        if ($nextBilling->lt($periodStart)) {
+            $this->addError('next_billing_date', 'Next Billing Date must be on or after Period Start.');
+            return;
+        }
+        
+        // Optional: Validate Next Billing Date should not be too far in the future (e.g., not more than 1 year)
+        if ($nextBilling->gt($periodStart->copy()->addYear())) {
+            $this->addError('next_billing_date', 'Next Billing Date should not be more than 1 year from Period Start.');
+            return;
+        }
+
+        // For basecamp, user_count is always 1
+        $finalUserCount = $this->tier === 'basecamp' ? 1 : $this->user_count;
+        
+        $updateData = [
+            'tier' => $this->tier,
+            'user_count' => $finalUserCount,
+            'status' => $this->status,
+            'current_period_start' => $this->current_period_start,
+            'current_period_end' => $this->current_period_end,
+            'next_billing_date' => $this->next_billing_date,
+        ];
+        
+        // Only update organisation_id if it's not a basecamp subscription
+        if ($this->tier !== 'basecamp' && $this->organisation_id) {
+            $updateData['organisation_id'] = $this->organisation_id;
+        }
+
+        $this->selectedSubscription->update($updateData);
+
+        // Update organisation tier only if it's not basecamp
+        if ($this->tier !== 'basecamp' && $this->organisation_id) {
+            Organisation::where('id', $this->organisation_id)->update([
+                'subscription_tier' => $this->tier,
+            ]);
+        }
+
+        // Update payment status in latest invoice
+        $latestInvoice = Invoice::where(function($q) {
+            if ($this->selectedSubscription->organisation_id) {
+                $q->where('subscription_id', $this->selectedSubscription->id);
+            } else {
+                $q->where('user_id', $this->selectedSubscription->user_id)
+                  ->where('tier', 'basecamp');
+            }
+        })
+        ->orderBy('created_at', 'desc')
+        ->first();
+
+        if ($latestInvoice) {
+            $latestInvoice->update([
+                'status' => $this->payment_status === 'paid' ? 'paid' : 'unpaid',
+            ]);
+        }
+
+        session()->flash('success', 'Subscription updated successfully.');
+        $this->closeModal();
+    }
+
+    public function pauseSubscription($subscriptionId)
+    {
+        $subscription = SubscriptionRecord::findOrFail($subscriptionId);
+        $subscription->update([
+            'status' => 'suspended',
+            'suspended_at' => now(),
+        ]);
+        session()->flash('success', 'Subscription paused successfully.');
+    }
+
+    public function resumeSubscription($subscriptionId)
+    {
+        $subscription = SubscriptionRecord::findOrFail($subscriptionId);
+        $subscription->update([
+            'status' => 'active',
+            'suspended_at' => null,
+        ]);
+        session()->flash('success', 'Subscription resumed successfully.');
+    }
+
+    public function deleteUnpaidSubscription($subscriptionId)
+    {
+        try {
+            $subscription = SubscriptionRecord::findOrFail($subscriptionId);
+            $deleted = app(SubscriptionService::class)->deleteUnpaidSubscriptionRecord($subscription);
+            if ($deleted) {
+                session()->flash('success', 'Unpaid subscription deleted successfully.');
+            } else {
+                session()->flash('error', 'Cannot delete subscription with paid invoices. Please contact support.');
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error deleting unpaid subscription: ' . $e->getMessage());
+            session()->flash('error', 'Failed to delete subscription: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Sync subscription user_count with actual user count
+     */
+    public function syncUserCount($subscriptionId)
+    {
+        try {
+            $subscription = SubscriptionRecord::findOrFail($subscriptionId);
+            
+            // Get actual user count from organisation
+            $actualUserCount = \App\Models\User::where('orgId', $subscription->organisation_id)
+                ->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'))
+                ->count();
+            
+            $oldCount = $subscription->user_count;
+            
+            // Update subscription with actual user count
+            $subscription->update([
+                'user_count' => $actualUserCount,
+            ]);
+            
+            session()->flash('success', "User count synced successfully. Updated from {$oldCount} to {$actualUserCount}.");
+        } catch (\Exception $e) {
+            \Log::error('Error syncing user count: ' . $e->getMessage());
+            session()->flash('error', 'Failed to sync user count: ' . $e->getMessage());
+        }
+    }
+
+    public function getSubscriptionsProperty()
+    {
+        $combined = collect();
+        
+        // Get organisation subscriptions (only if tab is organisation)
+        if ($this->activeTab === 'organisation') {
+            // Fix N+1: Eager load user count and subscription
+            $orgQuery = Organisation::with('subscriptionRecord')
+                ->withCount(['users' => function($q) {
+                    $q->whereDoesntHave('roles', fn($q) => $q->where('name', 'basecamp'));
+                }])
+                ->when($this->search, function($q) {
+                    $q->where('name', 'like', '%' . $this->search . '%');
+                })
+                ->orderBy('name', 'asc')
+                ->get();
+            
+            // Get all subscription IDs and organisation IDs for batch invoice query
+            $subscriptionIds = $orgQuery->pluck('subscriptionRecord.id')->filter()->toArray();
+            $organisationIds = $orgQuery->pluck('id')->toArray();
+            
+            // Fix N+1: Optimized batch fetch - get only latest invoice per subscription/organisation
+            // Order by created_at desc, then group to get latest per subscription/organisation
+            $latestInvoices = Invoice::where(function($q) use ($subscriptionIds, $organisationIds) {
+                if (!empty($subscriptionIds)) {
+                    $q->whereIn('subscription_id', $subscriptionIds);
+                }
+                if (!empty($organisationIds)) {
+                    if (!empty($subscriptionIds)) {
+                        $q->orWhereIn('organisation_id', $organisationIds);
+                    } else {
+                        $q->whereIn('organisation_id', $organisationIds);
+                    }
+                }
+            })
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->groupBy(function($invoice) {
+                // Group by subscription_id first, then fallback to organisation_id
+                return $invoice->subscription_id ?? 'org_' . $invoice->organisation_id;
+            })
+            ->map(function($invoices) {
+                return $invoices->first(); // Get the latest invoice for each group
+            });
+            
+            // Create a map for quick lookup: subscription_id => invoice, organisation_id => invoice
+            $invoiceMap = [];
+            foreach ($latestInvoices as $invoice) {
+                if ($invoice->subscription_id) {
+                    $invoiceMap['sub_' . $invoice->subscription_id] = $invoice;
+                }
+                if ($invoice->organisation_id) {
+                    $invoiceMap['org_' . $invoice->organisation_id] = $invoice;
+                }
+            }
+            
+            // Add organisation subscriptions
+            foreach ($orgQuery as $org) {
+                $subscription = $org->subscriptionRecord;
+                
+                // Get latest invoice payment status from map
+                $paymentStatus = 'unpaid';
+                if ($subscription) {
+                    $invoice = $invoiceMap['sub_' . $subscription->id] ?? $invoiceMap['org_' . $org->id] ?? null;
+                    if ($invoice) {
+                        $paymentStatus = $invoice->status === 'paid' ? 'paid' : 'unpaid';
+                    }
+                } else {
+                    // Check organisation-level invoice if no subscription
+                    $invoice = $invoiceMap['org_' . $org->id] ?? null;
+                    if ($invoice) {
+                        $paymentStatus = $invoice->status === 'paid' ? 'paid' : 'unpaid';
+                    }
+                }
+                
+                $combined->push([
+                    'type' => 'organisation',
+                    'id' => $org->id,
+                    'name' => $org->name,
+                    'subscription' => $subscription,
+                    'user_count' => $org->users_count ?? 0, // Use eager-loaded count
+                    'payment_status' => $paymentStatus,
+                ]);
+            }
+        }
+        
+        // Get basecamp user subscriptions (only if tab is basecamp)
+        if ($this->activeTab === 'basecamp') {
+            $basecampSubscriptions = SubscriptionRecord::where('tier', 'basecamp')
+                ->whereNotNull('user_id')
+                ->with('user')
+                ->when($this->search, function($q) {
+                    // Search is already sanitized in updatedSearch() method
+                    $q->whereHas('user', function($userQuery) {
+                        $userQuery->where('first_name', 'like', '%' . $this->search . '%')
+                            ->orWhere('last_name', 'like', '%' . $this->search . '%')
+                            ->orWhere('email', 'like', '%' . $this->search . '%');
+                    });
+                })
+                ->orderBy('created_at', 'desc')
+                ->get();
+            
+            // Fix N+1: Batch fetch latest invoices for all basecamp subscriptions
+            $subscriptionIds = $basecampSubscriptions->pluck('id')->toArray();
+            $userIds = $basecampSubscriptions->pluck('user_id')->filter()->toArray();
+            
+            // Initialize invoice map
+            $invoiceMap = [];
+            
+            // Only query if we have IDs to search for
+            if (!empty($subscriptionIds) || !empty($userIds)) {
+                $latestInvoices = Invoice::where(function($q) use ($subscriptionIds, $userIds) {
+                    if (!empty($subscriptionIds)) {
+                        $q->whereIn('subscription_id', $subscriptionIds);
+                    }
+                    if (!empty($userIds)) {
+                        if (!empty($subscriptionIds)) {
+                            $q->orWhere(function($q2) use ($userIds) {
+                                $q2->whereIn('user_id', $userIds)
+                                   ->where('tier', 'basecamp');
+                            });
+                        } else {
+                            $q->where(function($q2) use ($userIds) {
+                                $q2->whereIn('user_id', $userIds)
+                                   ->where('tier', 'basecamp');
+                            });
+                        }
+                    }
+                })
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->groupBy(function($invoice) {
+                    // Group by subscription_id first, then user_id
+                    return $invoice->subscription_id ?? 'user_' . $invoice->user_id;
+                })
+                ->map(function($invoices) {
+                    return $invoices->first(); // Get the latest invoice for each group
+                });
+                
+                // Create a map for quick lookup
+                foreach ($latestInvoices as $invoice) {
+                    if ($invoice->subscription_id) {
+                        $invoiceMap['sub_' . $invoice->subscription_id] = $invoice;
+                    }
+                    if ($invoice->user_id) {
+                        $invoiceMap['user_' . $invoice->user_id] = $invoice;
+                    }
+                }
+            }
+            
+            // Add basecamp user subscriptions
+            foreach ($basecampSubscriptions as $subscription) {
+                $user = $subscription->user;
+                
+                // Get latest invoice payment status from map
+                $invoice = $invoiceMap['sub_' . $subscription->id] ?? $invoiceMap['user_' . $subscription->user_id] ?? null;
+                $paymentStatus = 'unpaid';
+                if ($invoice) {
+                    $paymentStatus = $invoice->status === 'paid' ? 'paid' : 'unpaid';
+                }
+                
+                $combined->push([
+                    'type' => 'basecamp',
+                    'id' => $subscription->id,
+                    'name' => $user ? ($user->first_name . ' ' . $user->last_name) : 'Unknown User',
+                    'email' => $user ? $user->email : '',
+                    'subscription' => $subscription,
+                    'user' => $user,
+                    'user_count' => 1, // Basecamp is always single user
+                    'payment_status' => $paymentStatus,
+                ]);
+            }
+        }
+        
+        // Apply filters
+        $filtered = $combined->filter(function($item) {
+            // Account Status Filter
+            if (!empty($this->accountStatusFilter)) {
+                $subscription = $item['subscription'] ?? null;
+                if (!$subscription) {
+                    // If no subscription and filter is set, exclude unless filter is "inactive"
+                    if ($this->accountStatusFilter !== 'inactive') {
+                        return false;
+                    }
+                } else {
+                    $status = strtolower($subscription->status);
+                    $filterStatus = strtolower($this->accountStatusFilter);
+                    
+                    // Map filter values to subscription statuses
+                    if ($filterStatus === 'active' && $status !== 'active') {
+                        return false;
+                    }
+                    if ($filterStatus === 'inactive' && !in_array($status, ['inactive', 'canceled', 'past_due'])) {
+                        return false;
+                    }
+                    if ($filterStatus === 'paused' && $status !== 'suspended') {
+                        return false;
+                    }
+                }
+            }
+            
+            // Payment Status Filter
+            if (!empty($this->paymentStatusFilter)) {
+                $paymentStatus = $item['payment_status'] ?? 'unpaid';
+                $filterPaymentStatus = strtolower($this->paymentStatusFilter);
+                
+                if ($filterPaymentStatus === 'paid' && $paymentStatus !== 'paid') {
+                    return false;
+                }
+                if ($filterPaymentStatus === 'unpaid' && $paymentStatus !== 'unpaid') {
+                    return false;
+                }
+                // Future-ready: Failed and Pending filters
+                if ($filterPaymentStatus === 'failed' && $paymentStatus !== 'failed') {
+                    return false;
+                }
+                if ($filterPaymentStatus === 'pending' && $paymentStatus !== 'pending') {
+                    return false;
+                }
+            }
+            
+            // Next Billing Date Filter
+            if (!empty($this->nextBillingDateFilter)) {
+                $subscription = $item['subscription'] ?? null;
+                if (!$subscription || !$subscription->next_billing_date) {
+                    return false;
+                }
+                
+                $nextBillingDate = \Carbon\Carbon::parse($subscription->next_billing_date);
+                $today = \Carbon\Carbon::today();
+                
+                switch (strtolower($this->nextBillingDateFilter)) {
+                    case 'today':
+                        if (!$nextBillingDate->isToday()) {
+                            return false;
+                        }
+                        break;
+                    case 'next_7_days':
+                        $sevenDaysFromNow = $today->copy()->addDays(7);
+                        if ($nextBillingDate->lt($today) || $nextBillingDate->gt($sevenDaysFromNow)) {
+                            return false;
+                        }
+                        break;
+                    case 'next_30_days':
+                        $thirtyDaysFromNow = $today->copy()->addDays(30);
+                        if ($nextBillingDate->lt($today) || $nextBillingDate->gt($thirtyDaysFromNow)) {
+                            return false;
+                        }
+                        break;
+                    case 'overdue':
+                        if (!$nextBillingDate->isPast()) {
+                            return false;
+                        }
+                        break;
+                }
+            }
+            
+            return true;
+        });
+        
+        // Apply sorting
+        $sorted = $filtered->sortBy(function($item) {
+            switch ($this->sortField) {
+                case 'name':
+                    return strtolower($item['name'] ?? '');
+                case 'created_at':
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription ? $subscription->created_at?->timestamp ?? 0 : 0;
+                case 'updated_at':
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription ? $subscription->updated_at?->timestamp ?? 0 : 0;
+                case 'status':
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription ? $subscription->status ?? '' : '';
+                case 'payment_status':
+                    return $item['payment_status'] ?? 'unpaid';
+                case 'next_billing_date':
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription && $subscription->next_billing_date ? $subscription->next_billing_date->timestamp : 0;
+                case 'current_period_end':
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription && $subscription->current_period_end ? $subscription->current_period_end->timestamp : 0;
+                case 'tier':
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription ? $subscription->tier ?? '' : '';
+                default:
+                    // Default to created_at for latest first
+                    $subscription = $item['subscription'] ?? null;
+                    return $subscription ? $subscription->created_at?->timestamp ?? 0 : 0;
+            }
+        }, SORT_REGULAR, $this->sortDirection === 'desc');
+        
+        $sorted = $sorted->values();
+        
+        // Manual pagination using Livewire's pagination state
+        $perPage = 15;
+        
+        // Get current page from Livewire pagination or request
+        $currentPage = $this->getPage();
+        if (!$currentPage || $currentPage < 1) {
+            $currentPage = 1;
+        }
+        
+        $items = $sorted->slice(($currentPage - 1) * $perPage, $perPage)->values();
+        $total = $sorted->count();
+        
+        // Build query parameters for pagination links (preserve filters and search)
+        $queryParams = [];
+        if ($this->search) {
+            $queryParams['search'] = $this->search;
+        }
+        if ($this->accountStatusFilter) {
+            $queryParams['accountStatusFilter'] = $this->accountStatusFilter;
+        }
+        if ($this->paymentStatusFilter) {
+            $queryParams['paymentStatusFilter'] = $this->paymentStatusFilter;
+        }
+        if ($this->nextBillingDateFilter) {
+            $queryParams['nextBillingDateFilter'] = $this->nextBillingDateFilter;
+        }
+        if ($this->sortField) {
+            $queryParams['sortField'] = $this->sortField;
+        }
+        if ($this->sortDirection) {
+            $queryParams['sortDirection'] = $this->sortDirection;
+        }
+        
+        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+            $items,
+            $total,
+            $perPage,
+            $currentPage,
+            [
+                'path' => request()->url(),
+                'pageName' => 'page',
+                'query' => $queryParams
+            ]
+        );
+        
+        // Set the page property for Livewire
+        $this->page = $currentPage;
+        
+        return $paginator;
+    }
+    
+    public function getPage()
+    {
+        // Get page from request query parameter (Livewire pagination uses this)
+        $page = request()->get('page', $this->page ?? 1);
+        
+        // Ensure page is a valid integer
+        $page = (int) $page;
+        if ($page < 1) {
+            $page = 1;
+        }
+        
+        // Update component's page property
+        $this->page = $page;
+        
+        return $page;
+    }
+    
+    // Livewire pagination methods - required for pagination links to work
+    public function gotoPage($page, $pageName = 'page')
+    {
+        $this->page = (int) $page;
+        if ($this->page < 1) {
+            $this->page = 1;
+        }
+    }
+    
+    public function nextPage($pageName = 'page')
+    {
+        $currentPage = $this->page ?? 1;
+        $this->page = $currentPage + 1;
+    }
+    
+    public function previousPage($pageName = 'page')
+    {
+        $currentPage = $this->page ?? 1;
+        if ($currentPage > 1) {
+            $this->page = $currentPage - 1;
+        }
+    }
+
+
+    public function render()
+    {
+        return view('livewire.admin.manage-subscriptions', [
+            'subscriptions' => $this->subscriptions,
+            'organisations' => Organisation::orderBy('name')->get(),
+        ])->layout('layouts.app');
+    }
+}
