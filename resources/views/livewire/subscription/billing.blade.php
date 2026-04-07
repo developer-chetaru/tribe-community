@@ -396,27 +396,11 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                     <div class="flex items-center flex-wrap gap-2">
-                                        <!-- <button wire:click="openInvoiceModal({{ $invoice->id }})" 
-                                                type="button"
-                                                class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded border border-blue-200 transition-all duration-200">
-                                            View Invoice
-                                        </button> -->
-                                        <!-- <a href="{{ route('invoices.download', $invoice->id) }}" 
-                                           download 
-                                           class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded border border-green-200 transition-all duration-200">
-                                            Download
-                                        </a> -->
-                                        
-                                        <!-- Share Invoice Button -->
-                                        <!-- <button wire:click="openShareModal({{ $invoice->id }})" 
-                                                type="button"
-                                                class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded border border-purple-200 transition-all duration-200">
-                                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
-                                            </svg>
-                                            Share
-                                        </button> -->
-                                        
+                                        {{-- Legacy actions (use local invoice id — do not use inside HTML comments; Blade still compiles {{ }} there)
+                                        <button wire:click="openInvoiceModal(ID)" ...>View Invoice</button>
+                                        <a href="...">Download</a>
+                                        <button wire:click="openShareModal(ID)">Share</button>
+                                        --}}
                                         @if(!empty($invoice->from_stripe))
                                             @if(!empty($invoice->hosted_invoice_url))
                                                 <a href="{{ $invoice->hosted_invoice_url }}" target="_blank" rel="noopener noreferrer"
