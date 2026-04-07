@@ -195,7 +195,7 @@
         <div class="mt-8 pt-8 border-t border-gray-200" wire:key="stripe-payment-history">
             <h3 class="text-xl font-bold text-[#EB1C24] mb-2">Payment history (Stripe)</h3>
             <p class="text-sm text-gray-600 mb-4">
-                Invoices from Stripe for this user’s linked customer. Links open in a new tab.
+                All invoices (paginated from Stripe) for every customer ID on this user’s subscriptions, plus card charges that are not tied to an invoice. Links open in a new tab.
             </p>
 
             @if($stripePaymentHistoryError)
@@ -205,7 +205,7 @@
                     @if(!$stripeCustomerLinked)
                         No Stripe customer ID is stored for this user yet — payment history will appear after checkout links a customer.
                     @else
-                        No invoices returned from Stripe for this customer.
+                        No invoices or charges returned from Stripe for the linked customer(s).
                     @endif
                 </p>
             @else
@@ -213,24 +213,33 @@
                     <table class="min-w-full text-sm">
                         <thead class="bg-gray-100 text-left text-gray-700">
                             <tr>
+                                <th class="px-4 py-2 font-semibold">Type</th>
                                 <th class="px-4 py-2 font-semibold">Date</th>
-                                <th class="px-4 py-2 font-semibold">Invoice</th>
+                                <th class="px-4 py-2 font-semibold">Reference</th>
                                 <th class="px-4 py-2 font-semibold">Status</th>
                                 <th class="px-4 py-2 font-semibold text-right">Amount</th>
-                                <th class="px-4 py-2 font-semibold">Receipt</th>
+                                <th class="px-4 py-2 font-semibold">Links</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
                             @foreach($stripePaymentHistory as $row)
                                 <tr class="hover:bg-gray-50">
+                                    <td class="px-4 py-2 text-gray-700 text-xs whitespace-nowrap">
+                                        @if(($row['kind'] ?? 'invoice') === 'charge')
+                                            <span class="font-medium text-gray-600">Charge</span>
+                                        @else
+                                            <span class="font-medium text-gray-600">Invoice</span>
+                                        @endif
+                                    </td>
                                     <td class="px-4 py-2 text-gray-800 whitespace-nowrap">{{ $row['created_formatted'] ?? '—' }}</td>
-                                    <td class="px-4 py-2 text-gray-800 font-mono text-xs">{{ $row['number'] ?? $row['id'] }}</td>
+                                    <td class="px-4 py-2 text-gray-800 font-mono text-xs max-w-[14rem] truncate" title="{{ $row['description'] ?? '' }}">{{ $row['number'] ?? $row['id'] }}</td>
                                     <td class="px-4 py-2">
                                         @php
                                             $st = $row['status'] ?? '';
                                             $badge = match ($st) {
                                                 'paid' => 'bg-green-100 text-green-800 border-green-200',
                                                 'open' => 'bg-amber-100 text-amber-900 border-amber-200',
+                                                'failed' => 'bg-red-100 text-red-800 border-red-200',
                                                 'void', 'uncollectible' => 'bg-gray-100 text-gray-700 border-gray-200',
                                                 default => 'bg-gray-100 text-gray-700 border-gray-200',
                                             };
@@ -246,7 +255,11 @@
                                             @if(!empty($row['hosted_invoice_url']))<span class="text-gray-400 mx-1">·</span>@endif
                                             <a href="{{ $row['invoice_pdf'] }}" target="_blank" rel="noopener" class="text-gray-600 hover:underline">PDF</a>
                                         @endif
-                                        @if(empty($row['hosted_invoice_url']) && empty($row['invoice_pdf']))
+                                        @if(!empty($row['receipt_url']))
+                                            @if(!empty($row['hosted_invoice_url']) || !empty($row['invoice_pdf']))<span class="text-gray-400 mx-1">·</span>@endif
+                                            <a href="{{ $row['receipt_url'] }}" target="_blank" rel="noopener" class="text-gray-600 hover:underline">Receipt</a>
+                                        @endif
+                                        @if(empty($row['hosted_invoice_url']) && empty($row['invoice_pdf']) && empty($row['receipt_url']))
                                             <span class="text-gray-400">—</span>
                                         @endif
                                     </td>

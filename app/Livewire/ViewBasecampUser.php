@@ -16,6 +16,7 @@ use App\Models\SubscriptionRecord;
 use App\Services\EngagementService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Stripe\Charge as StripeCharge;
 use Stripe\Invoice as StripeInvoice;
 use Stripe\Stripe;
 
@@ -50,7 +51,7 @@ class ViewBasecampUser extends Component
     }
 
     /**
-     * Load paid/open invoice history from Stripe for this Basecamp user's customer (not polled).
+     * Load invoice + non-invoice charge history from Stripe (all pages; all linked customers).
      */
     protected function loadStripePaymentHistory(): void
     {
@@ -58,16 +59,9 @@ class ViewBasecampUser extends Component
         $this->stripePaymentHistoryError = null;
         $this->stripeCustomerLinked = false;
 
-        $subscription = SubscriptionRecord::where('user_id', $this->user->id)
-            ->orderByDesc('created_at')
-            ->first();
+        $customerIds = $this->collectStripeCustomerIdsForUser();
 
-        $customerId = $subscription?->stripe_customer_id;
-        if (! $customerId && $this->user->orgId) {
-            $customerId = Organisation::query()->whereKey($this->user->orgId)->value('stripe_customer_id');
-        }
-
-        if (! $customerId) {
+        if ($customerIds === []) {
             return;
         }
 
@@ -75,34 +69,31 @@ class ViewBasecampUser extends Component
 
         try {
             Stripe::setApiKey(config('services.stripe.secret'));
-            $invoices = StripeInvoice::all([
-                'customer' => $customerId,
-                'limit' => 50,
-            ]);
 
-            foreach ($invoices->data as $inv) {
-                $amountPaid = isset($inv->amount_paid) ? ((int) $inv->amount_paid) / 100 : 0.0;
-                $currency = strtoupper((string) ($inv->currency ?? 'gbp'));
-                $created = isset($inv->created) ? \Carbon\Carbon::createFromTimestamp((int) $inv->created) : null;
+            $rows = [];
+            $seenInvoiceIds = [];
 
-                $lineDesc = null;
-                if (isset($inv->lines->data[0])) {
-                    $lineDesc = $inv->lines->data[0]->description ?? null;
+            foreach ($customerIds as $customerId) {
+                foreach ($this->fetchAllInvoicesForCustomer($customerId) as $inv) {
+                    if (isset($seenInvoiceIds[$inv->id])) {
+                        continue;
+                    }
+                    $seenInvoiceIds[$inv->id] = true;
+                    $rows[] = $this->mapStripeInvoiceToRow($inv);
                 }
 
-                $this->stripePaymentHistory[] = [
-                    'id' => $inv->id,
-                    'number' => $inv->number ?? $inv->id,
-                    'status' => $inv->status ?? 'unknown',
-                    'amount_paid' => $amountPaid,
-                    'amount_formatted' => number_format($amountPaid, 2) . ' ' . $currency,
-                    'currency' => $currency,
-                    'created_at' => $created,
-                    'created_formatted' => $created?->format('M j, Y g:i A') ?? '',
-                    'hosted_invoice_url' => $inv->hosted_invoice_url ?? null,
-                    'invoice_pdf' => $inv->invoice_pdf ?? null,
-                    'description' => $inv->description ?? $lineDesc,
-                ];
+                foreach ($this->fetchChargesWithoutInvoiceForCustomer($customerId) as $ch) {
+                    $rows[] = $this->mapStripeChargeToRow($ch);
+                }
+            }
+
+            usort($rows, function (array $a, array $b) {
+                return ($b['sort_ts'] ?? 0) <=> ($a['sort_ts'] ?? 0);
+            });
+
+            foreach ($rows as $row) {
+                unset($row['sort_ts']);
+                $this->stripePaymentHistory[] = $row;
             }
         } catch (\Throwable $e) {
             Log::warning('ViewBasecampUser: Stripe payment history failed', [
@@ -111,6 +102,146 @@ class ViewBasecampUser extends Component
             ]);
             $this->stripePaymentHistoryError = 'Unable to load payment history from Stripe.';
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function collectStripeCustomerIdsForUser(): array
+    {
+        $ids = SubscriptionRecord::query()
+            ->where('user_id', $this->user->id)
+            ->whereNotNull('stripe_customer_id')
+            ->pluck('stripe_customer_id')
+            ->unique()
+            ->filter()
+            ->values()
+            ->all();
+
+        if ($this->user->orgId) {
+            $orgCid = Organisation::query()->whereKey($this->user->orgId)->value('stripe_customer_id');
+            if ($orgCid && ! in_array($orgCid, $ids, true)) {
+                $ids[] = $orgCid;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * @return list<\Stripe\Invoice>
+     */
+    protected function fetchAllInvoicesForCustomer(string $customerId): array
+    {
+        $all = [];
+        $params = ['customer' => $customerId, 'limit' => 100];
+
+        while (true) {
+            $page = StripeInvoice::all($params);
+            foreach ($page->data as $inv) {
+                $all[] = $inv;
+            }
+            if (! $page->has_more || empty($page->data)) {
+                break;
+            }
+            $last = $page->data[count($page->data) - 1];
+            $params['starting_after'] = $last->id;
+        }
+
+        return $all;
+    }
+
+    /**
+     * Charges not linked to an invoice (avoids duplicating subscription invoice payments).
+     *
+     * @return list<\Stripe\Charge>
+     */
+    protected function fetchChargesWithoutInvoiceForCustomer(string $customerId): array
+    {
+        $all = [];
+        $params = ['customer' => $customerId, 'limit' => 100];
+
+        while (true) {
+            $page = StripeCharge::all($params);
+            foreach ($page->data as $ch) {
+                if (! empty($ch->invoice)) {
+                    continue;
+                }
+                $all[] = $ch;
+            }
+            if (! $page->has_more || empty($page->data)) {
+                break;
+            }
+            $last = $page->data[count($page->data) - 1];
+            $params['starting_after'] = $last->id;
+        }
+
+        return $all;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function mapStripeInvoiceToRow(\Stripe\Invoice $inv): array
+    {
+        $amountPaid = isset($inv->amount_paid) ? ((int) $inv->amount_paid) / 100 : 0.0;
+        $currency = strtoupper((string) ($inv->currency ?? 'gbp'));
+        $created = isset($inv->created) ? \Carbon\Carbon::createFromTimestamp((int) $inv->created) : null;
+
+        $lineDesc = null;
+        if (isset($inv->lines->data[0])) {
+            $lineDesc = $inv->lines->data[0]->description ?? null;
+        }
+
+        return [
+            'kind' => 'invoice',
+            'id' => $inv->id,
+            'number' => $inv->number ?? $inv->id,
+            'status' => $inv->status ?? 'unknown',
+            'amount_paid' => $amountPaid,
+            'amount_formatted' => number_format($amountPaid, 2) . ' ' . $currency,
+            'currency' => $currency,
+            'created_at' => $created,
+            'created_formatted' => $created?->format('M j, Y g:i A') ?? '',
+            'hosted_invoice_url' => $inv->hosted_invoice_url ?? null,
+            'invoice_pdf' => $inv->invoice_pdf ?? null,
+            'description' => $inv->description ?? $lineDesc,
+            'receipt_url' => null,
+            'sort_ts' => (int) ($inv->created ?? 0),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function mapStripeChargeToRow(\Stripe\Charge $ch): array
+    {
+        $amount = isset($ch->amount) ? ((int) $ch->amount) / 100 : 0.0;
+        $currency = strtoupper((string) ($ch->currency ?? 'gbp'));
+        $created = isset($ch->created) ? \Carbon\Carbon::createFromTimestamp((int) $ch->created) : null;
+
+        $status = match ($ch->status ?? '') {
+            'succeeded' => 'paid',
+            'failed' => 'failed',
+            default => $ch->status ?? 'unknown',
+        };
+
+        return [
+            'kind' => 'charge',
+            'id' => $ch->id,
+            'number' => $ch->id,
+            'status' => $status,
+            'amount_paid' => $amount,
+            'amount_formatted' => number_format($amount, 2) . ' ' . $currency,
+            'currency' => $currency,
+            'created_at' => $created,
+            'created_formatted' => $created?->format('M j, Y g:i A') ?? '',
+            'hosted_invoice_url' => null,
+            'invoice_pdf' => null,
+            'description' => $ch->description ?? 'Card payment',
+            'receipt_url' => $ch->receipt_url ?? null,
+            'sort_ts' => (int) ($ch->created ?? 0),
+        ];
     }
     
     public function loadEngagementData()
