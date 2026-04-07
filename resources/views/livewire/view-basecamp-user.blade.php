@@ -191,6 +191,73 @@
             @endif
         </div>
 
+        {{-- Stripe payment history (admin) --}}
+        <div class="mt-8 pt-8 border-t border-gray-200" wire:key="stripe-payment-history">
+            <h3 class="text-xl font-bold text-[#EB1C24] mb-2">Payment history (Stripe)</h3>
+            <p class="text-sm text-gray-600 mb-4">
+                Invoices from Stripe for this user’s linked customer. Links open in a new tab.
+            </p>
+
+            @if($stripePaymentHistoryError)
+                <p class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">{{ $stripePaymentHistoryError }}</p>
+            @elseif(count($stripePaymentHistory) === 0)
+                <p class="text-sm text-gray-500">
+                    @if(!$stripeCustomerLinked)
+                        No Stripe customer ID is stored for this user yet — payment history will appear after checkout links a customer.
+                    @else
+                        No invoices returned from Stripe for this customer.
+                    @endif
+                </p>
+            @else
+                <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-100 text-left text-gray-700">
+                            <tr>
+                                <th class="px-4 py-2 font-semibold">Date</th>
+                                <th class="px-4 py-2 font-semibold">Invoice</th>
+                                <th class="px-4 py-2 font-semibold">Status</th>
+                                <th class="px-4 py-2 font-semibold text-right">Amount</th>
+                                <th class="px-4 py-2 font-semibold">Receipt</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            @foreach($stripePaymentHistory as $row)
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-4 py-2 text-gray-800 whitespace-nowrap">{{ $row['created_formatted'] ?? '—' }}</td>
+                                    <td class="px-4 py-2 text-gray-800 font-mono text-xs">{{ $row['number'] ?? $row['id'] }}</td>
+                                    <td class="px-4 py-2">
+                                        @php
+                                            $st = $row['status'] ?? '';
+                                            $badge = match ($st) {
+                                                'paid' => 'bg-green-100 text-green-800 border-green-200',
+                                                'open' => 'bg-amber-100 text-amber-900 border-amber-200',
+                                                'void', 'uncollectible' => 'bg-gray-100 text-gray-700 border-gray-200',
+                                                default => 'bg-gray-100 text-gray-700 border-gray-200',
+                                            };
+                                        @endphp
+                                        <span class="inline-block px-2 py-0.5 rounded border text-xs font-medium {{ $badge }}">{{ ucfirst($st) }}</span>
+                                    </td>
+                                    <td class="px-4 py-2 text-right font-medium text-gray-900">{{ $row['amount_formatted'] ?? '—' }}</td>
+                                    <td class="px-4 py-2">
+                                        @if(!empty($row['hosted_invoice_url']))
+                                            <a href="{{ $row['hosted_invoice_url'] }}" target="_blank" rel="noopener" class="text-[#EB1C24] hover:underline">View</a>
+                                        @endif
+                                        @if(!empty($row['invoice_pdf']))
+                                            @if(!empty($row['hosted_invoice_url']))<span class="text-gray-400 mx-1">·</span>@endif
+                                            <a href="{{ $row['invoice_pdf'] }}" target="_blank" rel="noopener" class="text-gray-600 hover:underline">PDF</a>
+                                        @endif
+                                        @if(empty($row['hosted_invoice_url']) && empty($row['invoice_pdf']))
+                                            <span class="text-gray-400">—</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </div>
+
         {{-- Sentiment (Happy Index) — visible summary for coaching / support --}}
         @if(!empty($sentimentSummary))
         <div class="mt-8 pt-8 border-t border-gray-200" wire:key="sentiment-summary">

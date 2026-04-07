@@ -11,8 +11,13 @@ use App\Models\HptmLearningChecklist;
 use App\Models\HptmLearningType;
 use App\Models\HptmPrinciple;
 use App\Models\HappyIndex;
+use App\Models\Organisation;
+use App\Models\SubscriptionRecord;
 use App\Services\EngagementService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Stripe\Invoice as StripeInvoice;
+use Stripe\Stripe;
 
 class ViewBasecampUser extends Component
 {
@@ -22,6 +27,13 @@ class ViewBasecampUser extends Component
 
     /** @var array Recent sentiment check-ins + counts for admin coaching view */
     public array $sentimentSummary = [];
+
+    /** @var array<int, array<string, mixed>> Stripe invoices for admin payment history */
+    public array $stripePaymentHistory = [];
+
+    public ?string $stripePaymentHistoryError = null;
+
+    public bool $stripeCustomerLinked = false;
 
     public function mount($id)
     {
@@ -34,6 +46,71 @@ class ViewBasecampUser extends Component
         $this->user = User::findOrFail($id);
         // loadHptmData ends by refreshing engagement + sentiment (same after wire:poll)
         $this->loadHptmData();
+        $this->loadStripePaymentHistory();
+    }
+
+    /**
+     * Load paid/open invoice history from Stripe for this Basecamp user's customer (not polled).
+     */
+    protected function loadStripePaymentHistory(): void
+    {
+        $this->stripePaymentHistory = [];
+        $this->stripePaymentHistoryError = null;
+        $this->stripeCustomerLinked = false;
+
+        $subscription = SubscriptionRecord::where('user_id', $this->user->id)
+            ->orderByDesc('created_at')
+            ->first();
+
+        $customerId = $subscription?->stripe_customer_id;
+        if (! $customerId && $this->user->orgId) {
+            $customerId = Organisation::query()->whereKey($this->user->orgId)->value('stripe_customer_id');
+        }
+
+        if (! $customerId) {
+            return;
+        }
+
+        $this->stripeCustomerLinked = true;
+
+        try {
+            Stripe::setApiKey(config('services.stripe.secret'));
+            $invoices = StripeInvoice::all([
+                'customer' => $customerId,
+                'limit' => 50,
+            ]);
+
+            foreach ($invoices->data as $inv) {
+                $amountPaid = isset($inv->amount_paid) ? ((int) $inv->amount_paid) / 100 : 0.0;
+                $currency = strtoupper((string) ($inv->currency ?? 'gbp'));
+                $created = isset($inv->created) ? \Carbon\Carbon::createFromTimestamp((int) $inv->created) : null;
+
+                $lineDesc = null;
+                if (isset($inv->lines->data[0])) {
+                    $lineDesc = $inv->lines->data[0]->description ?? null;
+                }
+
+                $this->stripePaymentHistory[] = [
+                    'id' => $inv->id,
+                    'number' => $inv->number ?? $inv->id,
+                    'status' => $inv->status ?? 'unknown',
+                    'amount_paid' => $amountPaid,
+                    'amount_formatted' => number_format($amountPaid, 2) . ' ' . $currency,
+                    'currency' => $currency,
+                    'created_at' => $created,
+                    'created_formatted' => $created?->format('M j, Y g:i A') ?? '',
+                    'hosted_invoice_url' => $inv->hosted_invoice_url ?? null,
+                    'invoice_pdf' => $inv->invoice_pdf ?? null,
+                    'description' => $inv->description ?? $lineDesc,
+                ];
+            }
+        } catch (\Throwable $e) {
+            Log::warning('ViewBasecampUser: Stripe payment history failed', [
+                'user_id' => $this->user->id,
+                'error' => $e->getMessage(),
+            ]);
+            $this->stripePaymentHistoryError = 'Unable to load payment history from Stripe.';
+        }
     }
     
     public function loadEngagementData()
