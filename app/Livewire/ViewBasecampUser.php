@@ -72,6 +72,8 @@ class ViewBasecampUser extends Component
 
             $rows = [];
             $seenInvoiceIds = [];
+            $invoiceChargeIds = [];
+            $invoicePaymentIntentIds = [];
 
             foreach ($customerIds as $customerId) {
                 foreach ($this->fetchAllInvoicesForCustomer($customerId) as $inv) {
@@ -79,11 +81,28 @@ class ViewBasecampUser extends Component
                         continue;
                     }
                     $seenInvoiceIds[$inv->id] = true;
-                    $rows[] = $this->mapStripeInvoiceToRow($inv);
+                    $invoiceRow = $this->mapStripeInvoiceToRow($inv);
+                    if (! empty($invoiceRow['_charge_id'])) {
+                        $invoiceChargeIds[$invoiceRow['_charge_id']] = true;
+                    }
+                    if (! empty($invoiceRow['_payment_intent_id'])) {
+                        $invoicePaymentIntentIds[$invoiceRow['_payment_intent_id']] = true;
+                    }
+                    $rows[] = $invoiceRow;
                 }
 
                 foreach ($this->fetchChargesWithoutInvoiceForCustomer($customerId) as $ch) {
-                    $rows[] = $this->mapStripeChargeToRow($ch);
+                    $chargeRow = $this->mapStripeChargeToRow($ch);
+
+                    // Avoid duplicate rows for the same payment already represented by an invoice.
+                    if (! empty($chargeRow['_charge_id']) && isset($invoiceChargeIds[$chargeRow['_charge_id']])) {
+                        continue;
+                    }
+                    if (! empty($chargeRow['_payment_intent_id']) && isset($invoicePaymentIntentIds[$chargeRow['_payment_intent_id']])) {
+                        continue;
+                    }
+
+                    $rows[] = $chargeRow;
                 }
             }
 
@@ -93,6 +112,7 @@ class ViewBasecampUser extends Component
 
             foreach ($rows as $row) {
                 unset($row['sort_ts']);
+                unset($row['_payment_intent_id'], $row['_charge_id']);
                 $this->stripePaymentHistory[] = $row;
             }
         } catch (\Throwable $e) {
@@ -208,6 +228,8 @@ class ViewBasecampUser extends Component
             'description' => $inv->description ?? $lineDesc,
             'receipt_url' => null,
             'sort_ts' => (int) ($inv->created ?? 0),
+            '_payment_intent_id' => is_string($inv->payment_intent ?? null) ? $inv->payment_intent : null,
+            '_charge_id' => is_string($inv->charge ?? null) ? $inv->charge : null,
         ];
     }
 
@@ -241,6 +263,8 @@ class ViewBasecampUser extends Component
             'description' => $ch->description ?? 'Card payment',
             'receipt_url' => $ch->receipt_url ?? null,
             'sort_ts' => (int) ($ch->created ?? 0),
+            '_payment_intent_id' => is_string($ch->payment_intent ?? null) ? $ch->payment_intent : null,
+            '_charge_id' => is_string($ch->id ?? null) ? $ch->id : null,
         ];
     }
     
