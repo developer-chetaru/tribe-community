@@ -15,6 +15,8 @@ use App\Services\Billing\StripeService;
 use App\Services\StripePaymentService;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Carbon\Carbon;
 
 class Billing extends Component
@@ -1239,7 +1241,25 @@ class Billing extends Component
     public function getInvoicesProperty()
     {
         $user = auth()->user();
-        
+
+        /** @var \App\Services\Billing\StripeInvoiceHistoryService $stripeHistory */
+        $stripeHistory = app(\App\Services\Billing\StripeInvoiceHistoryService::class);
+        $customerIds = $stripeHistory->collectCustomerIdsForUser($user);
+
+        if ($customerIds !== []) {
+            try {
+                $rows = $stripeHistory->fetchInvoiceDisplayRows($customerIds);
+                if (count($rows) > 0) {
+                    return $this->paginateStripeInvoiceRows(collect($rows), 10);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Billing: failed to load Stripe invoices, falling back to local', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         // For basecamp users, filter by user_id
         if ($user->hasRole('basecamp')) {
             return Invoice::where('user_id', $user->id)
@@ -1248,12 +1268,33 @@ class Billing extends Component
                 ->orderBy('created_at', 'desc')
                 ->paginate(10);
         }
-        
+
         // For directors, filter by organisation_id
         return Invoice::where('organisation_id', $user->orgId)
             ->with(['subscription', 'payments'])
             ->orderBy('created_at', 'desc')
             ->paginate(10);
+    }
+
+    /**
+     * @param  Collection<int, \stdClass>  $items
+     */
+    protected function paginateStripeInvoiceRows(Collection $items, int $perPage): LengthAwarePaginator
+    {
+        $page = LengthAwarePaginator::resolveCurrentPage();
+        $total = $items->count();
+        $slice = $items->slice(($page - 1) * $perPage, $perPage)->values();
+
+        return new LengthAwarePaginator(
+            $slice,
+            $total,
+            $perPage,
+            $page,
+            [
+                'path' => LengthAwarePaginator::resolveCurrentPath(),
+                'pageName' => 'page',
+            ]
+        );
     }
 
     public function getStripeSubscriptionDetails()

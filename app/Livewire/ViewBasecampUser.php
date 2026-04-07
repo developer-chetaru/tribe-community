@@ -74,6 +74,7 @@ class ViewBasecampUser extends Component
             $seenInvoiceIds = [];
             $invoiceChargeIds = [];
             $invoicePaymentIntentIds = [];
+            $invoiceFingerprints = [];
 
             foreach ($customerIds as $customerId) {
                 foreach ($this->fetchAllInvoicesForCustomer($customerId) as $inv) {
@@ -88,6 +89,9 @@ class ViewBasecampUser extends Component
                     if (! empty($invoiceRow['_payment_intent_id'])) {
                         $invoicePaymentIntentIds[$invoiceRow['_payment_intent_id']] = true;
                     }
+                    if (! empty($invoiceRow['_dedupe_fp'])) {
+                        $invoiceFingerprints[$invoiceRow['_dedupe_fp']] = true;
+                    }
                     $rows[] = $invoiceRow;
                 }
 
@@ -101,6 +105,10 @@ class ViewBasecampUser extends Component
                     if (! empty($chargeRow['_payment_intent_id']) && isset($invoicePaymentIntentIds[$chargeRow['_payment_intent_id']])) {
                         continue;
                     }
+                    // Fallback: Stripe often returns invoice.charge as an object — IDs above can miss; same amount+time = same payment.
+                    if (! empty($chargeRow['_dedupe_fp']) && isset($invoiceFingerprints[$chargeRow['_dedupe_fp']])) {
+                        continue;
+                    }
 
                     $rows[] = $chargeRow;
                 }
@@ -111,8 +119,7 @@ class ViewBasecampUser extends Component
             });
 
             foreach ($rows as $row) {
-                unset($row['sort_ts']);
-                unset($row['_payment_intent_id'], $row['_charge_id']);
+                unset($row['sort_ts'], $row['_payment_intent_id'], $row['_charge_id'], $row['_dedupe_fp']);
                 $this->stripePaymentHistory[] = $row;
             }
         } catch (\Throwable $e) {
@@ -200,6 +207,27 @@ class ViewBasecampUser extends Component
     }
 
     /**
+     * Stripe list/retrieve often returns an ID string or an expanded object with ->id.
+     */
+    protected function stripeObjectId(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (is_string($value)) {
+            return $value;
+        }
+        if (is_object($value) && isset($value->id)) {
+            return (string) $value->id;
+        }
+        if (is_array($value) && isset($value['id'])) {
+            return (string) $value['id'];
+        }
+
+        return null;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     protected function mapStripeInvoiceToRow(\Stripe\Invoice $inv): array
@@ -207,11 +235,16 @@ class ViewBasecampUser extends Component
         $amountPaid = isset($inv->amount_paid) ? ((int) $inv->amount_paid) / 100 : 0.0;
         $currency = strtoupper((string) ($inv->currency ?? 'gbp'));
         $created = isset($inv->created) ? \Carbon\Carbon::createFromTimestamp((int) $inv->created) : null;
+        $amountMinor = (int) ($inv->amount_paid ?? 0);
+        $sortTs = (int) ($inv->created ?? 0);
 
         $lineDesc = null;
         if (isset($inv->lines->data[0])) {
             $lineDesc = $inv->lines->data[0]->description ?? null;
         }
+
+        $chargeId = $this->stripeObjectId($inv->charge ?? null);
+        $piId = $this->stripeObjectId($inv->payment_intent ?? null);
 
         return [
             'kind' => 'invoice',
@@ -227,9 +260,10 @@ class ViewBasecampUser extends Component
             'invoice_pdf' => $inv->invoice_pdf ?? null,
             'description' => $inv->description ?? $lineDesc,
             'receipt_url' => null,
-            'sort_ts' => (int) ($inv->created ?? 0),
-            '_payment_intent_id' => is_string($inv->payment_intent ?? null) ? $inv->payment_intent : null,
-            '_charge_id' => is_string($inv->charge ?? null) ? $inv->charge : null,
+            'sort_ts' => $sortTs,
+            '_payment_intent_id' => $piId,
+            '_charge_id' => $chargeId,
+            '_dedupe_fp' => sprintf('%s|%d|%d', $currency, $amountMinor, $sortTs),
         ];
     }
 
@@ -248,6 +282,9 @@ class ViewBasecampUser extends Component
             default => $ch->status ?? 'unknown',
         };
 
+        $amountMinor = (int) ($ch->amount ?? 0);
+        $sortTs = (int) ($ch->created ?? 0);
+
         return [
             'kind' => 'charge',
             'id' => $ch->id,
@@ -262,9 +299,10 @@ class ViewBasecampUser extends Component
             'invoice_pdf' => null,
             'description' => $ch->description ?? 'Card payment',
             'receipt_url' => $ch->receipt_url ?? null,
-            'sort_ts' => (int) ($ch->created ?? 0),
-            '_payment_intent_id' => is_string($ch->payment_intent ?? null) ? $ch->payment_intent : null,
-            '_charge_id' => is_string($ch->id ?? null) ? $ch->id : null,
+            'sort_ts' => $sortTs,
+            '_payment_intent_id' => $this->stripeObjectId($ch->payment_intent ?? null),
+            '_charge_id' => isset($ch->id) ? (string) $ch->id : null,
+            '_dedupe_fp' => sprintf('%s|%d|%d', $currency, $amountMinor, $sortTs),
         ];
     }
     

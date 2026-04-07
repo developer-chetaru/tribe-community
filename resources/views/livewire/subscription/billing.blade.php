@@ -372,16 +372,16 @@
                         @forelse($invoices as $invoice)
                             <tr>
                                 <td class="px-6 py-4 whitespace-nowrap">{{ $invoice->invoice_number }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap">{{ $invoice->invoice_date->format('M d, Y') }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">{{ $invoice->invoice_date instanceof \Carbon\Carbon ? $invoice->invoice_date->format('M d, Y') : \Carbon\Carbon::parse($invoice->invoice_date)->format('M d, Y') }}</td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div>
                                         <span class="font-semibold">£{{ number_format($invoice->total_amount, 2) }}</span>
                                         <span class="text-xs text-gray-500 block">(incl. VAT)</span>
                                     </div>
-                                    @if($invoice->tax_amount > 0)
+                                    @if(($invoice->tax_amount ?? 0) > 0 || isset($invoice->subtotal))
                                         <div class="text-xs text-gray-500 mt-1">
                                             Subtotal: £{{ number_format($invoice->subtotal ?? ($invoice->total_amount / 1.20), 2) }}
-                                            @if($invoice->tax_amount)
+                                            @if($invoice->tax_amount ?? 0)
                                                 + VAT: £{{ number_format($invoice->tax_amount, 2) }}
                                             @endif
                                         </div>
@@ -395,7 +395,7 @@
                                     </span>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div class="flex items-center space-x-3">
+                                    <div class="flex items-center flex-wrap gap-2">
                                         <!-- <button wire:click="openInvoiceModal({{ $invoice->id }})" 
                                                 type="button"
                                                 class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded border border-blue-200 transition-all duration-200">
@@ -417,18 +417,32 @@
                                             Share
                                         </button> -->
                                         
-                                        <!-- Payment Invoice (Stripe) Button -->
-                                        <button wire:click="redirectToStripeInvoice({{ $invoice->id }})" 
-                                                type="button"
-                                                wire:loading.attr="disabled"
-                                                class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded border border-orange-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                                            <span wire:loading.remove wire:target="redirectToStripeInvoice({{ $invoice->id }})">
-                                                View Invoice
-                                            </span>
-                                            <span wire:loading wire:target="redirectToStripeInvoice({{ $invoice->id }})">Loading...</span>
-                                        </button>
+                                        @if(!empty($invoice->from_stripe))
+                                            @if(!empty($invoice->hosted_invoice_url))
+                                                <a href="{{ $invoice->hosted_invoice_url }}" target="_blank" rel="noopener noreferrer"
+                                                   class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded border border-orange-200">
+                                                    View Invoice
+                                                </a>
+                                            @endif
+                                            @if(!empty($invoice->invoice_pdf))
+                                                <a href="{{ $invoice->invoice_pdf }}" target="_blank" rel="noopener noreferrer"
+                                                   class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded border border-gray-200">
+                                                    PDF
+                                                </a>
+                                            @endif
+                                        @else
+                                            <button wire:click="redirectToStripeInvoice({{ $invoice->id }})" 
+                                                    type="button"
+                                                    wire:loading.attr="disabled"
+                                                    class="inline-flex items-center px-3 py-1.5 text-sm font-medium text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded border border-orange-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                                                <span wire:loading.remove wire:target="redirectToStripeInvoice({{ $invoice->id }})">
+                                                    View Invoice
+                                                </span>
+                                                <span wire:loading wire:target="redirectToStripeInvoice({{ $invoice->id }})">Loading...</span>
+                                            </button>
+                                        @endif
                                         
-                                        @if($invoice->status === 'pending')
+                                        @if(empty($invoice->from_stripe) && $invoice->status === 'pending')
                                             @php
                                                 $hasPayment = \App\Models\Payment::where('invoice_id', $invoice->id)
                                                     ->where('status', 'completed')
