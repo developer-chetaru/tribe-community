@@ -291,6 +291,24 @@ class BasecampBillingController extends Controller
         ];
     }
 
+    protected function toUserIso8601(?\DateTimeInterface $value, string $timezone): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        return \Carbon\Carbon::instance($value)->setTimezone($timezone)->toIso8601String();
+    }
+
+    protected function unixToUserIso8601(mixed $unixTs, string $timezone): ?string
+    {
+        if (! is_numeric($unixTs)) {
+            return null;
+        }
+
+        return \Carbon\Carbon::createFromTimestamp((int) $unixTs)->setTimezone($timezone)->toIso8601String();
+    }
+
     /**
      * @OA\Get(
      *     path="/api/basecamp/subscription",
@@ -380,6 +398,7 @@ class BasecampBillingController extends Controller
     {
         try {
             $user = Auth::user();
+            $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
 
             if (!$user) {
                 return response()->json([
@@ -445,9 +464,9 @@ class BasecampBillingController extends Controller
                 'tier' => $subscription->tier,
                 'status' => $subscription->status,
                 'user_count' => $subscription->user_count,
-                'current_period_start' => $subscription->current_period_start,
-                'current_period_end' => $subscription->current_period_end,
-                'next_billing_date' => $subscription->next_billing_date,
+                'current_period_start' => $this->toUserIso8601($subscription->current_period_start, $userTimezone),
+                'current_period_end' => $this->toUserIso8601($subscription->current_period_end, $userTimezone),
+                'next_billing_date' => $this->toUserIso8601($subscription->next_billing_date, $userTimezone),
                 'monthly_price' => 10.00, // Basecamp subscription is £10/month (before VAT)
                 'monthly_price_with_vat' => 12.00, // £10 + 20% VAT (£2.00)
                 'vat_rate' => 20.00, // VAT percentage
@@ -458,10 +477,10 @@ class BasecampBillingController extends Controller
                 $responseData['stripe_subscription'] = [
                     'id' => $stripeSubscription->id,
                     'status' => $stripeSubscription->status,
-                    'current_period_start' => $stripeSubscription->current_period_start ? date('Y-m-d\TH:i:s.000000\Z', $stripeSubscription->current_period_start) : null,
-                    'current_period_end' => $stripeSubscription->current_period_end ? date('Y-m-d\TH:i:s.000000\Z', $stripeSubscription->current_period_end) : null,
+                    'current_period_start' => $this->unixToUserIso8601($stripeSubscription->current_period_start ?? null, $userTimezone),
+                    'current_period_end' => $this->unixToUserIso8601($stripeSubscription->current_period_end ?? null, $userTimezone),
                     'cancel_at_period_end' => $stripeSubscription->cancel_at_period_end ?? false,
-                    'canceled_at' => $stripeSubscription->canceled_at ? date('Y-m-d\TH:i:s.000000\Z', $stripeSubscription->canceled_at) : null,
+                    'canceled_at' => $this->unixToUserIso8601($stripeSubscription->canceled_at ?? null, $userTimezone),
                 ];
             }
 
