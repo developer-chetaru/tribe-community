@@ -309,8 +309,9 @@ class BasecampBillingController extends Controller
     }
 
     /**
-     * Treat DB subscription dates as a calendar day at start-of-day in app timezone, then convert to the user's zone.
-     * This matches how the web UI displays "Apr 10" when the row shows 2026-04-10 00:00:00.
+     * Calendar-only fields from DB (Y-m-d): interpret that day at start-of-day in the user's timezone.
+     * Avoids shifting the instant to the previous calendar day when app timezone ≠ user timezone
+     * (e.g. IST midnight → London still on the 9th when converted).
      */
     protected function subscriptionCalendarDateToUserIso8601(?string $ymd, string $userTimezone): ?string
     {
@@ -318,11 +319,9 @@ class BasecampBillingController extends Controller
             return null;
         }
 
-        $appTz = config('app.timezone', 'UTC');
         try {
-            return Carbon::createFromFormat('Y-m-d', $ymd, $appTz)
+            return Carbon::createFromFormat('Y-m-d', $ymd, $userTimezone)
                 ->startOfDay()
-                ->setTimezone($userTimezone)
                 ->toIso8601String();
         } catch (\Throwable) {
             return null;
@@ -501,6 +500,10 @@ class BasecampBillingController extends Controller
             $nextBillingYmd = $this->subscriptionDateYmdFromModel($subscription, 'next_billing_date');
             $lastPaymentYmd = $this->subscriptionDateYmdFromModel($subscription, 'last_payment_date');
 
+            // Web /billing labels "Next Billing Date" from current_period_end->format('M d, Y'), NOT from next_billing_date column.
+            // Expose the same calendar day in the API so mobile matches the red date on the billing page.
+            $webNextBillingYmd = $periodEndYmd;
+
             // Build response data
             $responseData = [
                 'id' => $subscription->id,
@@ -510,16 +513,20 @@ class BasecampBillingController extends Controller
                 'user_count' => $subscription->user_count,
                 'current_period_start' => $this->subscriptionCalendarDateToUserIso8601($periodStartYmd, $userTimezone),
                 'current_period_end' => $this->subscriptionCalendarDateToUserIso8601($periodEndYmd, $userTimezone),
-                'next_billing_date' => $this->subscriptionCalendarDateToUserIso8601($nextBillingYmd, $userTimezone),
+                'next_billing_date' => $this->subscriptionCalendarDateToUserIso8601($webNextBillingYmd, $userTimezone),
                 'current_period_start_date' => $periodStartYmd,
                 'current_period_end_date' => $periodEndYmd,
-                'next_billing_date_date' => $nextBillingYmd,
+                'next_billing_date_date' => $webNextBillingYmd,
                 'last_payment_date' => $this->subscriptionCalendarDateToUserIso8601($lastPaymentYmd, $userTimezone),
                 'last_payment_date_date' => $lastPaymentYmd,
                 'monthly_price' => 10.00, // Basecamp subscription is £10/month (before VAT)
                 'monthly_price_with_vat' => 12.00, // £10 + 20% VAT (£2.00)
                 'vat_rate' => 20.00, // VAT percentage
             ];
+
+            if ($nextBillingYmd !== null && $nextBillingYmd !== $periodEndYmd) {
+                $responseData['next_billing_date_column_date'] = $nextBillingYmd;
+            }
 
             // Add Stripe subscription details if available
             if ($stripeSubscription) {
