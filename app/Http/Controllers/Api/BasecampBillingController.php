@@ -7,6 +7,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\SubscriptionRecord;
 use App\Models\User;
+use Carbon\Carbon;
 use App\Services\Billing\StripeInvoiceHistoryService;
 use App\Services\StripePaymentService;
 use Illuminate\Http\Request;
@@ -291,13 +292,50 @@ class BasecampBillingController extends Controller
         ];
     }
 
+    /**
+     * Y-m-d as stored in MySQL (matches Adminer) — avoids timezone shifting the calendar day.
+     */
+    protected function subscriptionDateYmdFromModel(SubscriptionRecord $subscription, string $column): ?string
+    {
+        $raw = $subscription->getRawOriginal($column);
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        if (is_string($raw) && preg_match('/^(\d{4}-\d{2}-\d{2})/', $raw, $m)) {
+            return $m[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * Treat DB subscription dates as a calendar day at start-of-day in app timezone, then convert to the user's zone.
+     * This matches how the web UI displays "Apr 10" when the row shows 2026-04-10 00:00:00.
+     */
+    protected function subscriptionCalendarDateToUserIso8601(?string $ymd, string $userTimezone): ?string
+    {
+        if ($ymd === null || $ymd === '') {
+            return null;
+        }
+
+        $appTz = config('app.timezone', 'UTC');
+        try {
+            return Carbon::createFromFormat('Y-m-d', $ymd, $appTz)
+                ->startOfDay()
+                ->setTimezone($userTimezone)
+                ->toIso8601String();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     protected function toUserIso8601(?\DateTimeInterface $value, string $timezone): ?string
     {
         if (! $value) {
             return null;
         }
 
-        return \Carbon\Carbon::instance($value)->setTimezone($timezone)->toIso8601String();
+        return Carbon::instance($value)->setTimezone($timezone)->toIso8601String();
     }
 
     protected function unixToUserIso8601(mixed $unixTs, string $timezone): ?string
@@ -306,7 +344,7 @@ class BasecampBillingController extends Controller
             return null;
         }
 
-        return \Carbon\Carbon::createFromTimestamp((int) $unixTs)->setTimezone($timezone)->toIso8601String();
+        return Carbon::createFromTimestamp((int) $unixTs)->setTimezone($timezone)->toIso8601String();
     }
 
     /**
@@ -398,14 +436,15 @@ class BasecampBillingController extends Controller
     {
         try {
             $user = Auth::user();
-            $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'status' => false,
                     'message' => 'Unauthorized. Please login.',
                 ], 401);
             }
+
+            $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
 
             // Check if user is basecamp user
             if (!$user->hasRole('basecamp')) {
@@ -457,6 +496,11 @@ class BasecampBillingController extends Controller
                 }
             }
 
+            $periodStartYmd = $this->subscriptionDateYmdFromModel($subscription, 'current_period_start');
+            $periodEndYmd = $this->subscriptionDateYmdFromModel($subscription, 'current_period_end');
+            $nextBillingYmd = $this->subscriptionDateYmdFromModel($subscription, 'next_billing_date');
+            $lastPaymentYmd = $this->subscriptionDateYmdFromModel($subscription, 'last_payment_date');
+
             // Build response data
             $responseData = [
                 'id' => $subscription->id,
@@ -464,9 +508,14 @@ class BasecampBillingController extends Controller
                 'tier' => $subscription->tier,
                 'status' => $subscription->status,
                 'user_count' => $subscription->user_count,
-                'current_period_start' => $this->toUserIso8601($subscription->current_period_start, $userTimezone),
-                'current_period_end' => $this->toUserIso8601($subscription->current_period_end, $userTimezone),
-                'next_billing_date' => $this->toUserIso8601($subscription->next_billing_date, $userTimezone),
+                'current_period_start' => $this->subscriptionCalendarDateToUserIso8601($periodStartYmd, $userTimezone),
+                'current_period_end' => $this->subscriptionCalendarDateToUserIso8601($periodEndYmd, $userTimezone),
+                'next_billing_date' => $this->subscriptionCalendarDateToUserIso8601($nextBillingYmd, $userTimezone),
+                'current_period_start_date' => $periodStartYmd,
+                'current_period_end_date' => $periodEndYmd,
+                'next_billing_date_date' => $nextBillingYmd,
+                'last_payment_date' => $this->subscriptionCalendarDateToUserIso8601($lastPaymentYmd, $userTimezone),
+                'last_payment_date_date' => $lastPaymentYmd,
                 'monthly_price' => 10.00, // Basecamp subscription is £10/month (before VAT)
                 'monthly_price_with_vat' => 12.00, // £10 + 20% VAT (£2.00)
                 'vat_rate' => 20.00, // VAT percentage
