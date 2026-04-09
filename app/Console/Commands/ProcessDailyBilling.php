@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\SubscriptionRecord;
 use App\Models\Invoice as BillingInvoice;
+use App\Models\Payment;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Stripe\Stripe;
@@ -53,13 +54,12 @@ class ProcessDailyBilling extends Command
         $this->info("Processing subscription ID: {$subscription->id}");
 
         try {
-            if ($subscription->status === 'inactive') {
-                $this->ensureUnpaidInvoiceForInactive($subscription);
-                return;
-            }
-
             // If subscription has no Stripe link and period already ended, mark inactive/unpaid.
             if (!$subscription->stripe_subscription_id) {
+                if ($subscription->status === 'inactive') {
+                    $this->ensureUnpaidInvoiceForInactive($subscription);
+                    return;
+                }
                 $this->handleNoStripeSubscriptionAfterPeriodEnd($subscription);
                 return;
             }
@@ -101,7 +101,18 @@ class ProcessDailyBilling extends Command
                         'old_local_period_end' => $localPeriodEnd?->format('Y-m-d'),
                         'new_period_end' => $stripePeriodEnd->format('Y-m-d'),
                     ]);
+                    $this->markLatestInvoicePaidIfRenewed($subscription);
                     return;
+                }
+
+                if ($subscription->status === 'inactive') {
+                    $subscription->update(['status' => 'active']);
+                    $this->markLatestInvoicePaidIfRenewed($subscription);
+                    Log::info('Inactive subscription re-activated from Stripe by daily cron', [
+                        'subscription_id' => $subscription->id,
+                        'stripe_subscription_id' => $subscription->stripe_subscription_id,
+                        'stripe_period_end' => $stripePeriodEnd->format('Y-m-d'),
+                    ]);
                 }
 
                 $this->info("Subscription {$subscription->id} is already up to date in Stripe");
@@ -232,6 +243,50 @@ class ProcessDailyBilling extends Command
 
         if ($latestInvoice->status !== 'unpaid') {
             $latestInvoice->update(['status' => 'unpaid']);
+        }
+    }
+
+    /**
+     * When Stripe already renewed but webhook failed, local latest invoice often stays unpaid.
+     * Mark it paid so Admin payment status reflects Stripe truth.
+     */
+    protected function markLatestInvoicePaidIfRenewed(SubscriptionRecord $subscription): void
+    {
+        $latestInvoice = BillingInvoice::where(function ($q) use ($subscription) {
+            if ($subscription->user_id) {
+                $q->where('user_id', $subscription->user_id)->where('tier', 'basecamp');
+            } else {
+                $q->where('subscription_id', $subscription->id);
+            }
+        })->orderByDesc('created_at')->first();
+
+        if (! $latestInvoice) {
+            return;
+        }
+
+        if (in_array((string) $latestInvoice->status, ['pending', 'unpaid', 'overdue'], true)) {
+            $latestInvoice->update([
+                'status' => 'paid',
+                'paid_date' => Carbon::today()->toDateString(),
+            ]);
+        }
+
+        $existingPayment = Payment::where('invoice_id', $latestInvoice->id)
+            ->whereIn('status', ['completed', 'approved'])
+            ->exists();
+
+        if (! $existingPayment) {
+            Payment::create([
+                'invoice_id' => $latestInvoice->id,
+                'organisation_id' => $subscription->organisation_id,
+                'user_id' => $subscription->user_id,
+                'payment_method' => 'card',
+                'amount' => $latestInvoice->total_amount,
+                'transaction_id' => $subscription->stripe_subscription_id ?? ('cron-sync-' . $subscription->id . '-' . now()->timestamp),
+                'status' => 'completed',
+                'payment_date' => Carbon::today()->toDateString(),
+                'payment_notes' => 'Auto-reconciled by billing:process-daily after Stripe renewal detected.',
+            ]);
         }
     }
 }

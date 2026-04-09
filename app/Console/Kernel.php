@@ -118,7 +118,7 @@ class Kernel extends ConsoleKernel
         // Uses UTC for system-level billing checks (same time for all users)
         // -------------------------
         $schedule->command('billing:process-daily')
-            ->hourly() // Hourly check for faster subscription status reconciliation
+            ->everyMinute() // Webhook-failure safety net: reconcile renewal every minute
             ->timezone('UTC')
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/billing-daily.log'));

@@ -223,7 +223,9 @@ class ViewBasecampUser extends Component
                 continue;
             }
             $invTs = (int) ($r['sort_ts'] ?? 0);
-            if (abs($invTs - $cTs) <= 120) {
+            // Stripe can timestamp related invoice and captured charge far apart.
+            // Treat same amount/currency within a day as the same billing event.
+            if (abs($invTs - $cTs) <= 86400) {
                 return true;
             }
         }

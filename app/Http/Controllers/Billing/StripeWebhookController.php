@@ -96,6 +96,7 @@ class StripeWebhookController extends Controller
         $stripeSubscriptionId = $invoice->subscription
             ? (is_object($invoice->subscription) ? $invoice->subscription->id : $invoice->subscription)
             : null;
+        $stripeCustomerId = is_object($invoice->customer) ? $invoice->customer->id : $invoice->customer;
 
         if (!$stripeSubscriptionId) {
             Log::info('Invoice has no subscription (one-time invoice), skipping subscription update');
@@ -106,10 +107,24 @@ class StripeWebhookController extends Controller
 
         // Fallback: if not found, may be first payment before checkout.session.completed set stripe_subscription_id
         if (!$subscription) {
-            $stripeCustomerId = is_object($invoice->customer) ? $invoice->customer->id : $invoice->customer;
             if ($stripeCustomerId) {
+                // Basecamp fallback: locate basecamp subscription by customer id even if stripe_subscription_id is missing
+                $subscription = SubscriptionRecord::where('tier', 'basecamp')
+                    ->where('stripe_customer_id', $stripeCustomerId)
+                    ->latest('id')
+                    ->first();
+
+                if ($subscription) {
+                    $subscription->update(['stripe_subscription_id' => $stripeSubscriptionId]);
+                    Log::info('Linked basecamp subscription via stripe customer in invoice.payment_succeeded', [
+                        'subscription_id' => $subscription->id,
+                        'stripe_subscription_id' => $stripeSubscriptionId,
+                        'stripe_customer_id' => $stripeCustomerId,
+                    ]);
+                }
+
                 $organisation = Organisation::where('stripe_customer_id', $stripeCustomerId)->first();
-                if ($organisation) {
+                if (!$subscription && $organisation) {
                     $subscription = SubscriptionRecord::where('organisation_id', $organisation->id)
                         ->whereNull('stripe_subscription_id')
                         ->latest('id')
@@ -165,17 +180,30 @@ class StripeWebhookController extends Controller
 
         $subscription->update($updateData);
 
-        PaymentRecord::create([
-            'organisation_id' => $subscription->organisation_id,
-            'subscription_id' => $subscription->id,
-            'stripe_invoice_id' => $invoice->id,
-            'stripe_payment_intent_id' => $invoice->payment_intent,
-            'amount' => $invoice->amount_paid / 100,
-            'currency' => $invoice->currency,
-            'status' => 'succeeded',
-            'type' => 'subscription_payment',
-            'paid_at' => now(),
-        ]);
+        // Idempotency guard: Stripe can deliver both invoice.payment_succeeded and invoice.paid
+        // for the same invoice (and can retry events). Don't create duplicate successful payments.
+        $existingSucceededPayment = PaymentRecord::where('stripe_invoice_id', $invoice->id)
+            ->where('status', 'succeeded')
+            ->first();
+
+        if (! $existingSucceededPayment) {
+            PaymentRecord::create([
+                'organisation_id' => $subscription->organisation_id,
+                'subscription_id' => $subscription->id,
+                'stripe_invoice_id' => $invoice->id,
+                'stripe_payment_intent_id' => $invoice->payment_intent,
+                'amount' => $invoice->amount_paid / 100,
+                'currency' => $invoice->currency,
+                'status' => 'succeeded',
+                'type' => 'subscription_payment',
+                'paid_at' => now(),
+            ]);
+        } else {
+            Log::info('Skipping duplicate successful PaymentRecord creation for Stripe invoice', [
+                'stripe_invoice_id' => $invoice->id,
+                'existing_payment_record_id' => $existingSucceededPayment->id,
+            ]);
+        }
 
         $invoiceModel = Invoice::where('subscription_id', $subscription->id)->latest()->first();
         if ($invoiceModel) {
