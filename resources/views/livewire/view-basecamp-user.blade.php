@@ -195,7 +195,7 @@
         <div class="mt-8 pt-8 border-t border-gray-200" wire:key="stripe-payment-history">
             <h3 class="text-xl font-bold text-[#EB1C24] mb-2">Payment history (Stripe)</h3>
             <p class="text-sm text-gray-600 mb-4">
-                All invoices (paginated from Stripe) for every customer ID on this user’s subscriptions, plus card charges that are not tied to an invoice. Links open in a new tab.
+                All invoices (paginated from Stripe) for every customer linked to this user — subscription and organisation IDs, plus any Stripe customers found by this user’s email (so guest checkouts do not hide older history). Card-only charges without an invoice are included. Links open in a new tab.
             </p>
 
             @if($stripePaymentHistoryError)

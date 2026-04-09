@@ -11,8 +11,7 @@ use App\Models\HptmLearningChecklist;
 use App\Models\HptmLearningType;
 use App\Models\HptmPrinciple;
 use App\Models\HappyIndex;
-use App\Models\Organisation;
-use App\Models\SubscriptionRecord;
+use App\Services\Billing\StripeInvoiceHistoryService;
 use App\Services\EngagementService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -109,6 +108,10 @@ class ViewBasecampUser extends Component
                     if (! empty($chargeRow['_dedupe_fp']) && isset($invoiceFingerprints[$chargeRow['_dedupe_fp']])) {
                         continue;
                     }
+                    // Charge list sometimes omits invoice linkage; fuzzy match invoice vs charge (same amount/currency, close timestamp).
+                    if ($this->chargeRowDuplicatesInvoiceRow($chargeRow, $rows)) {
+                        continue;
+                    }
 
                     $rows[] = $chargeRow;
                 }
@@ -136,23 +139,7 @@ class ViewBasecampUser extends Component
      */
     protected function collectStripeCustomerIdsForUser(): array
     {
-        $ids = SubscriptionRecord::query()
-            ->where('user_id', $this->user->id)
-            ->whereNotNull('stripe_customer_id')
-            ->pluck('stripe_customer_id')
-            ->unique()
-            ->filter()
-            ->values()
-            ->all();
-
-        if ($this->user->orgId) {
-            $orgCid = Organisation::query()->whereKey($this->user->orgId)->value('stripe_customer_id');
-            if ($orgCid && ! in_array($orgCid, $ids, true)) {
-                $ids[] = $orgCid;
-            }
-        }
-
-        return array_values(array_unique($ids));
+        return app(StripeInvoiceHistoryService::class)->collectCustomerIdsForUser($this->user);
     }
 
     /**
@@ -162,17 +149,9 @@ class ViewBasecampUser extends Component
     {
         $all = [];
         $params = ['customer' => $customerId, 'limit' => 100];
-
-        while (true) {
-            $page = StripeInvoice::all($params);
-            foreach ($page->data as $inv) {
-                $all[] = $inv;
-            }
-            if (! $page->has_more || empty($page->data)) {
-                break;
-            }
-            $last = $page->data[count($page->data) - 1];
-            $params['starting_after'] = $last->id;
+        $firstPage = StripeInvoice::all($params);
+        foreach ($firstPage->autoPagingIterator() as $inv) {
+            $all[] = $inv;
         }
 
         return $all;
@@ -187,20 +166,12 @@ class ViewBasecampUser extends Component
     {
         $all = [];
         $params = ['customer' => $customerId, 'limit' => 100];
-
-        while (true) {
-            $page = StripeCharge::all($params);
-            foreach ($page->data as $ch) {
-                if (! empty($ch->invoice)) {
-                    continue;
-                }
-                $all[] = $ch;
+        $firstPage = StripeCharge::all($params);
+        foreach ($firstPage->autoPagingIterator() as $ch) {
+            if (! empty($ch->invoice)) {
+                continue;
             }
-            if (! $page->has_more || empty($page->data)) {
-                break;
-            }
-            $last = $page->data[count($page->data) - 1];
-            $params['starting_after'] = $last->id;
+            $all[] = $ch;
         }
 
         return $all;
@@ -225,6 +196,39 @@ class ViewBasecampUser extends Component
         }
 
         return null;
+    }
+
+    /**
+     * When Stripe omits invoice id on a charge, we still get a second row for the same payment as the invoice row.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    protected function chargeRowDuplicatesInvoiceRow(array $chargeRow, array $rows): bool
+    {
+        $cCur = $chargeRow['currency'] ?? '';
+        $cTs = (int) ($chargeRow['sort_ts'] ?? 0);
+        $cParts = explode('|', (string) ($chargeRow['_dedupe_fp'] ?? ''), 3);
+        $cAmtMinor = isset($cParts[1]) ? (int) $cParts[1] : 0;
+
+        foreach ($rows as $r) {
+            if (($r['kind'] ?? '') !== 'invoice') {
+                continue;
+            }
+            if (($r['currency'] ?? '') !== $cCur) {
+                continue;
+            }
+            $invParts = explode('|', (string) ($r['_dedupe_fp'] ?? ''), 3);
+            $invAmtMinor = isset($invParts[1]) ? (int) $invParts[1] : 0;
+            if ($invAmtMinor !== $cAmtMinor) {
+                continue;
+            }
+            $invTs = (int) ($r['sort_ts'] ?? 0);
+            if (abs($invTs - $cTs) <= 120) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

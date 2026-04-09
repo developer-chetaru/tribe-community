@@ -7,8 +7,10 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\SubscriptionRecord;
 use App\Models\User;
+use App\Services\Billing\StripeInvoiceHistoryService;
 use App\Services\StripePaymentService;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -177,16 +179,57 @@ class BasecampBillingController extends Controller
                 ], 403);
             }
 
+            // Match web /billing: prefer Stripe invoice history when customer IDs exist (same as Billing Livewire).
+            /** @var StripeInvoiceHistoryService $stripeHistory */
+            $stripeHistory = app(StripeInvoiceHistoryService::class);
+            $customerIds = $stripeHistory->collectCustomerIdsForUser($user);
+
+            if ($customerIds !== []) {
+                try {
+                    $stripeRows = $stripeHistory->fetchInvoiceDisplayRows($customerIds);
+                    if (count($stripeRows) > 0) {
+                        $mapped = collect($stripeRows)->map(fn (\stdClass $row) => $this->stripeInvoiceRowToApiPayload($row));
+
+                        if ($request->has('status')) {
+                            $mapped = $mapped->filter(function (array $item) use ($request) {
+                                return ($item['status'] ?? '') === $request->status;
+                            })->values();
+                        }
+
+                        $perPage = min(max((int) $request->get('per_page', 10), 1), 100);
+                        $page = LengthAwarePaginator::resolveCurrentPage();
+                        $total = $mapped->count();
+                        $items = $mapped->slice(($page - 1) * $perPage, $perPage)->values()->all();
+
+                        return response()->json([
+                            'status' => true,
+                            'message' => 'Invoices retrieved successfully',
+                            'data' => $items,
+                            'user_id' => $user->id,
+                            'current_page' => $page,
+                            'last_page' => (int) max(1, (int) ceil($total / $perPage)),
+                            'per_page' => $perPage,
+                            'total' => $total,
+                            'source' => 'stripe',
+                        ], 200);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Basecamp API getInvoices: Stripe failed, using local invoices', [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
             $query = Invoice::where('user_id', $user->id)
                 ->where('tier', 'basecamp')
                 ->orderBy('created_at', 'desc');
 
-            // Filter by status if provided
             if ($request->has('status')) {
                 $query->where('status', $request->status);
             }
 
-            $invoices = $query->paginate(10);
+            $invoices = $query->paginate(min(max((int) $request->get('per_page', 10), 1), 100));
 
             return response()->json([
                 'status' => true,
@@ -197,6 +240,7 @@ class BasecampBillingController extends Controller
                 'last_page' => $invoices->lastPage(),
                 'per_page' => $invoices->perPage(),
                 'total' => $invoices->total(),
+                'source' => 'local',
             ], 200);
 
         } catch (\Exception $e) {
@@ -207,6 +251,44 @@ class BasecampBillingController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Shape aligned with local Invoice API fields + Stripe URLs for View/PDF (same data as web /billing).
+     *
+     * @return array<string, mixed>
+     */
+    protected function stripeInvoiceRowToApiPayload(\stdClass $row): array
+    {
+        $invoiceDate = $row->invoice_date ?? null;
+        $dateStr = null;
+        if ($invoiceDate instanceof \Carbon\Carbon) {
+            $dateStr = $invoiceDate->format('Y-m-d');
+        } elseif ($invoiceDate instanceof \DateTimeInterface) {
+            $dateStr = $invoiceDate->format('Y-m-d');
+        }
+
+        return [
+            'from_stripe' => true,
+            'id' => null,
+            'stripe_invoice_id' => $row->stripe_invoice_id ?? null,
+            'invoice_number' => $row->invoice_number ?? null,
+            'tier' => 'basecamp',
+            'user_id' => null,
+            'subscription_id' => null,
+            'user_count' => 1,
+            'price_per_user' => null,
+            'subtotal' => isset($row->subtotal) ? (float) $row->subtotal : null,
+            'tax_amount' => isset($row->tax_amount) ? (float) $row->tax_amount : null,
+            'total_amount' => (float) ($row->total_amount ?? 0),
+            'status' => $row->status ?? 'pending',
+            'invoice_date' => $dateStr,
+            'due_date' => null,
+            'paid_at' => null,
+            'hosted_invoice_url' => $row->hosted_invoice_url ?? null,
+            'invoice_pdf' => $row->invoice_pdf ?? null,
+            'currency' => $row->currency ?? 'GBP',
+        ];
     }
 
     /**
