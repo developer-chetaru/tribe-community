@@ -6,13 +6,14 @@ use Illuminate\Console\Command;
 use App\Models\SubscriptionRecord;
 use App\Models\Invoice as BillingInvoice;
 use App\Models\Payment;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Stripe\Stripe;
 
 class ProcessDailyBilling extends Command
 {
-    protected $signature = 'billing:process-daily';
+    protected $signature = 'billing:process-daily {--email= : Only sync the basecamp subscription for this user email}';
     protected $description = 'Process monthly subscriptions daily - checks for expired/due subscriptions and processes auto-renewal';
 
     public function handle()
@@ -22,14 +23,51 @@ class ProcessDailyBilling extends Command
 
         Stripe::setApiKey(config('services.stripe.secret'));
 
+        if ($email = $this->option('email')) {
+            $user = User::where('email', $email)->first();
+            if (! $user) {
+                $this->error("No user found with email: {$email}");
+
+                return 1;
+            }
+
+            $subscription = SubscriptionRecord::query()
+                ->where('user_id', $user->id)
+                ->where('tier', 'basecamp')
+                ->first();
+
+            if (! $subscription) {
+                $this->error('No basecamp subscription record for this user.');
+
+                return 1;
+            }
+
+            $this->info("Single-user sync: subscription_record.id={$subscription->id} ({$email})");
+            $this->processSubscription($subscription);
+
+            return 0;
+        }
+
         // Check subscriptions due for billing/period-end sync.
         // Include inactive records too so we can backfill missing unpaid invoice for UI consistency.
+        // Also include broken rows: Stripe id present but local period dates missing (webhook never updated DB).
         $subscriptions = SubscriptionRecord::whereIn('status', ['active', 'inactive'])
             ->where(function ($q) {
                 $q->whereDate('current_period_end', '<=', Carbon::today())
                     ->orWhere(function ($q2) {
                         $q2->whereNull('current_period_end')
                             ->whereDate('next_billing_date', '<=', Carbon::today());
+                    })
+                    ->orWhere(function ($q3) {
+                        $q3->whereNotNull('stripe_subscription_id')
+                            ->where(function ($q4) {
+                                $q4->whereNull('current_period_end')
+                                    ->orWhereNull('next_billing_date');
+                            });
+                    })
+                    ->orWhere(function ($q5) {
+                        $q5->whereNotNull('stripe_customer_id')
+                            ->whereNull('stripe_subscription_id');
                     });
             })
             ->get();
@@ -54,8 +92,10 @@ class ProcessDailyBilling extends Command
         $this->info("Processing subscription ID: {$subscription->id}");
 
         try {
+            $this->tryLinkStripeSubscriptionFromCustomer($subscription);
+
             // If subscription has no Stripe link and period already ended, mark inactive/unpaid.
-            if (!$subscription->stripe_subscription_id) {
+            if (! $subscription->stripe_subscription_id) {
                 if ($subscription->status === 'inactive') {
                     $this->ensureUnpaidInvoiceForInactive($subscription);
                     return;
@@ -146,6 +186,49 @@ class ProcessDailyBilling extends Command
             Log::error("Failed to process subscription {$subscription->id}: " . $e->getMessage());
             $this->error("Failed to process subscription: " . $e->getMessage());
             throw $e;
+        }
+    }
+
+    /**
+     * If DB row is missing stripe_subscription_id but we have stripe_customer_id, pick the best open subscription from Stripe.
+     */
+    protected function tryLinkStripeSubscriptionFromCustomer(SubscriptionRecord $subscription): void
+    {
+        if ($subscription->stripe_subscription_id || ! $subscription->stripe_customer_id) {
+            return;
+        }
+
+        try {
+            $page = \Stripe\Subscription::all([
+                'customer' => $subscription->stripe_customer_id,
+                'limit' => 20,
+            ]);
+
+            $best = null;
+            foreach ($page->autoPagingIterator() as $stripeSubscription) {
+                if (in_array($stripeSubscription->status, ['active', 'trialing', 'past_due'], true)) {
+                    $best = $stripeSubscription;
+                    break;
+                }
+            }
+
+            if ($best) {
+                $subscription->update(['stripe_subscription_id' => $best->id]);
+                $subscription->refresh();
+                Log::info('Linked stripe_subscription_id from Stripe customer in daily cron', [
+                    'subscription_record_id' => $subscription->id,
+                    'stripe_customer_id' => $subscription->stripe_customer_id,
+                    'stripe_subscription_id' => $best->id,
+                    'stripe_status' => $best->status,
+                ]);
+                $this->info("Linked Stripe subscription {$best->id} from customer {$subscription->stripe_customer_id}");
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Could not list Stripe subscriptions for customer', [
+                'subscription_record_id' => $subscription->id,
+                'stripe_customer_id' => $subscription->stripe_customer_id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
