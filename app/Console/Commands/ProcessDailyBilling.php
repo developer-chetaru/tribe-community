@@ -10,6 +10,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Stripe\Stripe;
+use Stripe\Customer as StripeCustomer;
 
 class ProcessDailyBilling extends Command
 {
@@ -43,7 +44,14 @@ class ProcessDailyBilling extends Command
             }
 
             $this->info("Single-user sync: subscription_record.id={$subscription->id} ({$email})");
+            $this->line('DB before: status=' . ($subscription->status ?? 'null')
+                . ' stripe_customer_id=' . ($subscription->stripe_customer_id ?? 'null')
+                . ' stripe_subscription_id=' . ($subscription->stripe_subscription_id ?? 'null'));
             $this->processSubscription($subscription);
+            $subscription->refresh();
+            $this->line('DB after:  status=' . ($subscription->status ?? 'null')
+                . ' stripe_customer_id=' . ($subscription->stripe_customer_id ?? 'null')
+                . ' stripe_subscription_id=' . ($subscription->stripe_subscription_id ?? 'null'));
 
             return 0;
         }
@@ -93,6 +101,7 @@ class ProcessDailyBilling extends Command
 
         try {
             $this->tryLinkStripeSubscriptionFromCustomer($subscription);
+            $this->tryLinkStripeIdsFromUserEmail($subscription);
 
             // If subscription has no Stripe link and period already ended, mark inactive/unpaid.
             if (! $subscription->stripe_subscription_id) {
@@ -118,16 +127,17 @@ class ProcessDailyBilling extends Command
                 : null;
             $today = Carbon::today();
 
-            // Stripe says subscription is not in good standing — always reconcile to inactive/unpaid.
-            if (in_array($stripeSub->status, ['past_due', 'unpaid', 'canceled', 'incomplete_expired', 'incomplete', 'paused'], true)) {
+            // Stripe says subscription is not in good standing — reconcile to inactive/unpaid.
+            // Note: do NOT include past_due here — payment may have succeeded but webhooks missed; we sync below.
+            if (in_array($stripeSub->status, ['unpaid', 'canceled', 'incomplete_expired', 'incomplete', 'paused'], true)) {
                 $this->markInactiveAndUnpaid($subscription, "stripe_status_{$stripeSub->status}");
                 Log::warning("Subscription {$subscription->id} marked inactive/unpaid due to Stripe status {$stripeSub->status}");
                 return;
             }
 
-            // Successful renewal: Stripe's current period extends past now — sync local DB if needed.
-            if ($stripePeriodEnd && $stripePeriodEnd->isFuture()) {
-                if (!$localPeriodEnd || !$stripePeriodEnd->isSameDay($localPeriodEnd)) {
+            // Active / trialing / past_due: refresh period fields from Stripe (trust Stripe subscription object over local NULLs).
+            if (in_array($stripeSub->status, ['active', 'trialing', 'past_due'], true) && $stripePeriodEnd && $stripePeriodStart) {
+                if (! $localPeriodEnd || ! $stripePeriodEnd->isSameDay($localPeriodEnd)) {
                     $subscription->update([
                         'status' => 'active',
                         'current_period_start' => $stripePeriodStart,
@@ -157,6 +167,20 @@ class ProcessDailyBilling extends Command
 
                 $this->info("Subscription {$subscription->id} is already up to date in Stripe");
                 return;
+            }
+
+            // Fallback: future period end but unexpected status handling above
+            if ($stripePeriodEnd && $stripePeriodEnd->isFuture()) {
+                if (! $localPeriodEnd || ! $stripePeriodEnd->isSameDay($localPeriodEnd)) {
+                    $subscription->update([
+                        'status' => 'active',
+                        'current_period_start' => $stripePeriodStart,
+                        'current_period_end' => $stripePeriodEnd,
+                        'next_billing_date' => $stripePeriodEnd,
+                    ]);
+                    $this->markLatestInvoicePaidIfRenewed($subscription);
+                    return;
+                }
             }
 
             // From here: Stripe has no future billing period (renewal did not land in Stripe).
@@ -205,10 +229,15 @@ class ProcessDailyBilling extends Command
             ]);
 
             $best = null;
+            $bestEnd = 0;
             foreach ($page->autoPagingIterator() as $stripeSubscription) {
-                if (in_array($stripeSubscription->status, ['active', 'trialing', 'past_due'], true)) {
+                if (! in_array($stripeSubscription->status, ['active', 'trialing', 'past_due'], true)) {
+                    continue;
+                }
+                $endTs = (int) ($stripeSubscription->current_period_end ?? 0);
+                if ($endTs >= $bestEnd) {
+                    $bestEnd = $endTs;
                     $best = $stripeSubscription;
-                    break;
                 }
             }
 
@@ -229,6 +258,81 @@ class ProcessDailyBilling extends Command
                 'stripe_customer_id' => $subscription->stripe_customer_id,
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * Guest checkouts often leave stripe_customer_id / stripe_subscription_id empty in DB even though Stripe has paid invoices.
+     * Search Stripe customers by user email and link the best active subscription.
+     */
+    protected function tryLinkStripeIdsFromUserEmail(SubscriptionRecord $subscription): void
+    {
+        if ($subscription->stripe_subscription_id || ! $subscription->user_id) {
+            return;
+        }
+
+        $user = User::find($subscription->user_id);
+        if (! $user || $user->email === null || trim((string) $user->email) === '') {
+            return;
+        }
+
+        $escaped = str_replace("'", "\\'", $user->email);
+        $query = "email:'{$escaped}'";
+
+        try {
+            $firstPage = StripeCustomer::search([
+                'query' => $query,
+                'limit' => 20,
+            ]);
+
+            $bestSub = null;
+            $bestEnd = 0;
+            $bestCustomerId = null;
+
+            foreach ($firstPage->autoPagingIterator() as $customer) {
+                $cid = $customer->id ?? null;
+                if (! is_string($cid) || $cid === '') {
+                    continue;
+                }
+
+                $page = \Stripe\Subscription::all([
+                    'customer' => $cid,
+                    'limit' => 20,
+                ]);
+
+                foreach ($page->autoPagingIterator() as $stripeSubscription) {
+                    if (! in_array($stripeSubscription->status, ['active', 'trialing', 'past_due'], true)) {
+                        continue;
+                    }
+                    $endTs = (int) ($stripeSubscription->current_period_end ?? 0);
+                    if ($endTs >= $bestEnd) {
+                        $bestEnd = $endTs;
+                        $bestSub = $stripeSubscription;
+                        $bestCustomerId = $cid;
+                    }
+                }
+            }
+
+            if ($bestSub && $bestCustomerId) {
+                $subscription->update([
+                    'stripe_customer_id' => $bestCustomerId,
+                    'stripe_subscription_id' => $bestSub->id,
+                ]);
+                $subscription->refresh();
+                Log::info('Linked Stripe customer + subscription from email search (daily cron)', [
+                    'subscription_record_id' => $subscription->id,
+                    'stripe_customer_id' => $bestCustomerId,
+                    'stripe_subscription_id' => $bestSub->id,
+                    'stripe_status' => $bestSub->status,
+                ]);
+                $this->info("Linked {$bestCustomerId} + subscription {$bestSub->id} from email search");
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Stripe customer search by email failed in daily cron', [
+                'subscription_record_id' => $subscription->id,
+                'error' => $e->getMessage(),
+            ]);
+            $this->warn('Stripe email search failed: ' . $e->getMessage());
         }
     }
 
