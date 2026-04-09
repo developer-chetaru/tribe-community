@@ -2,19 +2,20 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Models\SubscriptionRecord;
 use App\Models\Invoice as BillingInvoice;
 use App\Models\Payment;
+use App\Models\SubscriptionRecord;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
-use Stripe\Stripe;
 use Stripe\Customer as StripeCustomer;
+use Stripe\Stripe;
 
 class ProcessDailyBilling extends Command
 {
     protected $signature = 'billing:process-daily {--email= : Only sync the basecamp subscription for this user email}';
+
     protected $description = 'Process monthly subscriptions daily - checks for expired/due subscriptions and processes auto-renewal';
 
     public function handle()
@@ -44,14 +45,14 @@ class ProcessDailyBilling extends Command
             }
 
             $this->info("Single-user sync: subscription_record.id={$subscription->id} ({$email})");
-            $this->line('DB before: status=' . ($subscription->status ?? 'null')
-                . ' stripe_customer_id=' . ($subscription->stripe_customer_id ?? 'null')
-                . ' stripe_subscription_id=' . ($subscription->stripe_subscription_id ?? 'null'));
+            $this->line('DB before: status='.($subscription->status ?? 'null')
+                .' stripe_customer_id='.($subscription->stripe_customer_id ?? 'null')
+                .' stripe_subscription_id='.($subscription->stripe_subscription_id ?? 'null'));
             $this->processSubscription($subscription);
             $subscription->refresh();
-            $this->line('DB after:  status=' . ($subscription->status ?? 'null')
-                . ' stripe_customer_id=' . ($subscription->stripe_customer_id ?? 'null')
-                . ' stripe_subscription_id=' . ($subscription->stripe_subscription_id ?? 'null'));
+            $this->line('DB after:  status='.($subscription->status ?? 'null')
+                .' stripe_customer_id='.($subscription->stripe_customer_id ?? 'null')
+                .' stripe_subscription_id='.($subscription->stripe_subscription_id ?? 'null'));
 
             return 0;
         }
@@ -86,8 +87,8 @@ class ProcessDailyBilling extends Command
             try {
                 $this->processSubscription($subscription);
             } catch (\Exception $e) {
-                Log::error("Failed to process subscription {$subscription->id}: " . $e->getMessage());
-                $this->error("Failed to process subscription {$subscription->id}: " . $e->getMessage());
+                Log::error("Failed to process subscription {$subscription->id}: ".$e->getMessage());
+                $this->error("Failed to process subscription {$subscription->id}: ".$e->getMessage());
             }
         }
 
@@ -107,9 +108,11 @@ class ProcessDailyBilling extends Command
             if (! $subscription->stripe_subscription_id) {
                 if ($subscription->status === 'inactive') {
                     $this->ensureUnpaidInvoiceForInactive($subscription);
+
                     return;
                 }
                 $this->handleNoStripeSubscriptionAfterPeriodEnd($subscription);
+
                 return;
             }
 
@@ -132,55 +135,41 @@ class ProcessDailyBilling extends Command
             if (in_array($stripeSub->status, ['unpaid', 'canceled', 'incomplete_expired', 'incomplete', 'paused'], true)) {
                 $this->markInactiveAndUnpaid($subscription, "stripe_status_{$stripeSub->status}");
                 Log::warning("Subscription {$subscription->id} marked inactive/unpaid due to Stripe status {$stripeSub->status}");
+
                 return;
             }
 
-            // Active / trialing / past_due: refresh period fields from Stripe (trust Stripe subscription object over local NULLs).
-            if (in_array($stripeSub->status, ['active', 'trialing', 'past_due'], true) && $stripePeriodEnd && $stripePeriodStart) {
-                if (! $localPeriodEnd || ! $stripePeriodEnd->isSameDay($localPeriodEnd)) {
-                    $subscription->update([
-                        'status' => 'active',
-                        'current_period_start' => $stripePeriodStart,
-                        'current_period_end' => $stripePeriodEnd,
-                        'next_billing_date' => $stripePeriodEnd,
-                    ]);
-                    $this->info("Subscription {$subscription->id} synced from Stripe period dates");
-                    Log::info('Subscription synced from Stripe in daily cron', [
-                        'subscription_id' => $subscription->id,
-                        'stripe_subscription_id' => $subscription->stripe_subscription_id,
-                        'old_local_period_end' => $localPeriodEnd?->format('Y-m-d'),
-                        'new_period_end' => $stripePeriodEnd->format('Y-m-d'),
-                    ]);
-                    $this->markLatestInvoicePaidIfRenewed($subscription);
-                    return;
-                }
-
+            // Healthy subscription states: always persist status + whatever period fields Stripe returns.
+            // (Previously we required BOTH period timestamps; some API payloads omit one field and local DB stayed inactive forever.)
+            if (in_array($stripeSub->status, ['active', 'trialing', 'past_due'], true)) {
+                $update = [
+                    'status' => 'active',
+                ];
                 if ($subscription->status === 'inactive') {
-                    $subscription->update(['status' => 'active']);
-                    $this->markLatestInvoicePaidIfRenewed($subscription);
-                    Log::info('Inactive subscription re-activated from Stripe by daily cron', [
-                        'subscription_id' => $subscription->id,
-                        'stripe_subscription_id' => $subscription->stripe_subscription_id,
-                        'stripe_period_end' => $stripePeriodEnd->format('Y-m-d'),
-                    ]);
+                    $update['last_payment_date'] = now();
+                }
+                if ($stripePeriodStart) {
+                    $update['current_period_start'] = $stripePeriodStart;
+                }
+                if ($stripePeriodEnd) {
+                    $update['current_period_end'] = $stripePeriodEnd;
+                    $update['next_billing_date'] = $stripePeriodEnd;
                 }
 
-                $this->info("Subscription {$subscription->id} is already up to date in Stripe");
+                $subscription->update($update);
+                $this->markLatestInvoicePaidIfRenewed($subscription);
+
+                $this->info("Subscription {$subscription->id} reconciled from Stripe (status={$stripeSub->status})");
+                Log::info('Subscription reconciled from Stripe in daily cron', [
+                    'subscription_id' => $subscription->id,
+                    'stripe_subscription_id' => $subscription->stripe_subscription_id,
+                    'stripe_status' => $stripeSub->status,
+                    'stripe_period_start' => $stripePeriodStart?->toIso8601String(),
+                    'stripe_period_end' => $stripePeriodEnd?->toIso8601String(),
+                    'had_local_period_end' => $localPeriodEnd?->format('Y-m-d'),
+                ]);
+
                 return;
-            }
-
-            // Fallback: future period end but unexpected status handling above
-            if ($stripePeriodEnd && $stripePeriodEnd->isFuture()) {
-                if (! $localPeriodEnd || ! $stripePeriodEnd->isSameDay($localPeriodEnd)) {
-                    $subscription->update([
-                        'status' => 'active',
-                        'current_period_start' => $stripePeriodStart,
-                        'current_period_end' => $stripePeriodEnd,
-                        'next_billing_date' => $stripePeriodEnd,
-                    ]);
-                    $this->markLatestInvoicePaidIfRenewed($subscription);
-                    return;
-                }
             }
 
             // From here: Stripe has no future billing period (renewal did not land in Stripe).
@@ -189,26 +178,30 @@ class ProcessDailyBilling extends Command
             if ($localPeriodEnd && $localPeriodEnd->lt($today)) {
                 $this->markInactiveAndUnpaid($subscription, 'period_end_passed_no_renewal');
                 $this->warn("Subscription {$subscription->id} period ended (local {$localPeriodEnd->format('Y-m-d')}) without Stripe renewal. Marked inactive/unpaid.");
+
                 return;
             }
 
-            $this->info("Subscription {$subscription->id} is active and will be handled by Stripe automatically");
-            Log::info("Subscription {$subscription->id} processed - Stripe will handle billing automatically", [
+            $this->warn("Subscription {$subscription->id}: unhandled Stripe status '{$stripeSub->status}' — no DB update");
+            Log::warning('Unhandled Stripe subscription status in daily cron', [
+                'subscription_id' => $subscription->id,
+                'stripe_subscription_id' => $subscription->stripe_subscription_id,
                 'stripe_status' => $stripeSub->status,
                 'stripe_period_end' => $stripePeriodEnd?->format('Y-m-d'),
                 'local_period_end' => $subscription->current_period_end ? Carbon::parse($subscription->current_period_end)->format('Y-m-d') : 'N/A',
             ]);
-            
+
         } catch (\Exception $e) {
             if (str_contains($e->getMessage(), 'No such subscription')) {
                 $this->markInactiveAndUnpaid($subscription, 'stripe_subscription_missing');
                 Log::warning("Stripe subscription missing for local subscription {$subscription->id}. Marked inactive/unpaid.");
                 $this->warn("Subscription {$subscription->id} Stripe subscription missing. Marked inactive/unpaid.");
+
                 return;
             }
 
-            Log::error("Failed to process subscription {$subscription->id}: " . $e->getMessage());
-            $this->error("Failed to process subscription: " . $e->getMessage());
+            Log::error("Failed to process subscription {$subscription->id}: ".$e->getMessage());
+            $this->error('Failed to process subscription: '.$e->getMessage());
             throw $e;
         }
     }
@@ -332,7 +325,7 @@ class ProcessDailyBilling extends Command
                 'subscription_record_id' => $subscription->id,
                 'error' => $e->getMessage(),
             ]);
-            $this->warn('Stripe email search failed: ' . $e->getMessage());
+            $this->warn('Stripe email search failed: '.$e->getMessage());
         }
     }
 
@@ -356,14 +349,14 @@ class ProcessDailyBilling extends Command
 
         // Keep historical paid invoice intact.
         // Ensure there is an unpaid invoice for the current cycle so UI shows "Unpaid".
-        $needsCurrentUnpaidInvoice = !$latestInvoice || $latestInvoice->status === 'paid';
+        $needsCurrentUnpaidInvoice = ! $latestInvoice || $latestInvoice->status === 'paid';
         if ($needsCurrentUnpaidInvoice) {
             $today = Carbon::today()->toDateString();
             $existingTodayInvoice = BillingInvoice::where('subscription_id', $subscription->id)
                 ->whereDate('invoice_date', $today)
                 ->first();
 
-            if (!$existingTodayInvoice) {
+            if (! $existingTodayInvoice) {
                 $pricePerUser = $this->getTierPrice($subscription->tier);
                 $userCount = max(1, (int) ($subscription->user_count ?? 1));
                 $subtotal = $pricePerUser * $userCount;
@@ -422,9 +415,10 @@ class ProcessDailyBilling extends Command
             ->orderByDesc('created_at')
             ->first();
 
-        if (!$latestInvoice || $latestInvoice->status === 'paid') {
+        if (! $latestInvoice || $latestInvoice->status === 'paid') {
             $this->markInactiveAndUnpaid($subscription, 'inactive_backfill_unpaid_invoice');
             $this->info("Backfilled unpaid invoice for inactive subscription {$subscription->id}");
+
             return;
         }
 
@@ -469,7 +463,7 @@ class ProcessDailyBilling extends Command
                 'user_id' => $subscription->user_id,
                 'payment_method' => 'card',
                 'amount' => $latestInvoice->total_amount,
-                'transaction_id' => $subscription->stripe_subscription_id ?? ('cron-sync-' . $subscription->id . '-' . now()->timestamp),
+                'transaction_id' => $subscription->stripe_subscription_id ?? ('cron-sync-'.$subscription->id.'-'.now()->timestamp),
                 'status' => 'completed',
                 'payment_date' => Carbon::today()->toDateString(),
                 'payment_notes' => 'Auto-reconciled by billing:process-daily after Stripe renewal detected.',
@@ -477,4 +471,3 @@ class ProcessDailyBilling extends Command
         }
     }
 }
-
