@@ -1674,7 +1674,7 @@
          class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
          style="display: none;"
          id="cancel-modal">
-        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white z-50"
+        <div class="relative top-20 mx-auto max-w-[600px] p-5 border shadow-lg rounded-md bg-white z-50"
              x-show="show"
              x-transition:enter="ease-out duration-300"
              x-transition:enter-start="opacity-0 scale-95"
@@ -1713,14 +1713,14 @@
                     <button wire:click="closeCancelModal" 
                             @click="show = false"
                             type="button"
-                            class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors">
+                            class="px-4 py-2 bg-gray-200 text-gray-800 text-[14px] md:text-[16px] rounded-md hover:bg-gray-300 transition-colors">
                         Keep Subscription
                     </button>
                     <button wire:click="cancelSubscription" 
                             wire:loading.attr="disabled"
                             wire:target="cancelSubscription"
                             type="button"
-                            class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center cursor-pointer">
+                            class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-[14px] md:text-[16px] transition-colors disabled:opacity-50 flex items-center justify-center cursor-pointer">
                         <span wire:loading.remove wire:target="cancelSubscription">
                             <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
