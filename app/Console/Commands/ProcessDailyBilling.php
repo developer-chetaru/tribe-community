@@ -47,12 +47,16 @@ class ProcessDailyBilling extends Command
             $this->info("Single-user sync: subscription_record.id={$subscription->id} ({$email})");
             $this->line('DB before: status='.($subscription->status ?? 'null')
                 .' stripe_customer_id='.($subscription->stripe_customer_id ?? 'null')
-                .' stripe_subscription_id='.($subscription->stripe_subscription_id ?? 'null'));
+                .' stripe_subscription_id='.($subscription->stripe_subscription_id ?? 'null')
+                .' current_period_end='.($subscription->current_period_end?->toIso8601String() ?? 'null')
+                .' next_billing_date='.($subscription->next_billing_date?->toIso8601String() ?? 'null'));
             $this->processSubscription($subscription);
             $subscription->refresh();
             $this->line('DB after:  status='.($subscription->status ?? 'null')
                 .' stripe_customer_id='.($subscription->stripe_customer_id ?? 'null')
-                .' stripe_subscription_id='.($subscription->stripe_subscription_id ?? 'null'));
+                .' stripe_subscription_id='.($subscription->stripe_subscription_id ?? 'null')
+                .' current_period_end='.($subscription->current_period_end?->toIso8601String() ?? 'null')
+                .' next_billing_date='.($subscription->next_billing_date?->toIso8601String() ?? 'null'));
 
             return 0;
         }
@@ -116,15 +120,17 @@ class ProcessDailyBilling extends Command
                 return;
             }
 
-            // Retrieve Stripe subscription to check status
-            $stripeSub = \Stripe\Subscription::retrieve($subscription->stripe_subscription_id);
+            // Retrieve Stripe subscription (expand invoice so we can fall back to line-item period if needed).
+            $stripeSub = \Stripe\Subscription::retrieve($subscription->stripe_subscription_id, [
+                'expand' => ['latest_invoice'],
+            ]);
 
-            $stripePeriodStart = isset($stripeSub->current_period_start)
-                ? Carbon::createFromTimestamp($stripeSub->current_period_start)
-                : null;
-            $stripePeriodEnd = isset($stripeSub->current_period_end)
-                ? Carbon::createFromTimestamp($stripeSub->current_period_end)
-                : null;
+            [$stripePeriodStart, $stripePeriodEnd] = $this->resolveStripeSubscriptionPeriods($stripeSub);
+            if (! $stripePeriodEnd || ! $stripePeriodStart) {
+                [$fbStart, $fbEnd] = $this->fetchPeriodsFromLatestStripeInvoice($subscription->stripe_subscription_id);
+                $stripePeriodStart = $stripePeriodStart ?: $fbStart;
+                $stripePeriodEnd = $stripePeriodEnd ?: $fbEnd;
+            }
             $localPeriodEnd = $subscription->current_period_end
                 ? Carbon::parse($subscription->current_period_end)->startOfDay()
                 : null;
@@ -407,6 +413,87 @@ class ProcessDailyBilling extends Command
         ];
 
         return $prices[strtolower((string) $tier)] ?? 10.00;
+    }
+
+    /**
+     * Stripe timestamps are Unix seconds; treat 0 / empty as missing.
+     */
+    protected function normalizeStripeTimestamp(mixed $ts): ?int
+    {
+        if ($ts === null || $ts === '') {
+            return null;
+        }
+        $n = (int) $ts;
+
+        return $n > 0 ? $n : null;
+    }
+
+    /**
+     * Prefer subscription-level period; fall back to first subscription item or expanded latest_invoice line period.
+     */
+    protected function resolveStripeSubscriptionPeriods(\Stripe\Subscription $stripeSub): array
+    {
+        $startTs = $this->normalizeStripeTimestamp($stripeSub->current_period_start ?? null);
+        $endTs = $this->normalizeStripeTimestamp($stripeSub->current_period_end ?? null);
+
+        if ((! $startTs || ! $endTs) && isset($stripeSub->items->data[0])) {
+            $item = $stripeSub->items->data[0];
+            $startTs = $startTs ?: $this->normalizeStripeTimestamp($item->current_period_start ?? null);
+            $endTs = $endTs ?: $this->normalizeStripeTimestamp($item->current_period_end ?? null);
+        }
+
+        $latestInvoice = $stripeSub->latest_invoice ?? null;
+        if ((! $startTs || ! $endTs) && $latestInvoice && is_object($latestInvoice) && isset($latestInvoice->lines->data[0])) {
+            $period = $latestInvoice->lines->data[0]->period ?? null;
+            if ($period) {
+                $startTs = $startTs ?: $this->normalizeStripeTimestamp($period->start ?? null);
+                $endTs = $endTs ?: $this->normalizeStripeTimestamp($period->end ?? null);
+            }
+        }
+
+        return [
+            $startTs ? Carbon::createFromTimestamp($startTs) : null,
+            $endTs ? Carbon::createFromTimestamp($endTs) : null,
+        ];
+    }
+
+    /**
+     * Last resort: read billing period from the most recent Stripe invoice for this subscription.
+     */
+    protected function fetchPeriodsFromLatestStripeInvoice(?string $stripeSubscriptionId): array
+    {
+        if (! $stripeSubscriptionId) {
+            return [null, null];
+        }
+
+        try {
+            $invoices = \Stripe\Invoice::all([
+                'subscription' => $stripeSubscriptionId,
+                'limit' => 1,
+            ]);
+            $inv = $invoices->data[0] ?? null;
+            if (! $inv || empty($inv->lines->data)) {
+                return [null, null];
+            }
+            $period = $inv->lines->data[0]->period ?? null;
+            if (! $period) {
+                return [null, null];
+            }
+            $startTs = $this->normalizeStripeTimestamp($period->start ?? null);
+            $endTs = $this->normalizeStripeTimestamp($period->end ?? null);
+
+            return [
+                $startTs ? Carbon::createFromTimestamp($startTs) : null,
+                $endTs ? Carbon::createFromTimestamp($endTs) : null,
+            ];
+        } catch (\Throwable $e) {
+            Log::warning('Could not load Stripe invoice for subscription period fallback', [
+                'stripe_subscription_id' => $stripeSubscriptionId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [null, null];
+        }
     }
 
     protected function ensureUnpaidInvoiceForInactive(SubscriptionRecord $subscription): void
