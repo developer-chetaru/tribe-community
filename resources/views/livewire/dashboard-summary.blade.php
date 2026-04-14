@@ -152,7 +152,7 @@
 
 @elseif($showHappyIndex && !$userGivenFeedback && !$onLeaveToday)
     <div class="bg-red-500 rounded-lg p-3 sm:p-6 w-full mb-4 text-center text-white">
-        <h2 class="text-[14px] font-medium mb-4 sm:ext-lg" style="line-height: 1.3;">How's things at work today?</h2>
+        <h2 class="text-[14px] font-medium mb-4 sm:ext-lg" style="line-height: 1.3;">How are you feeling today??</h2>
         <div class="flex justify-center space-x-4 mb-4 text-2xl">
          <template x-for="(mood, index) in [
   
@@ -171,7 +171,7 @@
         <a href="#"
            @click.prevent="showDatePicker = true; open = true"
            class="underline text-white font-medium text-[12px] sm:text-[16px]" style="display: inline-block; line-height: 1.3;">
-           I'm not in work today!
+           I'm on a break!
         </a>
     </div>
 @endif

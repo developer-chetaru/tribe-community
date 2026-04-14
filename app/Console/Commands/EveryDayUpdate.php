@@ -170,7 +170,7 @@ class EveryDayUpdate extends Command
       if (!empty($playerIds)) {
         $response = $oneSignal->sendNotification(
           'Feedback',
-          "How's things at work today?",
+          "How are you feeling today??",
           $playerIds
         );
         Log::channel('daily')->info('Notification sent to users', ['response' => $response]);
@@ -290,7 +290,7 @@ class EveryDayUpdate extends Command
 
       $response = $oneSignal->sendNotification(
           'Feedback',
-          "How's things at work today?",
+          "How are you feeling today??",
           $playerIds
       );
 
@@ -308,7 +308,7 @@ class EveryDayUpdate extends Command
               $user->id,
               'sentiment',
               'Feedback',
-              "How's things at work today?",
+              "How are you feeling today??",
               null,
               $userNow
           );

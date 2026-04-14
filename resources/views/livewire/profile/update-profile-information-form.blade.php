@@ -924,7 +924,7 @@
         @endphp
         @if($showWorkingDays)
         <div class="col-span-6 sm:col-span-6 mt-6">
-            <label class="block text-sm font-bold text-gray-900 mb-3">Working Days</label>
+            <label class="block text-sm font-bold text-gray-900 mb-3">Sentiment Pop-Up Days</label>
             <div class="flex flex-wrap gap-2">
                 {{-- Monday --}}
                 <button type="button"
