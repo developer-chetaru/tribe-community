@@ -303,7 +303,7 @@ class DashboardService
                         $mood_value = $score >= 81 ? 3 : ($score >= 51 ? 2 : 1);
                     }
                 } else {
-                    // "My": logged-in user's mood if they submitted; otherwise org aggregate fallback
+                    // "My": only the logged-in user's submission for that day (never org aggregate)
                     if (isset($dayData['mood_value']) && $dayData['mood_value'] !== null) {
                         $mood_value = $dayData['mood_value'];
                         if (isset($dayData['user_score']) && $dayData['user_score'] !== null) {
@@ -317,9 +317,6 @@ class DashboardService
                                 $score = 0;
                             }
                         }
-                    } elseif ($dayData['total_users'] > 0) {
-                        $score = (int) round(($dayData['total_score'] / $dayData['total_users']) * 100);
-                        $mood_value = $score >= 81 ? 3 : ($score >= 51 ? 2 : 1);
                     }
                 }
 
