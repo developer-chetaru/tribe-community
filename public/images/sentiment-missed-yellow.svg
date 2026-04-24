@@ -1,0 +1,18 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="missedYellowBg" cx="32%" cy="28%" r="70%" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFEB3B"/>
+      <stop offset="0.55" stop-color="#FFD54F"/>
+      <stop offset="1" stop-color="#FFB300"/>
+    </radialGradient>
+  </defs>
+  <circle cx="16" cy="16" r="15" fill="url(#missedYellowBg)"/>
+  <path
+    d="M14.25 11.75C14.25 10.09 15.59 8.75 17.25 8.75C18.91 8.75 20.25 10.09 20.25 11.75C20.25 12.97 19.48 13.92 18.52 14.48C17.48 15.09 16.75 16.05 16.75 17.35V18.25"
+    stroke="#5D4037"
+    stroke-width="1.75"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="16.75" cy="22.75" r="1.15" fill="#5D4037"/>
+</svg>

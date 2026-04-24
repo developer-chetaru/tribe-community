@@ -579,7 +579,7 @@
                                             }
                                         } else {
                                             // Past working day, no submission — missed (branded asset)
-                                            $img = 'sentiment-missed.svg';
+                                            $img = 'sentiment-missed-yellow.svg';
                                         }
                                     } elseif (!$isBeforeRegistration && $dayDate->isSameDay($todayDate)) {
                                         // Today: check leave status first, then check if data exists
@@ -627,7 +627,7 @@
                                     $moodLabel = 'No entry';
                                     if (($isLeaveDay ?? false) || ($img === 'leave-office.svg')) {
                                         $moodLabel = 'Out of office';
-                                    } elseif ($img === 'sentiment-missed.svg') {
+                                    } elseif ($img === 'sentiment-missed-yellow.svg') {
                                         $moodLabel = 'Missed';
                                     } elseif ($mood !== null && $score !== null) {
                                         if ($score > 80) {
@@ -648,8 +648,8 @@
                                     ];
                                 @endphp
                                 <td class="p-1" wire:key="cal-{{ $year }}-{{ $month }}-{{ str_pad((string) $day, 2, '0', STR_PAD_LEFT) }}-{{ $sentimentCalendarScope }}">
-                                    <div class="mx-auto flex h-14 w-14 flex-col items-center justify-center rounded border transition {{ $dayDate->isSameDay($todayDate) ? 'border-[#EB1C24] bg-[#FEEBEE] ring-1 ring-[#EB1C24]' : 'border-gray-200 bg-white hover:bg-gray-50' }} {{ ($dayDate->lte($todayDate) || $img === 'leave-office.svg' || $img === 'sentiment-missed.svg') ? 'cursor-pointer' : 'cursor-default' }}"
-                                        @if($dayDate->lte($todayDate) || $img === 'leave-office.svg' || $img === 'sentiment-missed.svg')
+                                    <div class="mx-auto flex h-14 w-14 flex-col items-center justify-center rounded border transition {{ $dayDate->isSameDay($todayDate) ? 'border-[#EB1C24] bg-[#FEEBEE] ring-1 ring-[#EB1C24]' : 'border-gray-200 bg-white hover:bg-gray-50' }} {{ ($dayDate->lte($todayDate) || $img === 'leave-office.svg' || $img === 'sentiment-missed-yellow.svg') ? 'cursor-pointer' : 'cursor-default' }}"
+                                        @if($dayDate->lte($todayDate) || $img === 'leave-office.svg' || $img === 'sentiment-missed-yellow.svg')
                                             @click='openModal = true; modalData = @json($modalPayload)'
                                         @endif
                                     >
@@ -681,7 +681,7 @@
             <span class="inline-flex items-center gap-1"><img src="{{ asset('images/sad.svg') }}" alt="" class="h-3.5 w-3.5"> Low</span>
             <span class="inline-flex items-center gap-1"><span class="inline-block h-3.5 w-3.5 rounded border border-[#EB1C24] bg-[#FEEBEE]" aria-hidden="true"></span> Today</span>
             <span class="inline-flex items-center gap-1"><img src="{{ asset('images/leave-office.svg') }}" alt="" class="h-3.5 w-3.5"> Out of office</span>
-            <span class="inline-flex items-center gap-1"><img src="{{ asset('images/sentiment-missed.svg') }}" alt="" class="h-3.5 w-3.5"> Missed</span>
+            <span class="inline-flex items-center gap-1"><img src="{{ asset('images/sentiment-missed-yellow.svg') }}" alt="" class="h-3.5 w-3.5"> Missed</span>
             <span class="inline-flex items-center gap-1"><span class="font-medium text-gray-400">&mdash;</span> Blank</span>
         </div>
     </div>

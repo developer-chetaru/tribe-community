@@ -163,21 +163,24 @@
     <div class="flex flex-col overflow-auto bg-gradient-to-b from-gray-50 to-gray-100 p-4 sm:p-6 w-full sm:h-[539px] space-y-3">
         @forelse($summary as $item)
             <div class="group flex bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 items-start w-full p-4 border border-gray-100 hover:border-gray-200">
-                <!-- Icon Section -->
-                <div class="sentiment-view flex-shrink-0 mr-4">
-                    @if($item['status'] === 'Missed')
-                        <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
-                            <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                        </div>
+                <!-- Icon: missed = yellow ? asset; else emoji (😊/😐/😟) or fallback image -->
+                <div class="sentiment-view mr-4 flex-shrink-0">
+                    @php
+                        $rowEmoji = $item['emoji'] ?? null;
+                        $rowStatus = $item['status'] ?? '';
+                        $iconBg = match ($rowStatus) {
+                            'Out of office' => 'bg-sky-50',
+                            'Not Required' => 'bg-gray-100',
+                            default => 'bg-white ring-1 ring-gray-100',
+                        };
+                    @endphp
+                    @if($rowStatus === 'Missed')
+                        <img src="{{ asset('images/sentiment-missed-yellow.svg') }}" alt="" class="h-10 w-10 shrink-0" width="40" height="40">
+                    @elseif($rowEmoji)
+                        <div class="flex h-10 w-10 items-center justify-center rounded-full text-2xl leading-none {{ $iconBg }}" aria-hidden="true">{{ $rowEmoji }}</div>
                     @else
-                        <div class="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden">
-                            @if(isset($item['emoji']))
-                                <span class="text-2xl">{{ $item['emoji'] }}</span>
-                            @else
-                                <img src="{{ asset('images/' . $item['image']) }}" alt="Sentiment" class="w-full h-full object-cover">
-                            @endif
+                        <div class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-gray-50 ring-1 ring-gray-100">
+                            <img src="{{ asset('images/' . $item['image']) }}" alt="" class="h-full w-full object-cover">
                         </div>
                     @endif
                 </div>
@@ -215,9 +218,12 @@
                         @endif
                     </div>
                     
-                    <!-- Description -->
+                    <!-- Description (design: "No message added" in italics) -->
                     @if(!empty($item['description']))
-                        <p class="text-gray-700 text-sm sm:text-base leading-relaxed first-letter:uppercase mt-1">
+                        @php
+                            $isNoMessage = str_contains(strtolower($item['description']), 'no message added');
+                        @endphp
+                        <p class="{{ $isNoMessage ? 'italic text-gray-500' : 'text-gray-700' }} mt-1 text-sm leading-relaxed first-letter:uppercase sm:text-base">
                             {{ $item['description'] }}
                         </p>
                     @endif
