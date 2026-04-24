@@ -480,37 +480,33 @@
 
   <div class="w-full overflow-x-auto pb-2 sm:pb-3" wire:key="calendar-{{ $month }}-{{ $year }}-{{ $sentimentCalendarScope }}-{{ auth()->user()->timezone ?? 'default' }}">
         @php
-            $year = $this->year ?? now()->year;
-            $month = $this->month ?? now()->month;
+            $year = (int) ($this->year ?? now()->year);
+            $month = (int) ($this->month ?? now()->month);
 
+            // Get user's timezone for date grid and "today" comparison
+            $userTimezone = auth()->user()->timezone ?? 'Asia/Kolkata';
+            if (! in_array($userTimezone, timezone_identifiers_list())) {
+                $userTimezone = 'Asia/Kolkata';
+            }
+
+            // Month grid: leading/trailing cells are blank (no prev/next month numbers).
             $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $year);
-            $firstDayOfMonth = date('w', strtotime("$year-$month-01"));
+            $firstDayOfMonth = (int) date('w', strtotime(sprintf('%04d-%02d-01', $year, $month)));
 
-            $calendarDays = [];
-
-            // Add blank cells for first week
+            $calendarCells = [];
             for ($i = 0; $i < $firstDayOfMonth; $i++) {
-                $calendarDays[] = null;
+                $calendarCells[] = null;
             }
-
-            // Add all days of the month
-            for ($day = 1; $day <= $daysInMonth; $day++) {
-                $calendarDays[] = $day;
+            for ($dayNum = 1; $dayNum <= $daysInMonth; $dayNum++) {
+                $calendarCells[] = $dayNum;
             }
-
-            // Pad remaining cells to complete weeks
-            $remaining = 7 - (count($calendarDays) % 7);
-            if ($remaining < 7) {
-                for ($i = 0; $i < $remaining; $i++) {
-                    $calendarDays[] = null;
+            $padEnd = count($calendarCells) % 7;
+            if ($padEnd !== 0) {
+                for ($i = 0; $i < 7 - $padEnd; $i++) {
+                    $calendarCells[] = null;
                 }
             }
 
-            // Get user's timezone for today's date comparison
-            $userTimezone = auth()->user()->timezone ?? 'Asia/Kolkata';
-            if (!in_array($userTimezone, timezone_identifiers_list())) {
-                $userTimezone = 'Asia/Kolkata';
-            }
             $todayDate = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone)->startOfDay();
             
             // Get user's registration date (join date)
@@ -548,13 +544,14 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach(array_chunk($calendarDays, 7) as $week)
+                @foreach(array_chunk($calendarCells, 7) as $weekIdx => $week)
                     <tr>
-                        @foreach($week as $day)
-                            @if($day)
+                        @foreach($week as $colIdx => $cell)
+                            @if($cell !== null)
                                 @php
-                                    $dayData = $happyIndexMonthly[$day-1] ?? null;
+                                    $day = (int) $cell;
                                     $dayDate = \Carbon\Carbon::createFromDate($year, $month, $day, $userTimezone)->startOfDay();
+                                    $dayData = $happyIndexMonthly[$day - 1] ?? null;
                                     
                                     // For today, use todayMoodData if available, otherwise use dayData
                                     if ($dayDate->isSameDay($todayDate) && $todayMoodData) {
@@ -676,35 +673,43 @@
                                     }
 
                                     $modalPayload = [
-                                        'day' => $day,
+                                        'day' => str_pad((string) $day, 2, '0', STR_PAD_LEFT),
                                         'score' => $score,
                                         'moodLabel' => $moodLabel,
                                         'desc' => $desc ?? '',
                                         'img' => $img ?? '-',
                                     ];
                                 @endphp
-                                <td class="p-1" wire:key="cal-{{ $year }}-{{ $month }}-{{ str_pad((string) $day, 2, '0', STR_PAD_LEFT) }}-{{ $sentimentCalendarScope }}">
-                                    <div class="mx-auto flex h-14 w-14 flex-col items-center justify-center rounded border transition {{ $dayDate->isSameDay($todayDate) ? 'border-[#EB1C24] bg-[#FEEBEE] ring-1 ring-[#EB1C24]' : 'border-gray-200 bg-white hover:bg-gray-50' }} {{ ($dayDate->lte($todayDate) || $img === 'leave-office.svg' || $img === 'sentiment-missed.svg') ? 'cursor-pointer' : 'cursor-default' }}"
+                                <td class="p-1" wire:key="cal-{{ $dayDate->format('Y-m-d') }}-{{ $sentimentCalendarScope }}">
+                                    <div class="mx-auto flex h-14 w-14 flex-col items-center justify-center rounded-lg transition {{ $dayDate->isSameDay($todayDate) ? 'bg-[#FEEBEE] ring-2 ring-[#EB1C24] ring-offset-0' : 'bg-transparent hover:bg-gray-50/70' }} {{ ($dayDate->lte($todayDate) || $img === 'leave-office.svg' || $img === 'sentiment-missed.svg') ? 'cursor-pointer' : 'cursor-default' }}"
                                         @if($dayDate->lte($todayDate) || $img === 'leave-office.svg' || $img === 'sentiment-missed.svg')
                                             @click='openModal = true; modalData = @json($modalPayload)'
                                         @endif
                                     >
-                                        <span class="text-sm font-medium text-gray-600">{{ $day }}</span>
+                                        <span class="text-sm font-medium text-gray-600 tabular-nums">{{ str_pad((string) $day, 2, '0', STR_PAD_LEFT) }}</span>
                                         @if(isset($isBeforeRegistration) && $isBeforeRegistration)
                                             <span class="mt-1 text-sm text-gray-400">-</span>
                                         @elseif($isCalendarNonWorkingDay)
-                                            <span class="mt-1 text-sm text-gray-400">-</span>
+                                            @if($dayDate->isAfter($todayDate))
+                                                <span class="mt-1 block h-5 w-5 shrink-0" aria-hidden="true"></span>
+                                            @else
+                                                <span class="mt-1 text-sm text-gray-400">-</span>
+                                            @endif
                                         @else
                                             @if($img)
                                                 <img src="{{ asset('images/' . $img) }}" class="mt-1 h-5 w-5" alt="">
-                                            @else
+                                            @elseif(! $dayDate->isAfter($todayDate))
                                                 <span class="mt-1 text-xs text-gray-300">&mdash;</span>
+                                            @else
+                                                <span class="mt-1 block h-5 w-5 shrink-0" aria-hidden="true"></span>
                                             @endif
                                         @endif
                                     </div>
                                 </td>
                             @else
-                                <td class="p-2"></td>
+                                <td class="p-1" wire:key="cal-blank-{{ $year }}-{{ $month }}-{{ $weekIdx }}-{{ $colIdx }}-{{ $sentimentCalendarScope }}">
+                                    <div class="mx-auto h-14 w-14" aria-hidden="true"></div>
+                                </td>
                             @endif
                         @endforeach
                     </tr>
@@ -715,7 +720,7 @@
             <span class="inline-flex items-center gap-1"><img src="{{ asset('images/happy.svg') }}" alt="" class="h-3.5 w-3.5"> Great</span>
             <span class="inline-flex items-center gap-1"><img src="{{ asset('images/avarge.svg') }}" alt="" class="h-3.5 w-3.5"> Okay</span>
             <span class="inline-flex items-center gap-1"><img src="{{ asset('images/sad.svg') }}" alt="" class="h-3.5 w-3.5"> Low</span>
-            <span class="inline-flex items-center gap-1"><span class="inline-block h-3.5 w-3.5 rounded border border-[#EB1C24] bg-[#FEEBEE]" aria-hidden="true"></span> Today</span>
+            <span class="inline-flex items-center gap-1"><span class="inline-block h-3.5 w-3.5 rounded-full bg-[#FEEBEE] ring-2 ring-[#EB1C24]" aria-hidden="true"></span> Today</span>
             <span class="inline-flex items-center gap-1"><img src="{{ asset('images/leave-office.svg') }}" alt="" class="h-3.5 w-3.5"> Out of office</span>
             <span class="inline-flex items-center gap-1"><img src="{{ asset('images/sentiment-missed.svg') }}" alt="" class="h-3.5 w-3.5"> Missed</span>
             <span class="inline-flex items-center gap-1"><span class="font-medium text-gray-400">&mdash;</span> Blank</span>
