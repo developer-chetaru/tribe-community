@@ -106,7 +106,7 @@
         </div>
     </div>
 @else
-<div class="grid items-start grid-cols-1 md:grid-cols-2 gap-3 mt-3" x-data="{ openModal: false, modalData: { day: null, score: null, desc: null } }">
+<div class="grid items-start grid-cols-1 md:grid-cols-2 gap-3 mt-3" x-data="{ openModal: false, modalData: { day: null, score: null, desc: null, moodLabel: '', img: '-' } }">
     <div class="flex flex-wrap border border-gray-100 rounded-md w-full">
         <div class="flex px-3 py-2 bg-white w-full min-h-[74px]">
             <h3 class="text-lg sm:text-2xl text-[#EB1C24] font-bold mb-1 sm:mb-0 flex items-center gap-2">Sentiment Index</h3>
@@ -116,63 +116,119 @@
   x-on:close-leave-modal.window="open = false; showDatePicker = false"
   class="bg-[#F8F8F8] py-2 px-3 w-full"
 >
-@if($onLeaveToday)
-    <div x-data="{ confirmModal: false }" x-init="@this.on('openConfirmModal', () => { confirmModal = true })">
-    <button id="openModalBtn" class="bg-red-500 rounded-lg p-3 sm:p-6 w-full mb-4 text-center text-white">
-        Out of Office Mode Enabled
-    </button>
-    
-
-    <!-- <div x-show="confirmModal" x-transition.opacity
-         class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-        <div class="bg-white rounded-lg p-6 w-80 relative">
-            <button @click="confirmModal = false"
-                    class="absolute top-2 right-2 text-gray-500">&times;</button>
-            <p class="text-center mb-4">Ready to resume work?</p>
-            <button wire:click="changeLeaveStatus"
-                    @click="confirmModal = false"
-                    class="w-full bg-red-500 text-white py-2 rounded">
-                DISABLE
-            </button>
+@if(!$showHappyIndex && !$onLeaveToday && !$userGivenFeedback)
+    @if($nextWindowTime && $checkInOpenAtIso)
+        {{-- Before check-in opens: pink banner + countdown (design) --}}
+        <div class="mb-4 w-full rounded-xl border-2 border-dashed border-[#EB1C24]/55 bg-[#FDF2F2] px-4 py-4 sm:px-6 sm:py-5"
+             x-data="{
+                openAt: new Date(@js($checkInOpenAtIso)).getTime(),
+                label: '',
+                tick() {
+                    const ms = Math.max(0, this.openAt - Date.now());
+                    const h = Math.floor(ms / 3600000);
+                    const m = Math.floor((ms % 3600000) / 60000);
+                    this.label = h > 0 ? (h + 'h ' + m + 'm') : (m + 'm');
+                },
+                init() { this.tick(); setInterval(() => this.tick(), 60000); }
+             }">
+            <div class="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                <div class="max-w-xl">
+                    <p class="text-lg font-bold text-gray-900 sm:text-xl">Your daily check-in opens at {{ $nextWindowTime }}</p>
+                    <p class="mt-2 text-sm leading-relaxed text-gray-500 sm:text-base">Come back later to share how you're feeling. Your response helps your team understand the day's sentiment.</p>
+                </div>
+                <div class="shrink-0 rounded-xl border border-gray-100 bg-white px-6 py-4 text-center shadow-sm">
+                    <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-800">Opens in</p>
+                    <p class="mt-1 text-3xl font-bold tabular-nums text-gray-900" x-text="label"></p>
+                    <p class="mt-2 text-xs text-gray-500">Daily check-in starts at {{ $nextWindowTime }}</p>
+                </div>
+            </div>
         </div>
-    </div> -->
-    <!-- Modal -->
-    <div id="confirmModal" class="hidden fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-        <div class="bg-white rounded-lg p-6 w-80 relative">
-            <button id="closeModalBtn"
-                class="absolute top-2 right-2 text-gray-500">&times;</button>
-            <p class="text-center mb-4">Ready to resume work?</p>
-            <button id="disableBtn"
-                class="w-full bg-red-500 text-white py-2 rounded">
-                DISABLE
+    @elseif($sentimentEligibleToday)
+        <div class="mb-4 w-full rounded-xl border-2 border-dashed border-[#EB1C24]/40 bg-[#FDF2F2] px-4 py-4 sm:px-6">
+            <p class="text-base font-bold text-gray-900 sm:text-lg">Today's check-in window has ended</p>
+            <p class="mt-1 text-sm text-gray-500">See you tomorrow when the window opens again.</p>
+        </div>
+    @else
+        <div class="mb-4 w-full rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-4 text-center text-gray-500">
+            <p class="text-sm">No check-in window today (non-working day).</p>
+        </div>
+    @endif
+@endif
+
+@if($onLeaveToday)
+<div x-data="{ confirmOpen: false }">
+    <button
+        type="button"
+        @click="confirmOpen = true"
+        class="bg-red-500 rounded-lg p-3 sm:p-6 w-full mb-4 text-center text-white">
+        Out of Office Mode Enabled — Click to Disable
+    </button>
+
+    <div x-show="confirmOpen" x-cloak x-transition.opacity
+         class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+        <div class="bg-white rounded-lg p-6 w-80 max-w-[90vw] relative" @click.away="confirmOpen = false">
+            <button type="button" @click="confirmOpen = false"
+                    class="absolute top-2 right-2 text-gray-500 text-xl leading-none">&times;</button>
+            <p class="text-center mb-4 text-gray-700">Ready to resume work?</p>
+            <button
+                type="button"
+                wire:click="changeLeaveStatus"
+                @click="confirmOpen = false"
+                class="w-full bg-red-500 text-white py-2 rounded hover:bg-red-600">
+                DISABLE OUT OF OFFICE
             </button>
         </div>
     </div>
 </div>
 
 @elseif($showHappyIndex && !$userGivenFeedback && !$onLeaveToday)
-    <div class="bg-red-500 rounded-lg p-3 sm:p-6 w-full mb-4 text-center text-white">
-        <h2 class="text-[14px] font-medium mb-4 sm:ext-lg" style="line-height: 1.3;">How are you feeling today??</h2>
-        <div class="flex justify-center space-x-4 mb-4 text-2xl">
-         <template x-for="(mood, index) in [
-  
-  {src: '{{ asset("images/happy-user.svg") }}', value: 3, text: 'That\'s great to hear! Want to share what made your day good?'},
-    {src: '{{ asset("images/avarege-user.svg") }}', value: 2, text: 'Okay day... Want to share more?'},
-    {src: '{{ asset("images/sad-user.svg") }}', value: 1, text: 'Sorry to hear that! Want to tell us why?'}
-]" :key="index">
-    <span>
-        <img :src="mood.src"
-             class="w-12 h-12 mb-2 cursor-pointer"
-             alt=""
-             @click="selectedImage = mood.src; selectedText = mood.text; showDatePicker = false; $wire.set('moodStatus', mood.value); $wire.moodStatus = mood.value; setTimeout(() => { open = true; }, 100);">
-    </span>
-</template>
-  </div>
-        <a href="#"
-           @click.prevent="showDatePicker = true; open = true"
-           class="underline text-white font-medium text-[12px] sm:text-[16px]" style="display: inline-block; line-height: 1.3;">
-           I'm on a break!
-        </a>
+    @php
+        $sentimentMoodPicker = [
+            ['src' => asset('images/happy-user.svg'), 'value' => 3, 'text' => "That's great to hear! Want to share what made your day good?"],
+            ['src' => asset('images/avarege-user.svg'), 'value' => 2, 'text' => 'Okay day... Want to share more?'],
+            ['src' => asset('images/sad-user.svg'), 'value' => 1, 'text' => 'Sorry to hear that! Want to tell us why?'],
+        ];
+    @endphp
+    <div class="mb-4 w-full overflow-hidden rounded-2xl bg-[#EB1C24] text-white shadow-md">
+        <div class="flex flex-col gap-5 p-4 sm:p-6 lg:flex-row lg:items-stretch lg:justify-between lg:gap-8">
+            <div class="flex-1 text-center lg:text-left">
+                <h2 class="text-base font-semibold sm:text-lg">How are you feeling today??</h2>
+                <div class="mt-4 flex flex-wrap justify-center gap-3 lg:justify-start">
+                    <template x-for="(mood, index) in @js($sentimentMoodPicker)" :key="index">
+                        <button type="button"
+                                class="rounded-xl bg-white/15 px-3 py-2 ring-1 ring-white/25 transition hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white/60"
+                                @click="selectedImage = mood.src; selectedText = mood.text; showDatePicker = false; $wire.set('moodStatus', mood.value); $wire.moodStatus = mood.value; setTimeout(() => { open = true; }, 100);">
+                            <img :src="mood.src" class="mx-auto h-12 w-12" alt="">
+                        </button>
+                    </template>
+                </div>
+                <a href="#"
+                   @click.prevent="showDatePicker = true; open = true"
+                   class="mt-4 inline-block text-sm font-medium text-white underline decoration-white/80 underline-offset-2 sm:text-base">
+                    I'm on a break!
+                </a>
+            </div>
+            @if($checkInCloseAtIso)
+            <div class="flex shrink-0 flex-col justify-center rounded-xl border border-white/35 bg-white/10 px-4 py-4 sm:px-5 sm:py-5 lg:max-w-xs"
+                 x-data="{
+                    closeAt: new Date(@js($checkInCloseAtIso)).getTime(),
+                    label: '',
+                    tick() {
+                        const ms = Math.max(0, this.closeAt - Date.now());
+                        const h = Math.floor(ms / 3600000);
+                        const m = Math.floor((ms % 3600000) / 60000);
+                        this.label = h > 0 ? (h + 'h ' + m + 'm') : (m + 'm');
+                    },
+                    init() { this.tick(); setInterval(() => this.tick(), 60000); }
+                 }">
+                <p class="text-center text-sm font-semibold sm:text-left">
+                    <span class="mr-1" aria-hidden="true">⏳</span>
+                    <span>Time left today: <span x-text="label" class="font-bold"></span></span>
+                </p>
+                <p class="mt-2 text-center text-xs leading-snug text-white/90 sm:text-left">Complete your check-in before the day ends</p>
+            </div>
+            @endif
+        </div>
     </div>
 @endif
     <div x-show="open" x-cloak x-transition.opacity class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
@@ -219,12 +275,26 @@
             <p class="text-center mb-4" x-text="selectedText"></p>
             {{-- Hidden input to ensure Livewire tracks moodStatus --}}
             <input type="hidden" wire:model.live="moodStatus" />
-            <textarea
-                wire:model.defer="moodNote"
-                class="w-full p-2 border border-gray-300 rounded mb-2
-                       focus:ring-red-500 focus:border-red-500"
-                placeholder="Write a few words about your day..."
-            ></textarea>
+            <div x-data="{ noteLength: 0 }">
+                <textarea
+                    wire:model.defer="moodNote"
+                    @input="noteLength = $event.target.value.length"
+                    class="w-full p-2 border border-gray-300 rounded mb-1 focus:ring-red-500 focus:border-red-500"
+                    placeholder="Write a few words about your day... (optional for happy days)"
+                    maxlength="500"
+                    rows="3"
+                ></textarea>
+                <div class="flex justify-between items-center mb-2">
+                    @error('moodNote')
+                        <p class="text-red-500 text-sm">{{ $message }}</p>
+                    @else
+                        <p class="text-gray-400 text-xs">
+                            {{ (int) $moodStatus !== 3 ? 'Required for this mood' : 'Optional' }}
+                        </p>
+                    @enderror
+                    <span class="text-gray-400 text-xs" x-text="noteLength + '/500'"></span>
+                </div>
+            </div>
             @if(session()->has('error'))
                 <div class="mb-2 p-2 bg-red-100 border border-red-400 text-red-700 rounded text-sm">
                     {{ session('error') }}
@@ -235,9 +305,6 @@
                     {{ session('success') }}
                 </div>
             @endif
-            @error('moodNote')
-                <p class="text-red-500 text-sm mb-2">{{ $message }}</p>
-            @enderror
             @error('moodStatus')
                 <p class="text-red-500 text-sm mb-2">{{ $message }}</p>
             @enderror
@@ -255,9 +322,16 @@
         </div>
     </div>
   
-  
-  
-  
+        @if($currentStreak > 0)
+        <div class="flex items-center gap-2 px-3 py-2 bg-red-50 rounded-md mb-3">
+            <span class="text-2xl" aria-hidden="true">🔥</span>
+            <div>
+                <p class="text-sm font-semibold text-red-600">{{ $currentStreak }}-day streak!</p>
+                <p class="text-xs text-gray-500">Keep it going — log your sentiment today.</p>
+            </div>
+        </div>
+        @endif
+
       <!-- Filters -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
         @hasanyrole('organisation_user|director')
@@ -271,7 +345,7 @@
         </select>
 
         <!-- Departments -->
-        <select wire:model="selectedDepartment" class="border border-gray-100 rounded-sm py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#808080] focus:ring-red-500 focus:border-red-500">
+        <select wire:model.live="selectedDepartment" class="border border-gray-100 rounded-sm py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#808080] focus:ring-red-500 focus:border-red-500">
             <option value="">All Departments</option>
             @foreach($departments ?? [] as $dep)
                 <option value="{{ $dep['id'] }}">{{ $dep['department'] }}</option>
@@ -305,7 +379,31 @@
             @endforeach
         </select>
     </div>
-  <div class="w-full overflow-x-auto sm:px-3 pb-3" wire:key="calendar-{{ $month }}-{{ $year }}-{{ auth()->user()->timezone ?? 'default' }}">
+
+    @if(auth()->user()->orgId)
+        @hasanyrole('organisation_user|director')
+            <div class="mb-3 flex w-full flex-wrap gap-2" role="tablist" aria-label="Sentiment calendar view">
+                <button
+                    type="button"
+                    wire:click="$set('sentimentCalendarScope', 'org')"
+                    wire:loading.attr="disabled"
+                    class="min-w-[7.5rem] flex-1 rounded-lg border py-2.5 px-3 text-center text-xs font-semibold transition sm:text-sm {{ $sentimentCalendarScope === 'org' ? 'border-[#EB1C24] bg-[#EB1C24] text-white shadow-sm' : 'border-gray-200 bg-white text-gray-600 hover:border-[#EB1C24]/40' }}"
+                >
+                    Org Sentiment
+                </button>
+                <button
+                    type="button"
+                    wire:click="$set('sentimentCalendarScope', 'my')"
+                    wire:loading.attr="disabled"
+                    class="min-w-[7.5rem] flex-1 rounded-lg border py-2.5 px-3 text-center text-xs font-semibold transition sm:text-sm {{ $sentimentCalendarScope === 'my' ? 'border-[#EB1C24] bg-[#EB1C24] text-white shadow-sm' : 'border-gray-200 bg-white text-gray-600 hover:border-[#EB1C24]/40' }}"
+                >
+                    My Sentiment
+                </button>
+            </div>
+        @endhasanyrole
+    @endif
+
+  <div class="w-full overflow-x-auto sm:px-3 pb-3" wire:key="calendar-{{ $month }}-{{ $year }}-{{ $sentimentCalendarScope }}-{{ auth()->user()->timezone ?? 'default' }}">
         @php
             $year = $this->year ?? now()->year;
             $month = $this->month ?? now()->month;
@@ -437,8 +535,8 @@
                                                 $img = 'sad.svg';
                                             }
                                         } else {
-                                            // No data for past date - show red
-                                            $img = 'sad.svg';
+                                            // Past day, no submission — neutral (not sad)
+                                            $img = null;
                                         }
                                     } elseif (!$isBeforeRegistration && $dayDate->isSameDay($todayDate)) {
                                         // Today: check leave status first, then check if data exists
@@ -482,11 +580,32 @@
                                             $img = $isFutureLeave ? 'leave-office.svg' : null;
                                         }
                                     }
+
+                                    $moodLabel = 'No entry';
+                                    if (($isLeaveDay ?? false) || ($img === 'leave-office.svg')) {
+                                        $moodLabel = 'On leave';
+                                    } elseif ($mood !== null && $score !== null) {
+                                        if ($score > 80) {
+                                            $moodLabel = 'Happy 😊';
+                                        } elseif ($score >= 51) {
+                                            $moodLabel = 'Average 😐';
+                                        } elseif ($score >= 0) {
+                                            $moodLabel = 'Sad 😔';
+                                        }
+                                    }
+
+                                    $modalPayload = [
+                                        'day' => $day,
+                                        'score' => $score,
+                                        'moodLabel' => $moodLabel,
+                                        'desc' => $desc ?? '',
+                                        'img' => $img ?? '-',
+                                    ];
                                 @endphp
                                 <td class="p-1" wire:key="day-{{ $day }}">
                                     <div class="flex flex-col items-center justify-center bg-white border w-14 h-14 mx-auto cursor-pointer hover:bg-gray-50 transition rounded w-full"
                                         @if($dayDate->lte($todayDate) || $img === 'leave-office.svg')
-                                            x-on:click="openModal = true; modalData.day = {{ $day }}; modalData.score = {{ $score !== null ? $score : 'null' }}; modalData.desc = {{ json_encode($desc ?? 'No description available') }}; modalData.img = {{ json_encode($img ?? '-') }};"
+                                            @click='openModal = true; modalData = @json($modalPayload)'
                                         @else
                                             style="cursor: default;"
                                         @endif
@@ -502,6 +621,8 @@
                                         @else
                                             @if($img)
                                                 <img src="{{ asset('images/' . $img) }}" class="w-5 h-5 mt-1" alt="mood">
+                                            @elseif($dayDate->lt($todayDate) && !($isLeaveDay ?? false))
+                                                <span class="text-gray-300 text-xs mt-1">&mdash;</span>
                                             @else
                                                 <span class="text-gray-400 text-sm mt-1">-</span>
                                             @endif
@@ -529,7 +650,7 @@
         >
             <div class="flex flex-col items-center mb-4">
                 <h2 class="text-2xl font-semibold text-gray-800 mb-2">Day <span x-text="modalData.day"></span> Sentiment</h2>
-                <p class="text-lg font-medium text-gray-700 mb-2">Score: <span x-text="modalData.score"></span></p>
+                <p class="text-lg font-medium text-gray-700 mb-2">Mood: <span x-text="modalData.moodLabel || 'No entry'" class="font-semibold"></span></p>
                 <template x-if="modalData.img && modalData.img !== '-' && modalData.img !== 'undefined'">
                     <img :src="'{{ asset('images') }}/' + modalData.img" class="w-16 h-16 mb-2" alt="mood">
                 </template>
@@ -549,36 +670,6 @@
     </div>
 
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const openModalBtn = document.getElementById('openModalBtn');
-    const closeModalBtn = document.getElementById('closeModalBtn');
-    const confirmModal = document.getElementById('confirmModal');
-    const disableBtn = document.getElementById('disableBtn');
-
-    if (openModalBtn) {
-        openModalBtn.addEventListener('click', function () {
-            confirmModal.classList.remove('hidden');
-        });
-    }
-
-    if (closeModalBtn) {
-        closeModalBtn.addEventListener('click', function () {
-            confirmModal.classList.add('hidden');
-        });
-    }
-
-    if (disableBtn) {
-        disableBtn.addEventListener('click', function () {
-            confirmModal.classList.add('hidden');
-
-            // Trigger Livewire action
-            @this.call('changeLeaveStatus');
-        });
-    }
-});
-</script>
 
 @livewire('summary')
 @endif

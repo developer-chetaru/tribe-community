@@ -37,6 +37,16 @@
 
         <!-- Summary Section -->
         <div id="weekly-summaries-container">
+            @if (session()->has('info'))
+                <p class="mb-2 text-center text-amber-700 text-sm">{{ session('info') }}</p>
+            @endif
+            @if (session()->has('success'))
+                <p class="mb-2 text-center text-green-700 text-sm">{{ session('success') }}</p>
+            @endif
+            @if (session()->has('error'))
+                <p class="mb-2 text-center text-red-600 text-sm">{{ session('error') }}</p>
+            @endif
+
             @if(count($weeklySummaries) > 0)
                 @php $allEmpty = true; @endphp
                 @foreach ($weeklySummaries as $index => $summary)
@@ -57,10 +67,30 @@
                         </p>
                     </div>
                 @endforeach
+                @if($allEmpty)
+                    <div class="p-4 text-center text-gray-500 border border-dashed border-gray-200 rounded-lg mt-2">
+                        <p class="mb-3">No summary text for these weeks yet.</p>
+                        <button
+                            type="button"
+                            wire:click="generateWeeklySummary"
+                            wire:loading.attr="disabled"
+                            class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50">
+                            <span wire:loading.remove wire:target="generateWeeklySummary">Generate Summary</span>
+                            <span wire:loading wire:target="generateWeeklySummary">Generating...</span>
+                        </button>
+                    </div>
+                @endif
             @else
                 <div class="p-0 sm:p-4 text-center text-gray-500">
-                    <p>Summary is not available! <br>Your weekly sentiment summary is generated every Sunday. <br>
-                    You'll be able to view your updated summary after that.</p>
+                    <p class="mb-3">No summary for this period yet.</p>
+                    <button
+                        type="button"
+                        wire:click="generateWeeklySummary"
+                        wire:loading.attr="disabled"
+                        class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50">
+                        <span wire:loading.remove wire:target="generateWeeklySummary">Generate Summary</span>
+                        <span wire:loading wire:target="generateWeeklySummary">Generating...</span>
+                    </button>
                 </div>
             @endif
         </div>

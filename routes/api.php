@@ -1,20 +1,17 @@
 <?php
 
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\HPTMController;
-use App\Http\Controllers\UserLeaveController;
-use App\Http\Controllers\HappyIndexController;
-use App\Http\Controllers\SummaryController;
-
-use App\Http\Controllers\Api\WeeklySummaryController;
+use App\Http\Controllers\Api\BasecampBillingController;
 use App\Http\Controllers\Api\MonthlySummaryController;
-use App\Http\Controllers\Api\ReflectionApiController;
-
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PaymentController;
-use App\Http\Controllers\Api\BasecampBillingController;
-
+use App\Http\Controllers\Api\ReflectionApiController;
+use App\Http\Controllers\Api\WeeklySummaryController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ForgotController;
+use App\Http\Controllers\HappyIndexController;
+use App\Http\Controllers\HPTMController;
+use App\Http\Controllers\SummaryController;
+use App\Http\Controllers\UserLeaveController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/user-set-password', [AuthController::class, 'setPassword']);
@@ -35,7 +32,7 @@ Route::middleware(['web'])->group(function () {
 Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     // flutter api
     Route::get('/user-profile', [HPTMController::class, 'userProfile']);
-  	Route::Post('/update-user-profile', [HPTMController::class, 'updateUserProfile']);
+    Route::Post('/update-user-profile', [HPTMController::class, 'updateUserProfile']);
     Route::delete('/delete-profile-photo', [HPTMController::class, 'deleteProfilePhoto']);
     Route::delete('/delete-account', [HPTMController::class, 'deleteAccount']);
     Route::get('/timezone-list', [HPTMController::class, 'getTimezoneList']);
@@ -69,6 +66,8 @@ Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     Route::get('/basecamp/invoice/{id}/download', [BasecampBillingController::class, 'downloadInvoice']);
     Route::get('/basecamp/invoices/{id}/download', [BasecampBillingController::class, 'downloadInvoice']); // Alias for mobile app compatibility
 
+    Route::post('/add-happy-index', [HappyIndexController::class, 'addHappyIndex']);
+
 });
 
 // Public endpoints for Stripe Checkout callbacks (no auth required - handled inside)
@@ -81,7 +80,6 @@ Route::get('/basecamp/stripe-config', [BasecampBillingController::class, 'getStr
 Route::post('/change-password', [ForgotController::class, 'changePassword']);
 Route::post('/forgot-password', [ForgotController::class, 'sendResetLink']);
 Route::post('/reset-password', [ForgotController::class, 'reset']);
-Route::post('/add-happy-index', [HappyIndexController::class, 'addHappyIndex']);
 Route::post('/user/apply-leave', [UserLeaveController::class, 'userApplyLeave']);
 Route::post('/user-change-leave-status', [UserLeaveController::class, 'userChangeLeaveStatus']);
 
@@ -103,4 +101,3 @@ Route::post('/notification/archive-single', [NotificationController::class, 'arc
 Route::get('/view-archive-list', [NotificationController::class, 'getArchivedNotifications']);
 Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
 Route::post('/reflections/update-status', [ReflectionApiController::class, 'statusReflection']);
-
