@@ -68,6 +68,15 @@ class DashboardSummary extends Component
 
     public $userLeaves = []; // Store user leaves for the selected month
 
+    /** Working-day calendar totals for the selected month (matches dashboard legend). */
+    public array $sentimentMonthStats = [
+        'positive' => 0,
+        'neutral' => 0,
+        'low' => 0,
+        'out_of_office' => 0,
+        'missed' => 0,
+    ];
+
     protected $service;
 
     protected $listeners = [
@@ -465,6 +474,7 @@ class DashboardSummary extends Component
 
         $this->computeSentimentWindowHint();
         $this->calculateStreak();
+        $this->computeSentimentMonthStats();
     }
 
     public function applyLeave()
@@ -926,6 +936,31 @@ class DashboardSummary extends Component
     public function render()
     {
         return view('livewire.dashboard-summary');
+    }
+
+    private function computeSentimentMonthStats(): void
+    {
+        $user = auth()->user();
+        if (! $user) {
+            $this->sentimentMonthStats = [
+                'positive' => 0,
+                'neutral' => 0,
+                'low' => 0,
+                'out_of_office' => 0,
+                'missed' => 0,
+            ];
+
+            return;
+        }
+
+        $this->sentimentMonthStats = $this->service->sentimentCalendarMonthStats(
+            $user,
+            (int) ($this->year ?? now()->year),
+            (int) ($this->month ?? now()->month),
+            $this->happyIndexMonthly,
+            $this->onLeaveToday,
+            $this->todayMoodData
+        );
     }
 
     private function computeSentimentWindowHint(): void

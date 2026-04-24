@@ -14,6 +14,7 @@ use App\Models\Office;
 use App\Models\Organisation;
 use App\Models\SotMotivationValueRecord;
 use App\Models\User;
+use App\Models\UserLeave;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -351,7 +352,8 @@ class HPTMController extends Controller
      *             @OA\Property(property="departmentId", type="integer", nullable=true, example=1, description="Department ID (for organisation users only)"),
      *             @OA\Property(property="deviceType", type="string", nullable=true, example="ios", description="Device type (ios/android)"),
      *             @OA\Property(property="year", type="integer", nullable=true, example=2024, description="Year for data (defaults to current year)"),
-     *             @OA\Property(property="month", type="integer", nullable=true, example=1, description="Month for data (1-12, defaults to current month)")
+     *             @OA\Property(property="month", type="integer", nullable=true, example=1, description="Month for data (1-12, defaults to current month)"),
+     *             @OA\Property(property="sentimentCalendarScope", type="string", nullable=true, enum={"my","org"}, example="my", description="Calendar aggregation: my = logged-in user only; org = organisation aggregate for filters")
      *         )
      *     ),
      *
@@ -388,7 +390,17 @@ class HPTMController extends Controller
      *                 @OA\Property(property="notWorkingDays", type="array", @OA\Items(type="string"), example={"saturday", "sunday"}, description="Days excluded from happy index (saturday/sunday)"),
      *                 @OA\Property(property="appPaymentVersion", type="string", example="1", description="App payment version"),
      *                 @OA\Property(property="leaveStatus", type="integer", example=0, description="User's leave status (0=not on leave, 1=on leave)"),
-     *                 @OA\Property(property="notificationCount", type="integer", example=5, description="Count of unread active notifications")
+     *                 @OA\Property(property="notificationCount", type="integer", example=5, description="Count of unread active notifications"),
+     *                 @OA\Property(
+     *                     property="sentimentMonthStats",
+     *                     type="object",
+     *                     description="Working-day bucket counts for the requested month (aligned with web dashboard)",
+     *                     @OA\Property(property="positive", type="integer", example=2, description="Days with score > 80 (Great)"),
+     *                     @OA\Property(property="neutral", type="integer", example=0, description="Days with score 51–80 (Okay)"),
+     *                     @OA\Property(property="low", type="integer", example=1, description="Days with score 0–50 (Low)"),
+     *                     @OA\Property(property="out_of_office", type="integer", example=0, description="Approved leave days in month"),
+     *                     @OA\Property(property="missed", type="integer", example=15, description="Past working days with no submission")
+     *                 )
      *             )
      *         )
      *     ),
@@ -533,6 +545,11 @@ class HPTMController extends Controller
             // DashboardService hides today's data from calendar array (sets to null), so we replace it here for API
             $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
             $userToday = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
+            $onLeaveToday = UserLeave::where('user_id', $userId)
+                ->where('leave_status', 1)
+                ->whereDate('start_date', '<=', $userToday->toDateString())
+                ->whereDate('end_date', '>=', $userToday->toDateString())
+                ->exists();
             $userTodayYear = (int) $userToday->format('Y');
             $userTodayMonth = (int) $userToday->format('m');
 
@@ -646,6 +663,17 @@ class HPTMController extends Controller
             }
 
             $resultArray['happyIndexMonthly'] = $happyIndexArr;
+
+            $statsService = new \App\Services\DashboardService;
+            $resultArray['sentimentMonthStats'] = $statsService->sentimentCalendarMonthStats(
+                $user,
+                (int) $year,
+                (int) $month,
+                $happyIndexArr,
+                $onLeaveToday,
+                null
+            );
+
             $resultArray['firstDayOfMonth'] = date('l', strtotime($yearAndMonth.'-01'));
 
             // Year list

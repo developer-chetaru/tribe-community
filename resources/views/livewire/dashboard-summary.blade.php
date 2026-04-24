@@ -106,20 +106,42 @@
         </div>
     </div>
 @else
-<div class="grid items-start grid-cols-1 md:grid-cols-2 gap-3 mt-3" x-data="{ openModal: false, modalData: { day: null, score: null, desc: null, moodLabel: '', img: '-' } }">
-    <div class="flex flex-wrap border border-gray-100 rounded-md w-full">
-        <div class="flex px-3 py-2 bg-white w-full min-h-[74px]">
-            <h3 class="text-lg sm:text-2xl text-[#EB1C24] font-bold mb-1 sm:mb-0 flex items-center gap-2">Sentiment Index</h3>
+<div class="mt-3 grid grid-cols-1 items-start gap-3 md:grid-cols-2" x-data="{ openModal: false, modalData: { day: null, score: null, desc: null, moodLabel: '', img: '-' } }">
+    <div class="flex min-w-0 w-full flex-wrap overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div class="flex w-full flex-col gap-2 border-b border-gray-100 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:py-2.5 sm:pl-4 sm:pr-4">
+            <h3 class="text-lg font-bold text-[#EB1C24] sm:text-2xl">Sentiment Index</h3>
+            @if(auth()->user()->orgId)
+                @hasanyrole('organisation_user|director')
+                    <div class="inline-flex w-full max-w-md rounded-lg border border-gray-200 bg-gray-100 p-0.5 sm:w-auto" role="tablist" aria-label="Sentiment calendar view">
+                        <button
+                            type="button"
+                            wire:click="$set('sentimentCalendarScope', 'my')"
+                            wire:loading.attr="disabled"
+                            class="flex-1 rounded-md px-3 py-2 text-center text-xs font-semibold transition sm:min-w-[8.5rem] sm:text-sm {{ $sentimentCalendarScope === 'my' ? 'bg-[#EB1C24] text-white shadow-sm' : 'text-gray-600 hover:text-gray-900' }}"
+                        >
+                            My Sentiment
+                        </button>
+                        <button
+                            type="button"
+                            wire:click="$set('sentimentCalendarScope', 'org')"
+                            wire:loading.attr="disabled"
+                            class="flex-1 rounded-md px-3 py-2 text-center text-xs font-semibold transition sm:min-w-[8.5rem] sm:text-sm {{ $sentimentCalendarScope === 'org' ? 'bg-[#EB1C24] text-white shadow-sm' : 'text-gray-600 hover:text-gray-900' }}"
+                        >
+                            Organisation
+                        </button>
+                    </div>
+                @endhasanyrole
+            @endif
         </div>
 <div
   x-data="{ open: false,  selectedText: '',    selectedImage: '', showDatePicker: false, startDate: '', endDate: '' }"
   x-on:close-leave-modal.window="open = false; showDatePicker = false"
-  class="bg-[#F8F8F8] py-2 px-3 w-full"
+  class="w-full bg-white px-3 py-2 sm:px-3"
 >
 @if(!$showHappyIndex && !$onLeaveToday && !$userGivenFeedback)
     @if($nextWindowTime && $checkInOpenAtIso)
-        {{-- Before check-in opens: pink banner + countdown (design) --}}
-        <div class="mb-4 w-full rounded-xl border-2 border-dashed border-[#EB1C24]/55 bg-[#FDF2F2] px-4 py-4 sm:px-6 sm:py-5"
+        {{-- REMINDER: pre-window (mockup) --}}
+        <div class="mb-4 w-full rounded-lg border border-[#EB1C24]/50 bg-[#FEEBEE] px-3 py-3 sm:px-4 sm:py-3.5"
              x-data="{
                 openAt: new Date(@js($checkInOpenAtIso)).getTime(),
                 label: '',
@@ -131,25 +153,27 @@
                 },
                 init() { this.tick(); setInterval(() => this.tick(), 60000); }
              }">
-            <div class="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-                <div class="max-w-xl">
-                    <p class="text-lg font-bold text-gray-900 sm:text-xl">Your daily check-in opens at {{ $nextWindowTime }}</p>
-                    <p class="mt-2 text-sm leading-relaxed text-gray-500 sm:text-base">Come back later to share how you're feeling. Your response helps your team understand the day's sentiment.</p>
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex min-w-0 flex-1 items-start gap-3">
+                    <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-[#EB1C24] bg-white text-sm font-bold text-[#EB1C24]" aria-hidden="true">!</span>
+                    <div class="min-w-0">
+                        <p class="text-xs font-bold uppercase tracking-wide text-[#EB1C24]">Reminder</p>
+                        <p class="mt-0.5 text-sm font-semibold text-gray-900 sm:text-base">Daily sentiment window opens at {{ $nextWindowTime }}</p>
+                    </div>
                 </div>
-                <div class="shrink-0 rounded-xl border border-gray-100 bg-white px-6 py-4 text-center shadow-sm">
-                    <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-800">Opens in</p>
-                    <p class="mt-1 text-3xl font-bold tabular-nums text-gray-900" x-text="label"></p>
-                    <p class="mt-2 text-xs text-gray-500">Daily check-in starts at {{ $nextWindowTime }}</p>
+                <div class="shrink-0 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-center shadow-sm sm:min-w-[7rem]">
+                    <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-600">Opens in</p>
+                    <p class="text-xl font-bold tabular-nums text-gray-900 sm:text-2xl" x-text="label"></p>
                 </div>
             </div>
         </div>
     @elseif($sentimentEligibleToday)
-        <div class="mb-4 w-full rounded-xl border-2 border-dashed border-[#EB1C24]/40 bg-[#FDF2F2] px-4 py-4 sm:px-6">
-            <p class="text-base font-bold text-gray-900 sm:text-lg">Today's check-in window has ended</p>
-            <p class="mt-1 text-sm text-gray-500">See you tomorrow when the window opens again.</p>
+        <div class="mb-4 w-full rounded-lg border border-[#EB1C24]/40 bg-[#FEEBEE] px-3 py-3 sm:px-4">
+            <p class="text-sm font-bold text-gray-900 sm:text-base">Today's check-in window has ended</p>
+            <p class="mt-1 text-xs text-gray-600 sm:text-sm">See you tomorrow when the window opens again.</p>
         </div>
     @else
-        <div class="mb-4 w-full rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-4 text-center text-gray-500">
+        <div class="mb-4 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-center text-gray-500 sm:px-4">
             <p class="text-sm">No check-in window today (non-working day).</p>
         </div>
     @endif
@@ -323,7 +347,7 @@
     </div>
   
         @if($currentStreak > 0)
-        <div class="flex items-center gap-2 px-3 py-2 bg-red-50 rounded-md mb-3">
+        <div class="mb-3 flex items-center gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2">
             <span class="text-2xl" aria-hidden="true">🔥</span>
             <div>
                 <p class="text-sm font-semibold text-red-600">{{ $currentStreak }}-day streak!</p>
@@ -332,12 +356,50 @@
         </div>
         @endif
 
+        <div class="mb-2 grid grid-cols-2 gap-1.5 sm:mb-3 sm:grid-cols-5 sm:gap-2" aria-label="Monthly sentiment summary">
+            <div class="flex items-center gap-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 sm:flex-col sm:items-center sm:justify-center sm:py-2">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500" aria-hidden="true"></span>
+                <div class="min-w-0 sm:text-center">
+                    <p class="text-[10px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs">Positive</p>
+                    <p class="text-base font-bold text-gray-900 sm:text-lg">{{ $sentimentMonthStats['positive'] ?? 0 }}</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 sm:flex-col sm:items-center sm:justify-center sm:py-2">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400" aria-hidden="true"></span>
+                <div class="min-w-0 sm:text-center">
+                    <p class="text-[10px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs">Neutral</p>
+                    <p class="text-base font-bold text-gray-900 sm:text-lg">{{ $sentimentMonthStats['neutral'] ?? 0 }}</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 sm:flex-col sm:items-center sm:justify-center sm:py-2">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-[#EB1C24]" aria-hidden="true"></span>
+                <div class="min-w-0 sm:text-center">
+                    <p class="text-[10px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs">Low</p>
+                    <p class="text-base font-bold text-gray-900 sm:text-lg">{{ $sentimentMonthStats['low'] ?? 0 }}</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 sm:flex-col sm:items-center sm:justify-center sm:py-2">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-gray-400" aria-hidden="true"></span>
+                <div class="min-w-0 sm:text-center">
+                    <p class="text-[10px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs">Out of office</p>
+                    <p class="text-base font-bold text-gray-900 sm:text-lg">{{ $sentimentMonthStats['out_of_office'] ?? 0 }}</p>
+                </div>
+            </div>
+            <div class="col-span-2 flex items-center gap-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 sm:col-span-1 sm:flex-col sm:items-center sm:justify-center sm:py-2">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-gray-400 ring-1 ring-gray-300" aria-hidden="true"></span>
+                <div class="min-w-0 sm:text-center">
+                    <p class="text-[10px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs">Missed</p>
+                    <p class="text-base font-bold text-gray-900 sm:text-lg">{{ $sentimentMonthStats['missed'] ?? 0 }}</p>
+                </div>
+            </div>
+        </div>
+
       <!-- Filters -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+    <div class="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         @hasanyrole('organisation_user|director')
         @if(auth()->user()->orgId)
         <!-- Offices -->
-        <select wire:model.live="selectedOffice" class="border capitalize border-gray-100 rounded-sm py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#808080] focus:ring-red-500 focus:border-red-500">
+        <select wire:model.live="selectedOffice" class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-8 text-[12px] capitalize text-gray-700 shadow-sm focus:border-[#EB1C24] focus:outline-none focus:ring-1 focus:ring-[#EB1C24] sm:text-sm">
             <option value="">All Offices</option>
             @foreach($offices['offices'] ?? [] as $office)
                 <option value="{{ $office['officeId'] }}">{{ $office['office'] }}</option>
@@ -345,7 +407,7 @@
         </select>
 
         <!-- Departments -->
-        <select wire:model.live="selectedDepartment" class="border border-gray-100 rounded-sm py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#808080] focus:ring-red-500 focus:border-red-500">
+        <select wire:model.live="selectedDepartment" class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-8 text-[12px] text-gray-700 shadow-sm focus:border-[#EB1C24] focus:outline-none focus:ring-1 focus:ring-[#EB1C24] sm:text-sm">
             <option value="">All Departments</option>
             @foreach($departments ?? [] as $dep)
                 <option value="{{ $dep['id'] }}">{{ $dep['department'] }}</option>
@@ -355,7 +417,7 @@
         @endhasanyrole
 
         <!-- Month -->
-        <select wire:model.live="month" wire:loading.class="opacity-50" class="border border-gray-100 rounded-sm py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#808080] focus:ring-red-500 focus:border-red-500">
+        <select wire:model.live="month" wire:loading.class="opacity-50" class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-8 text-[12px] text-gray-700 shadow-sm focus:border-[#EB1C24] focus:outline-none focus:ring-1 focus:ring-[#EB1C24] sm:text-sm">
             @php
                 $currentYear = now()->year;
                 $currentMonth = now()->month;
@@ -373,37 +435,14 @@
 
 
         <!-- Year -->
-        <select wire:model.live="year" wire:loading.class="opacity-50" class="border border-gray-100 rounded-sm py-2 px-2 bg-white text-[12px] sm:text-[14px] text-[#808080] focus:ring-red-500 focus:border-red-500">
+        <select wire:model.live="year" wire:loading.class="opacity-50" class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-8 text-[12px] text-gray-700 shadow-sm focus:border-[#EB1C24] focus:outline-none focus:ring-1 focus:ring-[#EB1C24] sm:text-sm">
             @foreach($orgYearList ?? [] as $y)
                 <option value="{{ $y }}" {{ $y == ($this->year ?? date('Y')) ? 'selected' : '' }}>{{ $y }}</option>
             @endforeach
         </select>
     </div>
 
-    @if(auth()->user()->orgId)
-        @hasanyrole('organisation_user|director')
-            <div class="mb-3 flex w-full flex-wrap gap-2" role="tablist" aria-label="Sentiment calendar view">
-                <button
-                    type="button"
-                    wire:click="$set('sentimentCalendarScope', 'org')"
-                    wire:loading.attr="disabled"
-                    class="min-w-[7.5rem] flex-1 rounded-lg border py-2.5 px-3 text-center text-xs font-semibold transition sm:text-sm {{ $sentimentCalendarScope === 'org' ? 'border-[#EB1C24] bg-[#EB1C24] text-white shadow-sm' : 'border-gray-200 bg-white text-gray-600 hover:border-[#EB1C24]/40' }}"
-                >
-                    Org Sentiment
-                </button>
-                <button
-                    type="button"
-                    wire:click="$set('sentimentCalendarScope', 'my')"
-                    wire:loading.attr="disabled"
-                    class="min-w-[7.5rem] flex-1 rounded-lg border py-2.5 px-3 text-center text-xs font-semibold transition sm:text-sm {{ $sentimentCalendarScope === 'my' ? 'border-[#EB1C24] bg-[#EB1C24] text-white shadow-sm' : 'border-gray-200 bg-white text-gray-600 hover:border-[#EB1C24]/40' }}"
-                >
-                    My Sentiment
-                </button>
-            </div>
-        @endhasanyrole
-    @endif
-
-  <div class="w-full overflow-x-auto sm:px-3 pb-3" wire:key="calendar-{{ $month }}-{{ $year }}-{{ $sentimentCalendarScope }}-{{ auth()->user()->timezone ?? 'default' }}">
+  <div class="w-full overflow-x-auto pb-2 sm:pb-3" wire:key="calendar-{{ $month }}-{{ $year }}-{{ $sentimentCalendarScope }}-{{ auth()->user()->timezone ?? 'default' }}">
         @php
             $year = $this->year ?? now()->year;
             $month = $this->month ?? now()->month;
@@ -436,7 +475,7 @@
             if (!in_array($userTimezone, timezone_identifiers_list())) {
                 $userTimezone = 'Asia/Kolkata';
             }
-            $todayDate = \Carbon\Carbon::today($userTimezone);
+            $todayDate = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone)->startOfDay();
             
             // Get user's registration date (join date)
             $authUser = auth()->user();
@@ -502,12 +541,16 @@
                                     }
 
                                     // Determine emoji based on date and data
-                                    // If org user and this date is a non-working day for the org, show off-day emoji
-                                    $isOrgOffDay = false;
-                                    if (!$isBeforeRegistration && $isOrgUser) {
-                                        $dayShort = $dayDate->format('D'); // Mon, Tue, etc.
-                                        if (!in_array($dayShort, $orgWorkingDays)) {
-                                            $isOrgOffDay = true;
+                                    // Non-working days: org schedule, or Sat/Sun when user has no org (matches month stats)
+                                    $isCalendarNonWorkingDay = false;
+                                    if (! $isBeforeRegistration) {
+                                        $dayShort = $dayDate->format('D');
+                                        if ($isOrgUser) {
+                                            if (! in_array($dayShort, $orgWorkingDays, true)) {
+                                                $isCalendarNonWorkingDay = true;
+                                            }
+                                        } elseif (in_array($dayShort, ['Sat', 'Sun'], true)) {
+                                            $isCalendarNonWorkingDay = true;
                                         }
                                     }
                                     // Check if this is a leave day (from DashboardService)
@@ -520,8 +563,8 @@
                                         if ($isLeaveDay) {
                                             // User was on leave - show leave emoji
                                             $img = 'leave-office.svg';
-                                        } elseif ($isOrgOffDay) {
-                                            // Org non-working past day - use off-day marker
+                                        } elseif ($isCalendarNonWorkingDay) {
+                                            // Non-working day — blank (dash), not "missed"
                                             $img = null;
                                         } elseif ($dayData && $mood !== null && $score !== null) {
                                             // Use score-based logic (matching app code)
@@ -535,12 +578,12 @@
                                                 $img = 'sad.svg';
                                             }
                                         } else {
-                                            // Past day, no submission — neutral (not sad)
-                                            $img = null;
+                                            // Past working day, no submission — missed (branded asset)
+                                            $img = 'sentiment-missed.svg';
                                         }
                                     } elseif (!$isBeforeRegistration && $dayDate->isSameDay($todayDate)) {
                                         // Today: check leave status first, then check if data exists
-                                        if ($isOrgOffDay) {
+                                        if ($isCalendarNonWorkingDay) {
                                             $img = null;
                                         } elseif ($onLeaveToday ?? false) {
                                             $img = 'leave-office.svg';
@@ -574,7 +617,7 @@
                                                 }
                                             }
                                         }
-                                        if ($isOrgOffDay) {
+                                        if ($isCalendarNonWorkingDay) {
                                             $img = null;
                                         } else {
                                             $img = $isFutureLeave ? 'leave-office.svg' : null;
@@ -583,14 +626,16 @@
 
                                     $moodLabel = 'No entry';
                                     if (($isLeaveDay ?? false) || ($img === 'leave-office.svg')) {
-                                        $moodLabel = 'On leave';
+                                        $moodLabel = 'Out of office';
+                                    } elseif ($img === 'sentiment-missed.svg') {
+                                        $moodLabel = 'Missed';
                                     } elseif ($mood !== null && $score !== null) {
                                         if ($score > 80) {
-                                            $moodLabel = 'Happy 😊';
+                                            $moodLabel = 'Great';
                                         } elseif ($score >= 51) {
-                                            $moodLabel = 'Average 😐';
+                                            $moodLabel = 'Okay';
                                         } elseif ($score >= 0) {
-                                            $moodLabel = 'Sad 😔';
+                                            $moodLabel = 'Low';
                                         }
                                     }
 
@@ -602,29 +647,22 @@
                                         'img' => $img ?? '-',
                                     ];
                                 @endphp
-                                <td class="p-1" wire:key="day-{{ $day }}">
-                                    <div class="flex flex-col items-center justify-center bg-white border w-14 h-14 mx-auto cursor-pointer hover:bg-gray-50 transition rounded w-full"
-                                        @if($dayDate->lte($todayDate) || $img === 'leave-office.svg')
+                                <td class="p-1" wire:key="cal-{{ $year }}-{{ $month }}-{{ str_pad((string) $day, 2, '0', STR_PAD_LEFT) }}-{{ $sentimentCalendarScope }}">
+                                    <div class="mx-auto flex h-14 w-14 flex-col items-center justify-center rounded border transition {{ $dayDate->isSameDay($todayDate) ? 'border-[#EB1C24] bg-[#FEEBEE] ring-1 ring-[#EB1C24]' : 'border-gray-200 bg-white hover:bg-gray-50' }} {{ ($dayDate->lte($todayDate) || $img === 'leave-office.svg' || $img === 'sentiment-missed.svg') ? 'cursor-pointer' : 'cursor-default' }}"
+                                        @if($dayDate->lte($todayDate) || $img === 'leave-office.svg' || $img === 'sentiment-missed.svg')
                                             @click='openModal = true; modalData = @json($modalPayload)'
-                                        @else
-                                            style="cursor: default;"
                                         @endif
-                                        wire:ignore
                                     >
-                                        <span class="text-gray-600 text-sm font-medium">{{ $day }}</span>
+                                        <span class="text-sm font-medium text-gray-600">{{ $day }}</span>
                                         @if(isset($isBeforeRegistration) && $isBeforeRegistration)
-                                            {{-- Date before user registration - show dash --}}
-                                            <span class="text-gray-400 text-sm mt-1">-</span>
-                                        @elseif(isset($isOrgOffDay) && $isOrgOffDay)
-                                            {{-- Organization non-working day - show no emoji (placeholder dash) --}}
-                                            <span class="text-gray-400 text-sm mt-1">-</span>
+                                            <span class="mt-1 text-sm text-gray-400">-</span>
+                                        @elseif($isCalendarNonWorkingDay)
+                                            <span class="mt-1 text-sm text-gray-400">-</span>
                                         @else
                                             @if($img)
-                                                <img src="{{ asset('images/' . $img) }}" class="w-5 h-5 mt-1" alt="mood">
-                                            @elseif($dayDate->lt($todayDate) && !($isLeaveDay ?? false))
-                                                <span class="text-gray-300 text-xs mt-1">&mdash;</span>
+                                                <img src="{{ asset('images/' . $img) }}" class="mt-1 h-5 w-5" alt="">
                                             @else
-                                                <span class="text-gray-400 text-sm mt-1">-</span>
+                                                <span class="mt-1 text-xs text-gray-300">&mdash;</span>
                                             @endif
                                         @endif
                                     </div>
@@ -637,6 +675,15 @@
                 @endforeach
             </tbody>
         </table>
+        <div class="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t border-gray-100 pt-2 text-[10px] text-gray-600 sm:justify-start sm:text-xs" aria-label="Calendar legend">
+            <span class="inline-flex items-center gap-1"><img src="{{ asset('images/happy.svg') }}" alt="" class="h-3.5 w-3.5"> Great</span>
+            <span class="inline-flex items-center gap-1"><img src="{{ asset('images/avarge.svg') }}" alt="" class="h-3.5 w-3.5"> Okay</span>
+            <span class="inline-flex items-center gap-1"><img src="{{ asset('images/sad.svg') }}" alt="" class="h-3.5 w-3.5"> Low</span>
+            <span class="inline-flex items-center gap-1"><span class="inline-block h-3.5 w-3.5 rounded border border-[#EB1C24] bg-[#FEEBEE]" aria-hidden="true"></span> Today</span>
+            <span class="inline-flex items-center gap-1"><img src="{{ asset('images/leave-office.svg') }}" alt="" class="h-3.5 w-3.5"> Out of office</span>
+            <span class="inline-flex items-center gap-1"><img src="{{ asset('images/sentiment-missed.svg') }}" alt="" class="h-3.5 w-3.5"> Missed</span>
+            <span class="inline-flex items-center gap-1"><span class="font-medium text-gray-400">&mdash;</span> Blank</span>
+        </div>
     </div>
     </div>
     <div x-cloak x-show="openModal" x-transition.opacity class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
@@ -668,10 +715,14 @@
             </div>
         </div>
     </div>
+    </div>
+
+    <div class="min-w-0">
+        @livewire('summary')
+    </div>
 
 </div>
 
-@livewire('summary')
 @endif
 
 </div>

@@ -8,6 +8,7 @@ use App\Models\Office;
 use App\Models\Organisation;
 use App\Models\User;
 use App\Models\UserLeave;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -411,6 +412,122 @@ class DashboardService
             'orgYearList' => $orgYearList,
             'orgMonth' => $orgMonthList,
         ];
+    }
+
+    /**
+     * Working-day bucket counts for the selected month (matches dashboard / Livewire calendar rules).
+     *
+     * @param  array<int, array<string, mixed>>  $happyIndexMonthly  One row per calendar day (index 0 = day 1)
+     * @param  array{score?: int|float|null, mood_value?: int|null}|null  $todayMoodData  Override when service leaves today empty but user submitted
+     * @return array{positive: int, neutral: int, low: int, out_of_office: int, missed: int}
+     */
+    public function sentimentCalendarMonthStats(
+        User $user,
+        int $year,
+        int $month,
+        array $happyIndexMonthly,
+        bool $onLeaveToday = false,
+        ?array $todayMoodData = null,
+    ): array {
+        $stats = [
+            'positive' => 0,
+            'neutral' => 0,
+            'low' => 0,
+            'out_of_office' => 0,
+            'missed' => 0,
+        ];
+
+        $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $year);
+
+        $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+        if (! in_array($userTimezone, timezone_identifiers_list(), true)) {
+            $userTimezone = 'Asia/Kolkata';
+        }
+
+        $todayDate = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone)->startOfDay();
+        $userRegistrationDate = $user->created_at
+            ? Carbon::parse($user->created_at)->setTimezone($userTimezone)->startOfDay()
+            : null;
+
+        $isOrgUser = ! empty($user->orgId);
+        $orgWorkingDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+        if ($isOrgUser) {
+            $organisation = Organisation::find($user->orgId);
+            if ($organisation && $organisation->working_days) {
+                $wdRaw = $organisation->working_days;
+                if (is_string($wdRaw)) {
+                    $decoded = json_decode($wdRaw, true);
+                    if (is_array($decoded)) {
+                        $orgWorkingDays = $decoded;
+                    }
+                } elseif (is_array($wdRaw)) {
+                    $orgWorkingDays = $wdRaw;
+                }
+            }
+        }
+
+        for ($day = 1; $day <= $daysInMonth; $day++) {
+            $dayDate = Carbon::create($year, $month, $day, 0, 0, 0, $userTimezone)->startOfDay();
+
+            if ($userRegistrationDate && $dayDate->lt($userRegistrationDate)) {
+                continue;
+            }
+
+            $dayShort = $dayDate->format('D');
+            $isNonWorkingCalendarDay = $isOrgUser && ! in_array($dayShort, $orgWorkingDays, true);
+            if (! $isOrgUser && in_array($dayShort, ['Sat', 'Sun'], true)) {
+                $isNonWorkingCalendarDay = true;
+            }
+            if ($isNonWorkingCalendarDay) {
+                continue;
+            }
+
+            $dayData = $happyIndexMonthly[$day - 1] ?? null;
+            $isLeaveDay = isset($dayData['is_leave']) && $dayData['is_leave'] === true;
+            if ($dayDate->isSameDay($todayDate) && $onLeaveToday) {
+                $stats['out_of_office']++;
+
+                continue;
+            }
+            if ($isLeaveDay) {
+                $stats['out_of_office']++;
+
+                continue;
+            }
+
+            if ($dayDate->gt($todayDate)) {
+                continue;
+            }
+
+            $score = is_array($dayData) ? ($dayData['score'] ?? null) : null;
+            $mood = is_array($dayData) ? ($dayData['mood_value'] ?? null) : null;
+            if ($dayDate->isSameDay($todayDate) && $todayMoodData) {
+                $score = $todayMoodData['score'] ?? $score;
+                $mood = $todayMoodData['mood_value'] ?? $mood;
+            }
+
+            if ($dayDate->isSameDay($todayDate) && ($mood === null || $score === null)) {
+                continue;
+            }
+
+            if ($mood !== null && $score !== null) {
+                if ($score > 80) {
+                    $stats['positive']++;
+                } elseif ($score >= 51) {
+                    $stats['neutral']++;
+                } else {
+                    $stats['low']++;
+                }
+
+                continue;
+            }
+
+            if ($dayDate->lt($todayDate)) {
+                $stats['missed']++;
+            }
+        }
+
+        return $stats;
     }
 
     /**
