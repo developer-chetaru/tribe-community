@@ -1199,29 +1199,10 @@ Important writing requirements:
                     }
                 }
 
-                // Only save summary to database if it's valid (not an error message)
-                // Don't save error messages like "No summary generated." or "Error generating summary."
-                if ($this->isValidSummary($summaryText)) {
-                    // SAVE SUMMARY only if valid
-                    WeeklySummaryModel::updateOrCreate(
-                        [
-                            'user_id' => $user->id,
-                            'year' => $year,
-                            'month' => $month,
-                            'week_number' => $weekNumber,
-                        ],
-                        [
-                            'week_label' => $weekLabel,
-                            'summary' => $summaryText,
-                        ]
-                    );
-                } else {
-                    // Log that summary generation failed but don't save error message to database
-                    Log::warning("WeeklySummary: Invalid summary for user {$user->id} ({$weekLabel}). Not saving to database.");
-                }
-
                 /**
-                 * IMPORTANT: SEND EMAIL AND STORE NOTIFICATION ONLY IF SUMMARY IS VALID
+                 * IMPORTANT: SEND EMAIL AND STORE NOTIFICATION ONLY IF SUMMARY IS VALID.
+                 * The same $summaryText that is rendered in the email is persisted to weekly_summaries
+                 * only after OneSignal accepts the send (when the row is missing or summary is empty).
                  */
                 if ($this->isValidSummary($summaryText)) {
                     // ✅ Check if weekly summary email already sent for this week to prevent duplicates
@@ -1284,6 +1265,15 @@ Important writing requirements:
                                 'body' => $emailBody,
                             ]);
 
+                            $this->persistWeeklySummaryAfterEmailSent(
+                                $user->id,
+                                $year,
+                                $month,
+                                $weekNumber,
+                                $weekLabel,
+                                $summaryText
+                            );
+
                             Log::info("✅ OneSignal weekly email sent and notification stored for user {$user->id}");
                         } catch (\Throwable $e) {
                             Log::error("❌ OneSignal email failed for user {$user->id}: {$e->getMessage()}");
@@ -1292,7 +1282,7 @@ Important writing requirements:
                         Log::warning("⛔ Email NOT sent — notification already exists for user {$user->id}");
                     }
                 } else {
-                    Log::warning("⛔ Email NOT sent — summary invalid for user {$user->id}");
+                    Log::warning("⛔ Email NOT sent and weekly_summaries not updated — summary invalid for user {$user->id} ({$weekLabel})");
                 }
 
                 Log::info("WeeklySummary generated for user {$user->id} ({$weekLabel}) - timezone: {$userTimezone}");
@@ -1424,6 +1414,57 @@ You submitted your sentiment on all '.$totalExpected.' days.';
         return "You shared your sentiment on: {$submittedList}.
 You missed: {$missedList}.
 Recommendation: Try to engage with Tribe365 regularly to maintain consistent emotional awareness.";
+    }
+
+    /**
+     * Persist the same plain-text summary that was sent in the weekly email when
+     * the weekly_summaries row for this period is missing or has an empty summary.
+     * Called only after OneSignal accepts the send.
+     */
+    private function persistWeeklySummaryAfterEmailSent(
+        int $userId,
+        int $year,
+        int $month,
+        int $weekNumber,
+        string $weekLabel,
+        string $summaryText
+    ): void {
+        if (! $this->isValidSummary($summaryText)) {
+            return;
+        }
+
+        $keys = [
+            'user_id' => $userId,
+            'year' => $year,
+            'month' => $month,
+            'week_number' => $weekNumber,
+        ];
+
+        try {
+            $existing = WeeklySummaryModel::where($keys)->first();
+            if ($existing !== null && trim((string) $existing->summary) !== '') {
+                return;
+            }
+
+            WeeklySummaryModel::updateOrCreate(
+                $keys,
+                [
+                    'week_label' => $weekLabel,
+                    'summary' => $summaryText,
+                ]
+            );
+            Log::info('WeeklySummary: Saved to weekly_summaries after email (was missing or empty)', [
+                'user_id' => $userId,
+                'year' => $year,
+                'month' => $month,
+                'week_number' => $weekNumber,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('WeeklySummary: Failed to save after email', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
