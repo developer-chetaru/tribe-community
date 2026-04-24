@@ -126,7 +126,7 @@
             class="h-5 w-5" />
 
 
-    <span x-show="$store.sidebar.open" x-transition class="text-sm">My Teammates</span>
+    <span x-show="$store.sidebar.open" x-transition class="text-sm pl-4">My Teammates</span>
 </a>
 @endif
 @endhasanyrole

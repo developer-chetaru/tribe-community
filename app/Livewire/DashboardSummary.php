@@ -79,6 +79,9 @@ class DashboardSummary extends Component
 
     protected $service;
 
+    /** When true, `updated()` does not reload from `month` / `year` (handled by navigation + loadData). */
+    protected bool $suppressCalendarDataReload = false;
+
     protected $listeners = [
         'refreshData' => 'loadData',
         'summary-saved' => 'refreshAfterSubmit',
@@ -344,6 +347,10 @@ class DashboardSummary extends Component
 
     public function updated($propertyName)
     {
+        if ($this->suppressCalendarDataReload && in_array($propertyName, ['month', 'year'], true)) {
+            return;
+        }
+
         $reloadProperties = ['selectedOffice', 'selectedDepartment', 'month', 'year', 'sentimentCalendarScope'];
         if (in_array($propertyName, $reloadProperties)) {
             // Prevent scroll to top by using dispatch instead of direct loadData
@@ -351,6 +358,105 @@ class DashboardSummary extends Component
             // Dispatch event to maintain scroll position
             $this->dispatch('filter-updated', property: $propertyName);
         }
+    }
+
+    public function goToPreviousCalendarMonth(): void
+    {
+        $y = (int) ($this->year ?? 0);
+        $m = (int) ($this->month ?? 0);
+        if (! $y || ! $m) {
+            return;
+        }
+
+        $prev = Carbon::create($y, $m, 1)->subMonth();
+        if (! $this->isCalendarMonthInRange($prev->year, $prev->month)) {
+            return;
+        }
+
+        $this->suppressCalendarDataReload = true;
+        try {
+            $this->year = $prev->year;
+            $this->month = $prev->month;
+        } finally {
+            $this->suppressCalendarDataReload = false;
+        }
+        $this->loadData();
+        $this->dispatch('filter-updated', property: 'month');
+    }
+
+    public function goToNextCalendarMonth(): void
+    {
+        $y = (int) ($this->year ?? 0);
+        $m = (int) ($this->month ?? 0);
+        if (! $y || ! $m) {
+            return;
+        }
+
+        $next = Carbon::create($y, $m, 1)->addMonth();
+        if (! $this->isCalendarMonthInRange($next->year, $next->month)) {
+            return;
+        }
+
+        $this->suppressCalendarDataReload = true;
+        try {
+            $this->year = $next->year;
+            $this->month = $next->month;
+        } finally {
+            $this->suppressCalendarDataReload = false;
+        }
+        $this->loadData();
+        $this->dispatch('filter-updated', property: 'month');
+    }
+
+    protected function isCalendarMonthInRange(int $year, int $month): bool
+    {
+        if ($month < 1 || $month > 12) {
+            return false;
+        }
+
+        $user = auth()->user();
+        $tz = \App\Helpers\TimezoneHelper::getUserTimezone($user);
+        $now = \App\Helpers\TimezoneHelper::carbon(null, $tz);
+        $currentYear = (int) $now->year;
+        $currentMonth = (int) $now->month;
+
+        if ($year > $currentYear) {
+            return false;
+        }
+        if ($year === $currentYear && $month > $currentMonth) {
+            return false;
+        }
+
+        $years = ! empty($this->orgYearList) ? array_map('intval', (array) $this->orgYearList) : [$currentYear];
+        if (! in_array($year, $years, true)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function getCanGoToPreviousCalendarMonthProperty(): bool
+    {
+        $y = (int) ($this->year ?? 0);
+        $m = (int) ($this->month ?? 0);
+        if (! $y || ! $m) {
+            return false;
+        }
+        $prev = Carbon::create($y, $m, 1)->subMonth();
+
+        return $this->isCalendarMonthInRange($prev->year, $prev->month);
+    }
+
+    public function getCanGoToNextCalendarMonthProperty(): bool
+    {
+        $y = (int) ($this->year ?? 0);
+        $m = (int) ($this->month ?? 0);
+        if (! $y || ! $m) {
+            return false;
+        }
+        $next = Carbon::create($y, $m, 1)->addMonth();
+
+        return $this->isCalendarMonthInRange($next->year, $next->month);
     }
 
     public function updatedSelectedDepartment($value)

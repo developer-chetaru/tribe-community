@@ -394,12 +394,13 @@
             </div>
         </div>
 
-      <!-- Filters -->
-    <div class="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <!-- Filters: org office/dept, then calendar period (‹ year | month ›) -->
+    <div class="mb-3 space-y-2">
         @hasanyrole('organisation_user|director')
         @if(auth()->user()->orgId)
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <!-- Offices -->
-        <select wire:model.live="selectedOffice" class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-8 text-[12px] capitalize text-gray-700 shadow-sm focus:border-[#EB1C24] focus:outline-none focus:ring-1 focus:ring-[#EB1C24] sm:text-sm">
+        <select wire:model.live="selectedOffice" class="w-full cursor-pointer rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-8 text-[12px] capitalize text-gray-700 shadow-sm focus:border-[#EB1C24] focus:outline-none focus:ring-1 focus:ring-[#EB1C24] sm:text-sm">
             <option value="">All Offices</option>
             @foreach($offices['offices'] ?? [] as $office)
                 <option value="{{ $office['officeId'] }}">{{ $office['office'] }}</option>
@@ -407,39 +408,74 @@
         </select>
 
         <!-- Departments -->
-        <select wire:model.live="selectedDepartment" class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-8 text-[12px] text-gray-700 shadow-sm focus:border-[#EB1C24] focus:outline-none focus:ring-1 focus:ring-[#EB1C24] sm:text-sm">
+        <select wire:model.live="selectedDepartment" class="w-full cursor-pointer rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-8 text-[12px] text-gray-700 shadow-sm focus:border-[#EB1C24] focus:outline-none focus:ring-1 focus:ring-[#EB1C24] sm:text-sm">
             <option value="">All Departments</option>
             @foreach($departments ?? [] as $dep)
                 <option value="{{ $dep['id'] }}">{{ $dep['department'] }}</option>
             @endforeach
         </select>
+        </div>
         @endif
         @endhasanyrole
 
-        <!-- Month -->
-        <select wire:model.live="month" wire:loading.class="opacity-50" class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-8 text-[12px] text-gray-700 shadow-sm focus:border-[#EB1C24] focus:outline-none focus:ring-1 focus:ring-[#EB1C24] sm:text-sm">
+        <div
+            class="flex w-full min-w-0 items-center justify-between gap-2 sm:gap-3"
+            role="group"
+            aria-label="Calendar month and year"
+        >
+            <button
+                type="button"
+                wire:click="goToPreviousCalendarMonth"
+                wire:loading.attr="disabled"
+                @disabled(! $this->canGoToPreviousCalendarMonth)
+                class="inline-flex h-10 w-10 shrink-0 items-center justify-center self-center rounded-lg border border-gray-200 bg-white text-lg font-medium text-gray-600 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#EB1C24] focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40"
+                title="Previous month"
+                aria-label="Previous month"
+            >&lsaquo;</button>
+
+            <div class="flex min-w-0 flex-1 flex-wrap items-center justify-center gap-2 sm:gap-2.5">
+
+            <select
+                wire:model.live="month"
+                wire:loading.class="opacity-50"
+                class="w-auto min-w-[7.5rem] shrink-0 cursor-pointer rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-8 text-center text-[12px] text-gray-700 shadow-sm focus:border-[#EB1C24] focus:outline-none focus:ring-1 focus:ring-[#EB1C24] sm:min-w-[8.5rem] sm:text-sm"
+                aria-label="Month"
+            >
             @php
                 $currentYear = now()->year;
                 $currentMonth = now()->month;
-
-                // Only show months up to current month if the selected year is current year
                 $maxMonth = ($this->year ?? $currentYear) == $currentYear ? $currentMonth : 12;
             @endphp
-
             @foreach(range(1, $maxMonth) as $m)
                 <option value="{{ $m }}" {{ $m == ($this->month ?? $currentMonth) ? 'selected' : '' }}>
                     {{ date('F', mktime(0,0,0,$m,1)) }}
                 </option>
             @endforeach
-        </select>
+            </select>
+            <select
+                wire:model.live="year"
+                wire:loading.class="opacity-50"
+                class="w-auto min-w-[5.25rem] shrink-0 cursor-pointer rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-8 text-center text-[12px] text-gray-700 shadow-sm focus:border-[#EB1C24] focus:outline-none focus:ring-1 focus:ring-[#EB1C24] sm:min-w-[6.5rem] sm:text-sm"
+                aria-label="Year"
+            >
+                @forelse($orgYearList ?? [] as $y)
+                    <option value="{{ $y }}" {{ (int) $y === (int) ($this->year ?? now()->year) ? 'selected' : '' }}>{{ $y }}</option>
+                @empty
+                    <option value="{{ now()->year }}">{{ now()->year }}</option>
+                @endforelse
+            </select>
+            </div>
 
-
-        <!-- Year -->
-        <select wire:model.live="year" wire:loading.class="opacity-50" class="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-8 text-[12px] text-gray-700 shadow-sm focus:border-[#EB1C24] focus:outline-none focus:ring-1 focus:ring-[#EB1C24] sm:text-sm">
-            @foreach($orgYearList ?? [] as $y)
-                <option value="{{ $y }}" {{ $y == ($this->year ?? date('Y')) ? 'selected' : '' }}>{{ $y }}</option>
-            @endforeach
-        </select>
+            <button
+                type="button"
+                wire:click="goToNextCalendarMonth"
+                wire:loading.attr="disabled"
+                @disabled(! $this->canGoToNextCalendarMonth)
+                class="inline-flex h-10 w-10 shrink-0 items-center justify-center self-center rounded-lg border border-gray-200 bg-white text-lg font-medium text-gray-600 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#EB1C24] focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40"
+                title="Next month"
+                aria-label="Next month"
+            >&rsaquo;</button>
+        </div>
     </div>
 
   <div class="w-full overflow-x-auto pb-2 sm:pb-3" wire:key="calendar-{{ $month }}-{{ $year }}-{{ $sentimentCalendarScope }}-{{ auth()->user()->timezone ?? 'default' }}">
