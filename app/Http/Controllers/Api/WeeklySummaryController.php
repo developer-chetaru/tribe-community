@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use App\Models\WeeklySummary;
 
 class WeeklySummaryController extends Controller
@@ -329,26 +330,29 @@ class WeeklySummaryController extends Controller
             'month_type' => gettype($selectedMonth),
         ]);
         
-        $existingSummaries = WeeklySummary::where('user_id', $user->id)
+        $summaryRows = WeeklySummary::where('user_id', $user->id)
             ->where('year', $selectedYear)
             ->where('month', $selectedMonth)
             ->orderBy('week_number')
             ->get();
-            
+
+        $keyedByWeekNumber = $summaryRows->keyBy('week_number');
+        $byWeekLabel = $summaryRows->filter(fn ($s) => ! empty($s->week_label))->keyBy('week_label');
+
         Log::info("WeeklySummary: 📊 Database query result", [
             'user_id' => $user->id,
             'year' => $selectedYear,
             'month' => $selectedMonth,
-            'summaries_found' => $existingSummaries->count(),
-            'summary_ids' => $existingSummaries->pluck('id')->toArray(),
-            'week_numbers' => $existingSummaries->pluck('week_number')->toArray(),
-            'raw_data' => $existingSummaries->map(function($s) {
-                return ['id' => $s->id, 'week' => $s->week_number, 'has_summary' => !empty($s->summary)];
+            'summaries_found' => $summaryRows->count(),
+            'summary_ids' => $summaryRows->pluck('id')->toArray(),
+            'week_numbers' => $summaryRows->pluck('week_number')->toArray(),
+            'raw_data' => $summaryRows->map(function ($s) {
+                return ['id' => $s->id, 'week' => $s->week_number, 'has_summary' => ! empty($s->summary)];
             })->toArray(),
         ]);
-        
+
         // CRITICAL: If no summaries found, log detailed warning
-        if ($existingSummaries->count() === 0) {
+        if ($summaryRows->count() === 0) {
             // Try query without type casting to see if that's the issue
             $testQuery = WeeklySummary::where('user_id', $user->id)
                 ->where('year', (string)$selectedYear)
@@ -363,9 +367,6 @@ class WeeklySummaryController extends Controller
                 'all_summaries_for_user' => WeeklySummary::where('user_id', $user->id)->count(),
             ]);
         }
-        
-        // Key by week_number for easy lookup
-        $existingSummaries = $existingSummaries->keyBy('week_number');
 
         $firstDay = Carbon::create($selectedYear, $selectedMonth, 1)->startOfMonth();
         $lastDay = Carbon::create($selectedYear, $selectedMonth, 1)->endOfMonth();
@@ -386,48 +387,49 @@ class WeeklySummaryController extends Controller
             'last_day_of_month' => $lastDay->toDateTimeString(),
         ]);
 
-        // DIRECT RETURN: Just return all summaries that exist in database
-        // NO DATE FILTERING - just return what's in DB
+        // Build week slots like the dashboard (completed weeks only; skip pre-registration weeks)
         $weeksInMonth = [];
-        
-        Log::info("WeeklySummary: Processing summaries", [
-            'summaries_count' => $existingSummaries->count(),
-            'week_numbers' => $existingSummaries->pluck('week_number')->toArray(),
+
+        Log::info("WeeklySummary: Processing summaries (calendar slots)", [
+            'summaries_count' => $summaryRows->count(),
+            'week_numbers' => $summaryRows->pluck('week_number')->toArray(),
         ]);
-        
-        // Simply iterate through all summaries and add them - NO FILTERING AT ALL
-        Log::info("WeeklySummary: Starting to process summaries", [
-            'existing_summaries_count' => $existingSummaries->count(),
-            'existing_summaries_keys' => $existingSummaries->keys()->toArray(),
-        ]);
-        
-        foreach ($existingSummaries as $weekNum => $summary) {
-            Log::info("WeeklySummary: Processing week", [
-                'week_num' => $weekNum,
-                'summary_id' => $summary->id,
-                'has_summary_text' => !empty($summary->summary),
-            ]);
-            
-            // Calculate week dates simply
-            $weekStart = $firstDay->copy()->startOfWeek(Carbon::MONDAY);
-            if ($weekNum > 1) {
-                $weekStart->addWeeks($weekNum - 1);
+
+        $weekNum = 1;
+        $weekStart = $firstDay->copy()->startOfWeek(CarbonInterface::MONDAY)->startOfDay();
+
+        while ($weekStart->lte($lastDay)) {
+            $weekEnd = $weekStart->copy()->endOfWeek(CarbonInterface::SUNDAY)->endOfDay();
+
+            if ($weekStart->gt($today) || $weekEnd->gt($today)) {
+                break;
             }
-            $weekEnd = $weekStart->copy()->endOfWeek(Carbon::SUNDAY);
-            
-            // Add ALL summaries - no date filtering, no registration check
+
+            if ($weekEnd->lt($userRegistrationDate)) {
+                $weekNum++;
+                $weekStart->addWeek();
+
+                continue;
+            }
+
+            $labelStr = $weekStart->format('M d').' - '.$weekEnd->format('M d');
+
+            $fromNum = $keyedByWeekNumber->get($weekNum);
+            $text = ($fromNum && trim((string) $fromNum->summary) !== '') ? $fromNum->summary : null;
+            if ($text === null && ($alt = $byWeekLabel->get($labelStr))) {
+                $text = trim((string) $alt->summary) !== '' ? $alt->summary : null;
+            }
+
             $weeksInMonth[] = [
-                'week' => (int)$weekNum,
-                'weekLabel' => $weekStart->format('M d') . ' - ' . $weekEnd->format('M d'),
-                'summary' => $summary->summary ?? null,
+                'week' => (int) $weekNum,
+                'weekLabel' => $labelStr,
+                'summary' => $text,
             ];
-            
-            Log::info("WeeklySummary: Added week to array", [
-                'week_num' => $weekNum,
-                'weeks_in_month_count' => count($weeksInMonth),
-            ]);
+
+            $weekNum++;
+            $weekStart->addWeek();
         }
-        
+
         Log::info("WeeklySummary: Finished processing summaries", [
             'total_weeks_added' => count($weeksInMonth),
         ]);
@@ -445,7 +447,7 @@ class WeeklySummaryController extends Controller
         Log::info("WeeklySummary: 📈 Week processing summary", [
             'user_id' => $user->id,
             'total_weeks_in_result' => count($weeksInMonth),
-            'existing_summaries_count' => $existingSummaries->count(),
+            'existing_summaries_count' => $summaryRows->count(),
         ]);
 
         // Calculate valid months and years
@@ -514,8 +516,8 @@ class WeeklySummaryController extends Controller
                             'summary_length' => strlen($s->summary ?? '')
                         ];
                     })->toArray(),
-                    'existing_summaries_after_keyby_count' => $existingSummaries->count(),
-                    'existing_summaries_keys' => $existingSummaries->keys()->toArray(),
+                    'existing_summaries_after_keyby_count' => $keyedByWeekNumber->count(),
+                    'existing_summaries_keys' => $keyedByWeekNumber->keys()->toArray(),
                 ],
                 'processing_results' => [
                     'weeks_in_result' => count($weeksInMonth),
@@ -542,7 +544,7 @@ class WeeklySummaryController extends Controller
         Log::info("WeeklySummary: 🎯 FINAL RESPONSE DATA", [
             'user_id' => $user->id,
             'weekly_summaries_count' => count($weeksInMonth),
-            'summaries_found_in_db' => $existingSummaries->count(),
+            'summaries_found_in_db' => $summaryRows->count(),
             'week_numbers' => array_column($weeksInMonth, 'week'),
             'response_weekly_summaries_count' => count($responseData['data']['weeklySummaries']),
             'valid_months_count' => count($validMonths),

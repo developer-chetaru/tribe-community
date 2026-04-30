@@ -4,7 +4,9 @@ namespace App\Livewire;
 
 use App\Models\HappyIndex;
 use App\Models\WeeklySummary as WeeklySummaryModel;
+use App\Helpers\WeeklySummaryCalendarHelper;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Livewire\Component;
@@ -42,8 +44,8 @@ class WeeklySummary extends Component
 
         $userTimezone = \App\Helpers\TimezoneHelper::getUserTimezone($user);
         $now = \App\Helpers\TimezoneHelper::carbon(null, $userTimezone);
-        $startOfWeek = $now->copy()->startOfWeek()->startOfDay();
-        $endOfWeek = $now->copy()->endOfWeek()->endOfDay();
+        $startOfWeek = $now->copy()->startOfWeek(CarbonInterface::MONDAY)->startOfDay();
+        $endOfWeek = $now->copy()->endOfWeek(CarbonInterface::SUNDAY)->endOfDay();
         $startOfWeekUTC = $startOfWeek->copy()->utc();
         $endOfWeekUTC = $endOfWeek->copy()->utc();
 
@@ -73,9 +75,8 @@ class WeeklySummary extends Component
         })->implode("\n");
 
         $weekLabel = $startOfWeek->format('M d').' - '.$endOfWeek->format('M d');
-        $year = (int) $startOfWeek->year;
-        $month = (int) $startOfWeek->month;
-        $weekNumber = (int) $startOfWeek->weekOfMonth;
+        [$year, $month] = WeeklySummaryCalendarHelper::dashboardYearMonthForWeek($startOfWeek);
+        $weekNumber = WeeklySummaryCalendarHelper::sequentialWeekNumberForMonth($startOfWeek, $year, $month);
 
         $prompt = "Generate a short, friendly weekly emotional summary based on:\n{$entries}\nKeep it supportive, conversational, and under 4 sentences.";
 
@@ -228,12 +229,14 @@ class WeeklySummary extends Component
             'selectedMonthType' => gettype($this->selectedMonth),
         ]);
 
-        $existingSummaries = WeeklySummaryModel::where('user_id', $user->id)
+        $summaryRows = WeeklySummaryModel::where('user_id', $user->id)
             ->where('year', $year)
             ->where('month', $month)
             ->orderBy('week_number')
-            ->get()
-            ->keyBy('week_number');
+            ->get();
+
+        $existingSummaries = $summaryRows->keyBy('week_number');
+        $summariesByWeekLabel = $summaryRows->filter(fn ($s) => ! empty($s->week_label))->keyBy('week_label');
 
         Log::info('WeeklySummary existingSummaries found', [
             'user_id' => $user->id,
@@ -257,7 +260,7 @@ class WeeklySummary extends Component
         $userRegistrationDate = \App\Helpers\TimezoneHelper::setTimezone(Carbon::parse($user->created_at), $defaultTimezone)->startOfDay();
 
         while ($weekStart->lte($lastDay)) {
-            $weekEnd = $weekStart->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
+            $weekEnd = $weekStart->copy()->endOfWeek(CarbonInterface::SUNDAY)->endOfDay();
 
             // Skip future weeks and current week (only show summaries for completed weeks)
             // A week is considered completed only if its end date (Sunday) has passed
@@ -274,10 +277,17 @@ class WeeklySummary extends Component
                 continue;
             }
 
+            $weekLabelSlot = $weekStart->format('M d').' - '.$weekEnd->format('M d');
+            $fromNum = $existingSummaries->get($weekNum);
+            $text = ($fromNum && trim((string) $fromNum->summary) !== '') ? $fromNum->summary : null;
+            if ($text === null && ($alt = $summariesByWeekLabel->get($weekLabelSlot))) {
+                $text = trim((string) $alt->summary) !== '' ? $alt->summary : null;
+            }
+
             $weeksInMonth[$weekNum] = [
                 'week' => $weekNum,
-                'weekLabel' => $weekStart->format('M d').' - '.$weekEnd->format('M d'),
-                'summary' => $existingSummaries[$weekNum]->summary ?? null,
+                'weekLabel' => $weekLabelSlot,
+                'summary' => $text,
             ];
 
             $weekNum++;

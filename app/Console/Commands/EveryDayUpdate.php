@@ -1100,8 +1100,8 @@ class EveryDayUpdate extends Command
                 // Generate summary for the week that just ended
                 // On Sunday, the week that just ended is Monday-Sunday of the current week
                 // So we use startOfWeek() and endOfWeek() on today (Sunday) to get the week that just ended
-                $startOfWeekUserTz = $today->copy()->startOfWeek(); // Monday of current week
-                $endOfWeekUserTz = $today->copy()->endOfWeek(); // Sunday of current week (today)
+                $startOfWeekUserTz = $today->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+                $endOfWeekUserTz = $today->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
                 $startOfWeekUTC = $startOfWeekUserTz->clone()->setTimezone('UTC');
                 $endOfWeekUTC = $endOfWeekUserTz->clone()->setTimezone('UTC');
 
@@ -1132,9 +1132,12 @@ class EveryDayUpdate extends Command
                 })->implode("\n");
 
                 $weekLabel = $startOfWeekUserTz->format('M d').' - '.$endOfWeekUserTz->format('M d');
-                $year = $startOfWeekUserTz->year;
-                $month = $startOfWeekUserTz->month;
-                $weekNumber = $startOfWeekUserTz->weekOfMonth;
+                [$year, $month] = \App\Helpers\WeeklySummaryCalendarHelper::dashboardYearMonthForWeek($startOfWeekUserTz);
+                $weekNumber = \App\Helpers\WeeklySummaryCalendarHelper::sequentialWeekNumberForMonth(
+                    $startOfWeekUserTz,
+                    $year,
+                    $month
+                );
 
                 // Get prompt from database or use default
                 $promptTemplate = \App\Models\AppSetting::getValue('weekly_summary_prompt', 'Generate a professional weekly emotional summary for the user based strictly on the following daily sentiment data from {weekLabel}:
@@ -1200,9 +1203,8 @@ Important writing requirements:
                 }
 
                 /**
-                 * IMPORTANT: SEND EMAIL AND STORE NOTIFICATION ONLY IF SUMMARY IS VALID.
-                 * The same $summaryText that is rendered in the email is persisted to weekly_summaries
-                 * only after OneSignal accepts the send (when the row is missing or summary is empty).
+                 * Same $summaryText is used for the dashboard (weekly_summaries) and email body.
+                 * Dashboard is persisted when the summary is valid — not gated on OneSignal, so cron + dashboard stay aligned.
                  */
                 if ($this->isValidSummary($summaryText)) {
                     // ✅ Check if weekly summary email already sent for this week to prevent duplicates
@@ -1219,6 +1221,16 @@ Important writing requirements:
                     if ($emailAlreadySent) {
                         Log::warning("⛔ Email NOT sent — weekly summary already sent this week for user {$user->id}");
 
+                        // Heal dashboard if mail sent earlier but weekly_summaries row was missing/wrong slot
+                        $this->persistWeeklySummaryAfterEmailSent(
+                            $user->id,
+                            $year,
+                            $month,
+                            $weekNumber,
+                            $weekLabel,
+                            $summaryText
+                        );
+
                         continue;
                     }
 
@@ -1231,6 +1243,15 @@ Important writing requirements:
 
                     if ($recentEmailSent) {
                         Log::warning("⛔ Email NOT sent — weekly summary with same week label sent in last 7 days for user {$user->id}");
+
+                        $this->persistWeeklySummaryAfterEmailSent(
+                            $user->id,
+                            $year,
+                            $month,
+                            $weekNumber,
+                            $weekLabel,
+                            $summaryText
+                        );
 
                         continue;
                     }
@@ -1245,7 +1266,16 @@ Important writing requirements:
                         now($userTimezone)
                     );
 
-                    // Only send email if notification was successfully stored (not duplicate)
+                    // Dashboard row (same text as mail) — do not tie to mail API outcome
+                    $this->persistWeeklySummaryAfterEmailSent(
+                        $user->id,
+                        $year,
+                        $month,
+                        $weekNumber,
+                        $weekLabel,
+                        $summaryText
+                    );
+
                     if ($notificationStored) {
                         try {
                             $oneSignal = new OneSignalService;
@@ -1265,16 +1295,7 @@ Important writing requirements:
                                 'body' => $emailBody,
                             ]);
 
-                            $this->persistWeeklySummaryAfterEmailSent(
-                                $user->id,
-                                $year,
-                                $month,
-                                $weekNumber,
-                                $weekLabel,
-                                $summaryText
-                            );
-
-                            Log::info("✅ OneSignal weekly email sent and notification stored for user {$user->id}");
+                            Log::info("✅ OneSignal weekly email sent for user {$user->id}");
                         } catch (\Throwable $e) {
                             Log::error("❌ OneSignal email failed for user {$user->id}: {$e->getMessage()}");
                         }
@@ -1417,9 +1438,8 @@ Recommendation: Try to engage with Tribe365 regularly to maintain consistent emo
     }
 
     /**
-     * Persist the same plain-text summary that was sent in the weekly email when
-     * the weekly_summaries row for this period is missing or has an empty summary.
-     * Called only after OneSignal accepts the send.
+     * Persist the same plain-text summary used in the weekly email for the dashboard
+     * when the weekly_summaries row is missing or has an empty summary (does not overwrite non-empty).
      */
     private function persistWeeklySummaryAfterEmailSent(
         int $userId,

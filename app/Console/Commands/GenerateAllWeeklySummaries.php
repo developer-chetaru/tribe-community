@@ -5,9 +5,11 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\User;
 use App\Models\HappyIndex;
+use App\Helpers\WeeklySummaryCalendarHelper;
 use App\Models\WeeklySummary;
 use App\Services\OneSignalService;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Log;
 use OpenAI\Laravel\Facades\OpenAI;
 
@@ -28,13 +30,16 @@ class GenerateAllWeeklySummaries extends Command
         $oneSignal = new OneSignalService();
 
         // 🔥 Only 6 weeks back
-        $startWeek = now()->startOfWeek()->subWeeks(5); // 5 + current = 6 weeks
-        $endWeek   = now()->startOfWeek();
+        $startWeek = now()->startOfWeek(CarbonInterface::MONDAY)->subWeeks(5)->startOfDay();
+        $endWeek   = now()->startOfWeek(CarbonInterface::MONDAY)->startOfDay();
 
         while ($startWeek->lte($endWeek)) {
 
-            $weekStartUTC = $startWeek->copy()->setTimezone('UTC');
-            $weekEndUTC   = $startWeek->copy()->endOfWeek()->setTimezone('UTC');
+            $weekStartUTC = $startWeek->copy()->utc();
+            $weekEndUTC = $startWeek->copy()->endOfWeek(CarbonInterface::SUNDAY)->endOfDay()->utc();
+
+            [$bucketYear, $bucketMonth] = WeeklySummaryCalendarHelper::dashboardYearMonthForWeek($startWeek);
+            $weekIndex = WeeklySummaryCalendarHelper::sequentialWeekNumberForMonth($startWeek, $bucketYear, $bucketMonth);
 
             $userIds = HappyIndex::whereBetween('created_at', [$weekStartUTC, $weekEndUTC])
                 ->distinct()
@@ -47,9 +52,9 @@ class GenerateAllWeeklySummaries extends Command
                 // Skip if summary exists
                 if (WeeklySummary::where([
                     'user_id' => $uid,
-                    'year'    => $startWeek->year,
-                    'month'   => $startWeek->month,
-                    'week_number' => $startWeek->weekOfMonth
+                    'year'    => $bucketYear,
+                    'month'   => $bucketMonth,
+                    'week_number' => $weekIndex,
                 ])->exists()) {
                     continue;
                 }
@@ -75,10 +80,10 @@ class GenerateAllWeeklySummaries extends Command
                 // Save summary
                 WeeklySummary::create([
                     'user_id' => $uid,
-                    'year'    => $startWeek->year,
-                    'month'   => $startWeek->month,
-                    'week_number' => $startWeek->weekOfMonth,
-                    'week_label'  => $startWeek->format('M d') . " - " . $startWeek->copy()->endOfWeek()->format('M d'),
+                    'year'    => $bucketYear,
+                    'month'   => $bucketMonth,
+                    'week_number' => $weekIndex,
+                    'week_label'  => $startWeek->format('M d').' - '.$startWeek->copy()->endOfWeek(CarbonInterface::SUNDAY)->format('M d'),
                     'summary' => $summary,
                 ]);
 
