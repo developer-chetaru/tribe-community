@@ -351,7 +351,13 @@
             <span class="text-2xl" aria-hidden="true">🔥</span>
             <div>
                 <p class="text-sm font-semibold text-red-600">{{ $currentStreak }}-day streak!</p>
-                <p class="text-xs text-gray-500">Keep it going — log your sentiment today.</p>
+                <p class="text-xs text-gray-500">
+                    @if($userGivenFeedback)
+                        Keep it going — log your sentiment next day as well.
+                    @else
+                        Keep it going — log your sentiment today.
+                    @endif
+                </p>
             </div>
         </div>
         @endif
@@ -403,6 +409,7 @@
     <div class="mb-3 space-y-2">
         @hasanyrole('organisation_user|director')
         @if(auth()->user()->orgId)
+        @if($sentimentCalendarScope === 'org')
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <!-- Offices -->
         <select wire:model.live="selectedOffice" class="w-full cursor-pointer rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-8 text-[12px] capitalize text-gray-700 shadow-sm focus:border-[#EB1C24] focus:outline-none focus:ring-1 focus:ring-[#EB1C24] sm:text-sm">
@@ -420,6 +427,7 @@
             @endforeach
         </select>
         </div>
+        @endif
         @endif
         @endhasanyrole
 
