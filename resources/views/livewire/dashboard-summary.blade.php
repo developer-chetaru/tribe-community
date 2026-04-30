@@ -357,39 +357,44 @@
         @endif
 
         <div class="mb-2 grid grid-cols-2 gap-1.5 sm:mb-3 sm:grid-cols-5 sm:gap-2" aria-label="Monthly sentiment summary">
-            <div class="flex items-center gap-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 sm:flex-col sm:items-center sm:justify-center sm:py-2">
-                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500" aria-hidden="true"></span>
-                <div class="min-w-0 sm:text-center">
-                    <p class="text-[10px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs">Positive</p>
-                    <p class="text-base font-bold text-gray-900 sm:text-lg">{{ $sentimentMonthStats['positive'] ?? 0 }}</p>
+            <div class="flex items-center gap-1.5 rounded-[10px] border bg-[#F8F8F8] border-gray-200  px-2 py-1.5 flex-col items-center justify-center py-2">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-500 mt-[3px]" aria-hidden="true"></span>
+                <div class="min-w-0 text-center">
+                    <p class="text-[14px] font-bold text-[#3A9A5C] sm:text-[16px] leading-[1] ">{{ $sentimentMonthStats['positive'] ?? 0 }}</p>
+                    <p class="text-[12px] font-medium  tracking-wide text-gray-500 sm:text-[14px] ">Positive days</p>
+                    
                 </div>
             </div>
-            <div class="flex items-center gap-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 sm:flex-col sm:items-center sm:justify-center sm:py-2">
-                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400" aria-hidden="true"></span>
-                <div class="min-w-0 sm:text-center">
-                    <p class="text-[10px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs">Neutral</p>
-                    <p class="text-base font-bold text-gray-900 sm:text-lg">{{ $sentimentMonthStats['neutral'] ?? 0 }}</p>
+            <div class="flex items-center gap-1.5 rounded-[10px] border bg-[#F8F8F8] border-gray-200  px-2 py-1.5 flex-col items-center justify-center py-2">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-amber-400 mt-[3px]" aria-hidden="true"></span>
+                <div class="min-w-0 text-center">
+                   
+                    <p class="text-[14px] font-bold text-[#D4A017] sm:text-[16px] leading-[1]">{{ $sentimentMonthStats['neutral'] ?? 0 }}</p>
+                     <p class="text-[12px] font-medium  tracking-wide text-gray-500 sm:text-[14px]">Neutral days</p>
                 </div>
             </div>
-            <div class="flex items-center gap-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 sm:flex-col sm:items-center sm:justify-center sm:py-2">
-                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-[#EB1C24]" aria-hidden="true"></span>
-                <div class="min-w-0 sm:text-center">
-                    <p class="text-[10px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs">Low</p>
-                    <p class="text-base font-bold text-gray-900 sm:text-lg">{{ $sentimentMonthStats['low'] ?? 0 }}</p>
+            <div class="flex items-center gap-1.5 rounded-[10px] border bg-[#F8F8F8] border-gray-200  px-2 py-1.5 flex-col items-center justify-center py-2">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-[#EB1C24] mt-[3px]" aria-hidden="true"></span>
+                <div class="min-w-0 text-center">
+                    
+                    <p class="text-[14px] font-bold text-[#C0191A] sm:text-[16px] leading-[1]">{{ $sentimentMonthStats['low'] ?? 0 }}</p>
+                    <p class="text-[12px] font-medium  tracking-wide text-gray-500 sm:text-[14px]">Low days</p>
                 </div>
             </div>
-            <div class="flex items-center gap-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 sm:flex-col sm:items-center sm:justify-center sm:py-2">
-                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-gray-400" aria-hidden="true"></span>
-                <div class="min-w-0 sm:text-center">
-                    <p class="text-[10px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs">Out of office</p>
-                    <p class="text-base font-bold text-gray-900 sm:text-lg">{{ $sentimentMonthStats['out_of_office'] ?? 0 }}</p>
-                </div>
+            <div class="flex items-center gap-1.5 rounded-[10px] border bg-[#F8F8F8] border-gray-200  px-2 py-1.5 flex-col items-center justify-center py-2">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-gray-400 mt-[3px]" aria-hidden="true"></span>
+                <div class="min-w-0 text-center">
+                   
+                    <p class="text-[14px] font-bold text-[#808080] sm:text-[16px] leading-[1]">{{ $sentimentMonthStats['out_of_office'] ?? 0 }}</p>
+                     <p class="text-[12px] font-medium  tracking-wide text-gray-500 sm:text-[14px]">Out of office</p>
+                </div> 
             </div>
-            <div class="col-span-2 flex items-center gap-1.5 rounded border border-gray-200 bg-gray-50 px-2 py-1.5 sm:col-span-1 sm:flex-col sm:items-center sm:justify-center sm:py-2">
-                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-gray-400 ring-1 ring-gray-300" aria-hidden="true"></span>
-                <div class="min-w-0 sm:text-center">
-                    <p class="text-[10px] font-medium uppercase tracking-wide text-gray-500 sm:text-xs">Missed</p>
-                    <p class="text-base font-bold text-gray-900 sm:text-lg">{{ $sentimentMonthStats['missed'] ?? 0 }}</p>
+            <div class="flex items-center gap-1.5 rounded-[10px] border bg-[#F8F8F8] border-gray-200  px-2 py-1.5 flex-col items-center justify-center py-2">
+                <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-gray-400 ring-1 ring-gray-300 mt-[3px]" aria-hidden="true"></span>
+                <div class="min-w-0 text-center">
+                   
+                    <p class="text-[14px] font-bold text-[#808080] sm:text-[16px] leading-[1]">{{ $sentimentMonthStats['missed'] ?? 0 }}</p>
+                     <p class="text-[12px] font-medium  tracking-wide text-gray-500 sm:text-[14px]">Missed</p>
                 </div>
             </div>
         </div>
@@ -534,13 +539,13 @@
         <table class="table-auto border-collapse w-full text-center calendar-table"> 
             <thead>
                 <tr>
-                    <th class="p-2 text-red-600">Sun</th>
-                    <th class="p-2">Mon</th>
-                    <th class="p-2">Tue</th>
-                    <th class="p-2">Wed</th>
-                    <th class="p-2">Thu</th>
-                    <th class="p-2">Fri</th>
-                    <th class="p-2 text-red-600">Sat</th>
+                    <th class="p-1 sm:p-2 text-red-600 h-[47px] w-[42px] sm:h-14 sm:w-14" >Sun</th>
+                    <th class="p-1 sm:p-2 h-[47px] w-[42px] sm:h-14 sm:w-14">Mon</th>
+                    <th class="p-1 sm:p-2 h-[47px] w-[42px] sm:h-14 sm:w-14">Tue</th>
+                    <th class="p-1 sm:p-2 h-[47px] w-[42px] sm:h-14 sm:w-14">Wed</th>
+                    <th class="p-1 sm:p-2 h-[47px] w-[42px] sm:h-14 sm:w-14">Thu</th>
+                    <th class="p-1 sm:p-2 h-[47px] w-[42px] sm:h-14 sm:w-14">Fri</th>
+                    <th class="p-1 sm:p-2 h-[47px] w-[42px] sm:h-14 sm:w-14 text-red-600">Sat</th>  
                 </tr>
             </thead>
             <tbody>
@@ -681,7 +686,7 @@
                                     ];
                                 @endphp
                                 <td class="p-1" wire:key="cal-{{ $dayDate->format('Y-m-d') }}-{{ $sentimentCalendarScope }}">
-                                    <div class="mx-auto flex h-14 w-14 flex-col items-center justify-center rounded-lg transition {{ $dayDate->isSameDay($todayDate) ? 'bg-[#FEEBEE] ring-2 ring-[#EB1C24] ring-offset-0' : 'bg-transparent hover:bg-gray-50/70' }} {{ ($dayDate->lte($todayDate) || $img === 'leave-office.svg' || $img === 'sentiment-missed.svg') ? 'cursor-pointer' : 'cursor-default' }}"
+                                    <div class="  flex h-[47px] w-[42px] sm:h-14 sm:w-14 flex-col items-center justify-center rounded-lg transition {{ $dayDate->isSameDay($todayDate) ? 'bg-[#FEEBEE] ring-2 ring-[#EB1C24] ring-offset-0' : 'bg-transparent hover:bg-gray-50/70' }} {{ ($dayDate->lte($todayDate) || $img === 'leave-office.svg' || $img === 'sentiment-missed.svg') ? 'cursor-pointer' : 'cursor-default' }}"
                                         @if($dayDate->lte($todayDate) || $img === 'leave-office.svg' || $img === 'sentiment-missed.svg')
                                             @click='openModal = true; modalData = @json($modalPayload)'
                                         @endif
@@ -691,10 +696,10 @@
                                             <span class="mt-1 text-sm text-gray-400">-</span>
                                         @elseif($isCalendarNonWorkingDay)
                                             @if($dayDate->isAfter($todayDate))
-                                                <span class="mt-1 block h-5 w-5 shrink-0" aria-hidden="true"></span>
+                                                <span class="mt-1 block h-5 w-5 shrink-0" aria-hidden="true"></span> 
                                             @else
                                                 <span class="mt-1 text-sm text-gray-400">-</span>
-                                            @endif
+                                            @endif 
                                         @else
                                             @if($img)
                                                 <img src="{{ asset('images/' . $img) }}" class="mt-1 h-5 w-5" alt="">
@@ -708,7 +713,7 @@
                                 </td>
                             @else
                                 <td class="p-1" wire:key="cal-blank-{{ $year }}-{{ $month }}-{{ $weekIdx }}-{{ $colIdx }}-{{ $sentimentCalendarScope }}">
-                                    <div class="mx-auto h-14 w-14" aria-hidden="true"></div>
+                                    <div class="h-[47px] w-[42px] sm:h-14 sm:w-14" aria-hidden="true"></div>
                                 </td>
                             @endif
                         @endforeach
@@ -716,14 +721,14 @@
                 @endforeach
             </tbody>
         </table>
-        <div class="mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t border-gray-100 pt-2 text-[10px] text-gray-600 sm:justify-start sm:text-xs" aria-label="Calendar legend">
-            <span class="inline-flex items-center gap-1"><img src="{{ asset('images/happy.svg') }}" alt="" class="h-3.5 w-3.5"> Great</span>
-            <span class="inline-flex items-center gap-1"><img src="{{ asset('images/avarge.svg') }}" alt="" class="h-3.5 w-3.5"> Okay</span>
-            <span class="inline-flex items-center gap-1"><img src="{{ asset('images/sad.svg') }}" alt="" class="h-3.5 w-3.5"> Low</span>
-            <span class="inline-flex items-center gap-1"><span class="inline-block h-3.5 w-3.5 rounded-full bg-[#FEEBEE] ring-2 ring-[#EB1C24]" aria-hidden="true"></span> Today</span>
-            <span class="inline-flex items-center gap-1"><img src="{{ asset('images/leave-office.svg') }}" alt="" class="h-3.5 w-3.5"> Out of office</span>
-            <span class="inline-flex items-center gap-1"><img src="{{ asset('images/sentiment-missed.svg') }}" alt="" class="h-3.5 w-3.5"> Missed</span>
-            <span class="inline-flex items-center gap-1"><span class="font-medium text-gray-400">&mdash;</span> Blank</span>
+        <div class="mt-[15px] flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t border-gray-100  text-[10px] text-gray-600  sm:text-xs pt-[10px]" aria-label="Calendar legend">
+            <span class="inline-flex items-center gap-1 text-[12px] sm:text-[14px]"><img src="{{ asset('images/happy.svg') }}" alt="" class="h-4 w-4"> Great</span>
+            <span class="inline-flex items-center gap-1 text-[12px] sm:text-[14px]"><img src="{{ asset('images/avarge.svg') }}" alt="" class="h-4 w-4"> Okay</span>
+            <span class="inline-flex items-center gap-1 text-[12px] sm:text-[14px]"><img src="{{ asset('images/sad.svg') }}" alt="" class="h-4 w-4"> Low</span>
+            <span class="inline-flex items-center gap-1 text-[12px] sm:text-[14px]"><span class="inline-block h-3.5 w-3.5 rounded-[2px] bg-[#FEEBEE] ring-1 ring-[#EB1C24]" aria-hidden="true"></span> Today</span>
+            <span class="inline-flex items-center gap-1 text-[12px] sm:text-[14px]"><img src="{{ asset('images/leave-office.svg') }}" alt="" class="h-4 w-4"> Out of office</span>
+            <span class="inline-flex items-center gap-1 text-[12px] sm:text-[14px]"><img src="{{ asset('images/sentiment-missed.svg') }}" alt="" class="h-4 w-4"> Missed</span>
+            <span class="inline-flex items-center gap-1 text-[12px] sm:text-[14px]"><span class="font-medium text-gray-400">&mdash;</span> Blank</span>
         </div>
     </div>
     </div>
@@ -758,7 +763,7 @@
     </div>
     </div>
 
-    <div class="min-w-0">
+    <div class="min-w-0" style="height: 100%; display: block;">
         @livewire('summary')
     </div>
 

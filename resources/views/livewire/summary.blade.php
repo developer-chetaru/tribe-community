@@ -1,4 +1,4 @@
-<div class="flex flex-col border border-gray-100 rounded-md summary-info" x-data="{ openFilter: false }">
+<div class="flex min-w-0 w-full flex-wrap overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm height-[100%]" x-data="{ openFilter: false }">
     <div class="flex px-4 py-3 sm:px-6 sm:py-4 justify-between items-center w-full flex-wrap sm:flex-nowrap bg-white border-b border-gray-200">
         <h3 class="text-lg sm:text-2xl text-[#EB1C24] font-bold mb-1 sm:mb-0 flex items-center gap-2">
             <!-- <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -160,7 +160,7 @@
     </div>
 
     <!-- Summary Content -->
-    <div class="flex flex-col overflow-auto bg-gradient-to-b from-gray-50 to-gray-100 p-4 sm:p-6 w-full sm:h-[539px] space-y-3">
+    <div class="flex flex-col overflow-auto bg-gradient-to-b from-gray-50 to-gray-100 p-4 sm:p-6 w-full  space-y-3 height-[100%] max-h-[400px] md:max-h-[769px]">
         @forelse($summary as $item)
             <div class="group flex bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-200 items-start w-full p-4 border border-gray-100 hover:border-gray-200">
                 <!-- Icon: missed = yellow ? asset; else emoji (😊/😐/😟) or fallback image -->
