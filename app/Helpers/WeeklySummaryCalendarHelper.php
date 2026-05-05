@@ -15,16 +15,22 @@ final class WeeklySummaryCalendarHelper
 {
     /**
      * Month/year for the weekly_summaries row so it appears under the correct dashboard month.
-     * Uses the week’s Thursday (same as ISO “which month does this week belong to” convention).
+     *
+     * IMPORTANT: The dashboard month view counts "Week 1" as the Monday-aligned slice that
+     * contains the first day of the selected month, even if that Monday is in the previous month
+     * (e.g. May Week 1 can start on Apr 27).
+     *
+     * To match that UI, we bucket a week under the month that contains its Sunday (week end),
+     * so the Apr 27–May 3 week is stored under May.
      *
      * @return array{0: int, 1: int} [year, month]
      */
     public static function dashboardYearMonthForWeek(Carbon $weekStartMonday): array
     {
         $monday = $weekStartMonday->copy()->startOfWeek(CarbonInterface::MONDAY)->startOfDay();
-        $thursday = $monday->copy()->addDays(3);
+        $sunday = $monday->copy()->endOfWeek(CarbonInterface::SUNDAY)->startOfDay();
 
-        return [(int) $thursday->year, (int) $thursday->month];
+        return [(int) $sunday->year, (int) $sunday->month];
     }
 
     /**
