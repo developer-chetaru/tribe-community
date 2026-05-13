@@ -10,8 +10,8 @@ class IotDataSeeder extends Seeder
     public function run(): void
     {
         // Seed iot_feedback_statuses
-        if (DB::table('iot_feedback_statuses')->count() === 0) {
-            DB::table('iot_feedback_statuses')->insert([
+        if (DB::table('iot_feedback_status')->count() === 0) {
+            DB::table('iot_feedback_status')->insert([
                 ['title' => 'Open',                 'status' => 'Active', 'created_at' => now(), 'updated_at' => now()],
                 ['title' => 'Close',                'status' => 'Active', 'created_at' => now(), 'updated_at' => now()],
                 ['title' => 'Open awaiting R/A',    'status' => 'Active', 'created_at' => now(), 'updated_at' => now()],
@@ -25,8 +25,8 @@ class IotDataSeeder extends Seeder
         }
 
         // Seed iot_risk_priorities
-        if (DB::table('iot_risk_priorities')->count() === 0) {
-            DB::table('iot_risk_priorities')->insert([
+        if (DB::table('iot_risk_priority')->count() === 0) {
+            DB::table('iot_risk_priority')->insert([
                 ['title' => 'Low',    'status' => 'Active', 'created_at' => now(), 'updated_at' => now()],
                 ['title' => 'Medium', 'status' => 'Active', 'created_at' => now(), 'updated_at' => now()],
                 ['title' => 'High',   'status' => 'Active', 'created_at' => now(), 'updated_at' => now()],
