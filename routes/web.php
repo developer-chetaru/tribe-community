@@ -66,6 +66,22 @@ use App\Http\Controllers\Billing\StripeWebhookController;
 use App\Http\Controllers\Billing\RefundController;
 use App\Http\Controllers\Api\WeeklySummaryController;
 use App\Http\Controllers\Api\MonthlySummaryController;
+use App\Livewire\OffloadingCreate;
+use App\Livewire\OffloadingList;
+use App\Livewire\OffloadingChat;
+use App\Http\Controllers\ConnectingController;
+use App\Http\Controllers\SuperchargingController;
+use App\Http\Controllers\DiagnosticsController;
+use App\Http\Controllers\TribeometerController;
+use App\Http\Controllers\Admin\AdminIOTController;
+use App\Http\Controllers\Admin\AdminLoginController;
+use App\Http\Controllers\Admin\AdminCOTquestionController;
+use App\Http\Controllers\Admin\AdminCOTController;
+use App\Http\Controllers\Admin\AdminPersonalityTypeController;
+use App\Http\Controllers\Admin\AdminCultureStructureController;
+use App\Http\Controllers\Admin\AdminMotivationController;
+use App\Http\Controllers\Admin\AdminDiagnosticController;
+use App\Http\Controllers\Admin\AdminTribeometerController;
 
 
 use App\Http\Controllers\ForgotController;
@@ -289,6 +305,47 @@ Route::middleware([
     Route::get('/user/notifications', Notifications::class)->name('user.notifications');
     Route::get('/reflection-list', ReflectionList::class)->name('admin.reflections.index');
     Route::get('/reflections/create', ReflectionCreate::class)->name('reflection.create');
+    
+    // User Offloading/Feedback Submission
+    Route::get('/offloading/create', OffloadingCreate::class)->name('offloading.create');
+    Route::get('/offloading/list', OffloadingList::class)->name('offloading.list');
+    Route::get('/offloading/chat/{feedbackId}', OffloadingChat::class)->name('offloading.chat');
+
+    // Connecting Module - User Routes
+    Route::prefix('connecting')->name('connecting.')->group(function () {
+        Route::get('/team-role-map', [ConnectingController::class, 'teamRoleMap'])->name('team-role-map');
+        Route::post('/team-role-map/submit', [ConnectingController::class, 'submitTeamRoleMap'])->name('team-role-map.submit');
+        Route::get('/team-role-map/results', [ConnectingController::class, 'teamRoleMapResults'])->name('team-role-map.results');
+
+        Route::get('/personality-type', [ConnectingController::class, 'personalityType'])->name('personality-type');
+        Route::post('/personality-type/submit', [ConnectingController::class, 'submitPersonalityType'])->name('personality-type.submit');
+        Route::get('/personality-type/results', [ConnectingController::class, 'personalityTypeResults'])->name('personality-type.results');
+    });
+
+    // Supercharging Module - User Routes
+    Route::prefix('supercharging')->name('supercharging.')->group(function () {
+        Route::get('/culture-structure', [SuperchargingController::class, 'cultureStructure'])->name('culture-structure');
+        Route::post('/culture-structure/submit', [SuperchargingController::class, 'submitCultureStructure'])->name('culture-structure.submit');
+        Route::get('/culture-structure/results', [SuperchargingController::class, 'cultureStructureResults'])->name('culture-structure.results');
+
+        Route::get('/motivation', [SuperchargingController::class, 'motivation'])->name('motivation');
+        Route::post('/motivation/submit', [SuperchargingController::class, 'submitMotivation'])->name('motivation.submit');
+        Route::get('/motivation/results', [SuperchargingController::class, 'motivationResults'])->name('motivation.results');
+    });
+
+    // Diagnostics Module - User Routes
+    Route::prefix('diagnostics')->name('diagnostics.')->group(function () {
+        Route::get('/', [DiagnosticsController::class, 'index'])->name('index');
+        Route::post('/submit', [DiagnosticsController::class, 'submit'])->name('submit');
+        Route::get('/results', [DiagnosticsController::class, 'results'])->name('results');
+    });
+
+    // Tribeometer Module - User Routes
+    Route::prefix('tribeometer')->name('tribeometer.')->group(function () {
+        Route::get('/', [TribeometerController::class, 'index'])->name('index');
+        Route::post('/submit', [TribeometerController::class, 'submit'])->name('submit');
+        Route::get('/results', [TribeometerController::class, 'results'])->name('results');
+    });
 
     // My Teammates - Only for organisation_user, organisation_admin, basecamp (with orgId)
     // Note: Component-level check ensures user has orgId
@@ -390,6 +447,110 @@ Route::middleware([
         
         // Prompt Management
         Route::get('/admin/prompts', ManagePrompts::class)->name('admin.prompts');
+
+        // Assessments - Admin Routes (Super Admin Only)
+        Route::prefix('admin/connecting')->group(function () {
+            // Team Role Map
+            Route::prefix('team-role-map')->name('admin.cot.')->group(function () {
+                Route::get('/questions', [AdminCOTquestionController::class, 'index'])->name('questions.index');
+                Route::get('/questions/create', [AdminCOTquestionController::class, 'create'])->name('questions.create');
+                Route::post('/questions', [AdminCOTquestionController::class, 'store'])->name('questions.store');
+                Route::get('/questions/{id}/edit', [AdminCOTquestionController::class, 'edit'])->name('questions.edit');
+                Route::put('/questions/{id}', [AdminCOTquestionController::class, 'update'])->name('questions.update');
+                Route::delete('/questions/{id}', [AdminCOTquestionController::class, 'destroy'])->name('questions.destroy');
+
+                Route::get('/descriptions', [AdminCOTController::class, 'listTeamRoleMapDescription'])->name('team-role-descriptions.index');
+                Route::get('/descriptions/{id}/edit', [AdminCOTController::class, 'editTeamRoleMapDescription'])->name('team-role-descriptions.edit');
+                Route::put('/descriptions/{id}', [AdminCOTController::class, 'updateTeamRoleMapDescription'])->name('team-role-descriptions.update');
+
+                Route::get('/results', [AdminCOTController::class, 'teamRoleMapResults'])->name('team-role-results.index');
+                Route::get('/results/export', [AdminCOTController::class, 'exportTeamRoleMapResults'])->name('team-role-results.export');
+            });
+
+            // Personality Type
+            Route::prefix('personality-type')->name('admin.personality-type.')->group(function () {
+                Route::get('/questions', [AdminPersonalityTypeController::class, 'questionsIndex'])->name('questions.index');
+                Route::get('/questions/create', [AdminPersonalityTypeController::class, 'questionsCreate'])->name('questions.create');
+                Route::post('/questions', [AdminPersonalityTypeController::class, 'questionsStore'])->name('questions.store');
+                Route::get('/questions/{id}/edit', [AdminPersonalityTypeController::class, 'questionsEdit'])->name('questions.edit');
+                Route::put('/questions/{id}', [AdminPersonalityTypeController::class, 'questionsUpdate'])->name('questions.update');
+                Route::delete('/questions/{id}', [AdminPersonalityTypeController::class, 'questionsDestroy'])->name('questions.destroy');
+
+                Route::get('/options', [AdminPersonalityTypeController::class, 'optionsIndex'])->name('options.index');
+
+                Route::get('/values', [AdminPersonalityTypeController::class, 'valuesIndex'])->name('values.index');
+                Route::get('/values/{id}/edit', [AdminPersonalityTypeController::class, 'valuesEdit'])->name('values.edit');
+                Route::put('/values/{id}', [AdminPersonalityTypeController::class, 'valuesUpdate'])->name('values.update');
+
+                Route::get('/results', [AdminPersonalityTypeController::class, 'resultsIndex'])->name('results.index');
+                Route::get('/results/export', [AdminPersonalityTypeController::class, 'exportResults'])->name('results.export');
+            });
+        });
+
+        Route::prefix('admin/supercharging')->group(function () {
+            Route::prefix('culture-structure')->name('admin.culture-structure.')->group(function () {
+                Route::get('/questions', [AdminCultureStructureController::class, 'questionsIndex'])->name('questions.index');
+                Route::get('/questions/create', [AdminCultureStructureController::class, 'questionsCreate'])->name('questions.create');
+                Route::post('/questions', [AdminCultureStructureController::class, 'questionsStore'])->name('questions.store');
+                Route::get('/questions/{id}/edit', [AdminCultureStructureController::class, 'questionsEdit'])->name('questions.edit');
+                Route::put('/questions/{id}', [AdminCultureStructureController::class, 'questionsUpdate'])->name('questions.update');
+                Route::delete('/questions/{id}', [AdminCultureStructureController::class, 'questionsDestroy'])->name('questions.destroy');
+
+                Route::get('/types', [AdminCultureStructureController::class, 'typesIndex'])->name('types.index');
+                Route::get('/types/{id}/edit', [AdminCultureStructureController::class, 'typesEdit'])->name('types.edit');
+                Route::put('/types/{id}', [AdminCultureStructureController::class, 'typesUpdate'])->name('types.update');
+
+                Route::get('/results', [AdminCultureStructureController::class, 'resultsIndex'])->name('results.index');
+            });
+
+            Route::prefix('motivation')->name('admin.motivation.')->group(function () {
+                Route::get('/questions', [AdminMotivationController::class, 'questionsIndex'])->name('questions.index');
+                Route::get('/questions/create', [AdminMotivationController::class, 'questionsCreate'])->name('questions.create');
+                Route::post('/questions', [AdminMotivationController::class, 'questionsStore'])->name('questions.store');
+                Route::get('/questions/{id}/edit', [AdminMotivationController::class, 'questionsEdit'])->name('questions.edit');
+                Route::put('/questions/{id}', [AdminMotivationController::class, 'questionsUpdate'])->name('questions.update');
+                Route::delete('/questions/{id}', [AdminMotivationController::class, 'questionsDestroy'])->name('questions.destroy');
+
+                Route::get('/values', [AdminMotivationController::class, 'valuesIndex'])->name('values.index');
+                Route::get('/values/{id}/edit', [AdminMotivationController::class, 'valuesEdit'])->name('values.edit');
+                Route::put('/values/{id}', [AdminMotivationController::class, 'valuesUpdate'])->name('values.update');
+
+                Route::get('/results', [AdminMotivationController::class, 'resultsIndex'])->name('results.index');
+            });
+        });
+
+        Route::prefix('admin/diagnostics')->name('admin.diagnostic.')->group(function () {
+            Route::get('/', [AdminDiagnosticController::class, 'index'])->name('index');
+            Route::post('/update/{id}', [AdminDiagnosticController::class, 'update'])->name('update');
+            Route::get('/options', [AdminDiagnosticController::class, 'getDiagnosticOptionList'])->name('options.index');
+            Route::post('/options/update', [AdminDiagnosticController::class, 'upadateDiagnosticOption'])->name('options.update');
+            Route::post('/options/add', [AdminDiagnosticController::class, 'addDiagnosticOption'])->name('options.add');
+            Route::post('/options/delete', [AdminDiagnosticController::class, 'deleteDiagnosticOption'])->name('options.delete');
+            Route::get('/categories', [AdminDiagnosticController::class, 'getDiagnosticValuesList'])->name('categories.index');
+            Route::post('/categories/update', [AdminDiagnosticController::class, 'updateDiagnosticCategoryValues'])->name('categories.update');
+            Route::post('/categories/add', [AdminDiagnosticController::class, 'addDiagnosticCategory'])->name('categories.add');
+            Route::post('/categories/delete', [AdminDiagnosticController::class, 'deleteDiagnosticCategory'])->name('categories.delete');
+            Route::post('/questions/add', [AdminDiagnosticController::class, 'addDiagnosticQuestion'])->name('questions.add');
+            Route::post('/questions/delete', [AdminDiagnosticController::class, 'deleteDiagnosticQuestion'])->name('questions.delete');
+            Route::get('/results', [AdminDiagnosticController::class, 'resultsIndex'])->name('results.index');
+        });
+
+        Route::prefix('admin')->name('admin.')->group(function () {
+            Route::get('tribeometer', [AdminTribeometerController::class, 'index'])->name('tribeometer.index');
+            Route::get('tribeometer/question/edit/{id}', [AdminTribeometerController::class, 'editQuestion'])->name('tribeometer.question.edit');
+            Route::post('tribeometer/question/update/{id}', [AdminTribeometerController::class, 'updateQuestion'])->name('tribeometer.question.update');
+            Route::get('tribeometer/options', [AdminTribeometerController::class, 'getOptionList'])->name('tribeometer.option.list');
+            Route::post('tribeometer/option/update', [AdminTribeometerController::class, 'updateOption'])->name('tribeometer.option.update');
+            Route::get('tribeometer/values', [AdminTribeometerController::class, 'getValuesList'])->name('tribeometer.value.list');
+            Route::post('tribeometer/value/update', [AdminTribeometerController::class, 'updateValue'])->name('tribeometer.value.update');
+            Route::post('tribeometer/option/add', [AdminTribeometerController::class, 'addOption'])->name('tribeometer.option.add');
+            Route::post('tribeometer/question/add', [AdminTribeometerController::class, 'addQuestion'])->name('tribeometer.question.add');
+            Route::post('tribeometer/value/add', [AdminTribeometerController::class, 'addValue'])->name('tribeometer.value.add');
+            Route::post('tribeometer/question/delete', [AdminTribeometerController::class, 'deleteQuestion'])->name('tribeometer.question.delete');
+            Route::post('tribeometer/option/delete', [AdminTribeometerController::class, 'deleteOption'])->name('tribeometer.option.delete');
+            Route::post('tribeometer/value/delete', [AdminTribeometerController::class, 'deleteValue'])->name('tribeometer.value.delete');
+            Route::get('tribeometer/results', [AdminTribeometerController::class, 'resultsIndex'])->name('tribeometer.results.index');
+        });
         
         // Invoice Routes (Admin - super_admin can access all invoices)
         Route::get('/admin/invoices/{id}/download', [InvoiceController::class, 'download'])->name('admin.invoices.download');
@@ -417,6 +578,21 @@ Route::middleware([
         Route::get('/industries', Industry::class)->name('industries.list');
         Route::get('/industries/add', IndustryAdd::class)->name('industries.add');
         Route::get('/industries/edit/{id}', IndustryEdit::class)->name('industries.edit');
+
+        // IOT/Offloading Admin Routes
+        Route::post('/admin/improvementChkPass', [AdminLoginController::class, 'improvementChkPass'])->name('admin.improvement.check-pass');
+        Route::post('/admin/iot-change-password', [AdminLoginController::class, 'changePassword'])->name('admin.iot.change-password');
+        Route::get('/admin/iot-dashboard/{orgId}', [AdminIOTController::class, 'getIotDeshboard'])->name('admin.iot.dashboard');
+        Route::get('/admin/feedback-list/{orgId}/{status}/{officeId?}', [AdminIOTController::class, 'feedbackList'])->name('admin.iot.feedback-list');
+        Route::get('/admin/iot-chatbox/{feedbackId}', [AdminIOTController::class, 'iotChatbox'])->name('admin.iot.chatbox');
+        Route::post('/admin/iot-send-message', [AdminIOTController::class, 'sendChatMessagesFromAdmin'])->name('admin.iot.send-message');
+        Route::post('/admin/iot-update-feedback', [AdminIOTController::class, 'updateFeedback'])->name('admin.iot.update-feedback');
+        Route::post('/admin/iot-assign-theme', [AdminIOTController::class, 'assignTheme'])->name('admin.iot.assign-theme');
+        Route::get('/admin/theme-list/{orgId}', [AdminIOTController::class, 'themeList'])->name('admin.theme-list');
+        Route::get('/admin/add-theme/{orgId}', [AdminIOTController::class, 'addTheme'])->name('admin.add-theme');
+        Route::post('/admin/store-theme', [AdminIOTController::class, 'storeTheme'])->name('admin.store-theme');
+        Route::get('/admin/edit-theme/{themeId}', [AdminIOTController::class, 'editTheme'])->name('admin.edit-theme');
+        Route::post('/admin/update-theme/{themeId}', [AdminIOTController::class, 'updateTheme'])->name('admin.update-theme');
     });
     
     // REMOVED: API routes for summaries moved to routes/api.php

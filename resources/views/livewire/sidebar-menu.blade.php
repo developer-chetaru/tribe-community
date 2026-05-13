@@ -1,3 +1,4 @@
+<div>
 <div 
      x-data="sidebarComponent()"
      :class="sidebarClass"
@@ -67,6 +68,21 @@
     </a>
       @endhasanyrole
 
+
+@hasanyrole('super_admin')
+    <a href="#"
+       onclick="event.preventDefault(); if(typeof showOffloadingAccess === 'function') { showOffloadingAccess(); }"
+       class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
+       :class="[
+           $store.sidebar.open ? ' justify-start' : 'justify-center',
+           window.location.pathname.startsWith('/admin/iot') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700'
+       ]">
+        <img
+            :src="'{{ asset('images/offloading.svg') }}'"
+            class="h-5 w-5" />
+        <span x-show="$store.sidebar.open" x-transition class="text-sm pl-4">Offloading</span>
+    </a>
+@endhasanyrole
 
       
 @hasanyrole('organisation_user|organisation_admin|basecamp|director')
@@ -147,6 +163,23 @@
 </a>
 @endhasanyrole
 
+<!-- Offloading for regular users -->
+@hasanyrole('organisation_user|basecamp|director')
+@if(!auth()->user()->hasAnyRole(['super_admin', 'organisation_admin']))
+<a href="{{ route('offloading.list') }}"
+   class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
+   :class="[
+       $store.sidebar.open ? ' justify-start' : 'justify-center',
+       request()->is('offloading*') || request()->routeIs('offloading.*')
+           ? 'bg-red-100 text-red-600 font-semibold'
+           : 'text-gray-700 hover:bg-gray-100'
+   ]">
+    <img src="{{ asset('images/offloading.svg') }}" class="h-5 w-5" />
+    <span x-show="$store.sidebar.open" x-transition class="text-sm pl-4">Offloading</span>
+</a>
+@endif
+@endhasanyrole
+
 {{-- Notification button removed for users --}}
 {{-- @hasanyrole('organisation_user|basecamp|organisation_admin')
     <a href="{{ route('user.notifications') }}"
@@ -192,26 +225,59 @@
     </a>
 @endhasanyrole --}}
 
- <!-- @hasanyrole('super_admin')
-    <a href="#"
-   class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
-   :class="[
-       $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
-       window.location.pathname === '' ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700'
-   ]">
-    
-    <img 
-        :src="window.location.pathname === '' 
-            ? '{{ asset('images/offloading-active.svg') }}' 
-            : '{{ asset('images/offloading.svg') }}'" 
-        class="h-5 w-5" />
+{{-- Offloading (super_admin placeholder - disabled) --}}
 
-    <span x-show="$store.sidebar.open" x-transition class="text-sm">Offloading</span>
-</a>
-     @endhasanyrole
--->
+@hasanyrole('organisation_user|basecamp|organisation_admin')
+    <a href="{{ route('connecting.team-role-map.results') }}"
+       class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
+       :class="[
+           $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
+           request()->is('connecting*') 
+               ? 'bg-red-100 text-red-600 font-semibold' 
+               : 'text-gray-700 hover:bg-gray-100'
+       ]"
+    >
+        <img src="{{ asset('images/connecting.svg') }}" class="h-5 w-5" />
+        <span x-show="$store.sidebar.open" x-transition class="text-sm pl-4">Assessments</span>
+    </a>
+    <a href="{{ route('supercharging.culture-structure.results') }}"
+       class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
+       :class="[
+           $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
+           request()->is('supercharging*') 
+               ? 'bg-red-100 text-red-600 font-semibold' 
+               : 'text-gray-700 hover:bg-gray-100'
+       ]"
+    >
+        <img src="{{ asset('images/connecting.svg') }}" class="h-5 w-5" onerror="this.src='{{ asset('images/connecting.svg') }}'" />
+        <span x-show="$store.sidebar.open" x-transition class="text-sm pl-4">Supercharging</span>
+    </a>
+    <a href="{{ route('diagnostics.index') }}"
+       class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
+       :class="[
+           $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
+           request()->is('diagnostics*') 
+               ? 'bg-red-100 text-red-600 font-semibold' 
+               : 'text-gray-700 hover:bg-gray-100'
+       ]"
+    >
+        <img src="{{ asset('images/diagnostics.svg') }}" class="h-5 w-5" onerror="this.src='{{ asset('images/connecting.svg') }}'" />
+        <span x-show="$store.sidebar.open" x-transition class="text-sm pl-4">Diagnostics</span>
+    </a>
+    <a href="{{ route('tribeometer.index') }}"
+       class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
+       :class="[
+           $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
+           request()->is('tribeometer*') 
+               ? 'bg-red-100 text-red-600 font-semibold' 
+               : 'text-gray-700 hover:bg-gray-100'
+       ]"
+    >
+        <img src="{{ asset('images/diagnostics.svg') }}" class="h-5 w-5" onerror="this.src='{{ asset('images/connecting.svg') }}'" />
+        <span x-show="$store.sidebar.open" x-transition class="text-sm pl-4">Tribeometer</span>
+    </a>
+@endhasanyrole
 
-         
       @hasanyrole('super_admin')
       <a href="{{ route('basecampuser') }}"
        class="flex items-center p-2.5 rounded-xl transition"
@@ -232,44 +298,9 @@
       
         @endhasanyrole
       
-	<!--    @hasanyrole('super_admin')
-
-    <a href="#"
-   class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
-   :class="[
-       $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
-       window.location.pathname === '' ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700'
-   ]">
-    
-    <img 
-        :src="window.location.pathname === '' 
-            ? '{{ asset('images/risk-active.svg') }}' 
-            : '{{ asset('images/risk.svg') }}'" 
-        class="h-5 w-5" />
-
-    <span x-show="$store.sidebar.open" x-transition class="text-sm">Risks</span>
-</a>
+{{-- Risks (disabled) --}}
       
-     @endhasanyrole  -->
-      
-<!--    @hasanyrole('super_admin')
-    <a href="#"
-   class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
-   :class="[
-       $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
-       window.location.pathname === '' ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700'
-   ]">
-    
-    <img 
-        :src="window.location.pathname === '' 
-            ? '{{ asset('images/kudos-active.svg') }}' 
-            : '{{ asset('images/kudos.svg') }}'" 
-        class="h-5 w-5" />
-
-    <span x-show="$store.sidebar.open" x-transition class="text-sm">Kudos</span>
-</a>
-   @endhasanyrole
--->
+{{-- Kudos (disabled) --}}
           
     <!-- notification -->
      @hasanyrole('super_admin')
@@ -441,11 +472,15 @@
     </div>
 </div>
 
-{{-- Connecting --}}
-<!--
-<div x-data="{ open: false }" class="ml-3 space-y-1">
-    <button @click="open = !open"
-        class="flex items-center justify-between w-full p-2.5 rounded-xl hover:bg-gray-100 transition text-gray-700">
+{{-- Connecting (Team Role Map) --}}
+<div 
+    x-data="{ 
+        open: {{ request()->is('admin/connecting/team-role-map*') ? 'true' : 'false' }} 
+    }" 
+    class="ml-3 space-y-1">
+    <button @click.stop="open = !open"
+        class="flex items-center justify-between w-full p-2.5 rounded-xl transition 
+        {{ request()->is('admin/connecting/team-role-map*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
         <div class="flex items-center space-x-3">
             <img src="{{ asset('images/connecting.svg') }}" class="h-5 w-5" />
             <span class="text-sm">Connecting</span>
@@ -458,19 +493,33 @@
     </button>
  
     <div x-show="open" x-transition class="ml-4 mt-1 space-y-1 border-l border-gray-200 pl-3">
-        <a href="#"
-            class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Questions</a>
-              <a href="#"
-            class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Description</a>
+        <a href="{{ route('admin.cot.questions.index') }}"
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/connecting/team-role-map/questions*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Team Role Map Questions
+        </a>
+        <a href="{{ route('admin.cot.team-role-descriptions.index') }}"
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/connecting/team-role-map/descriptions*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Team Role Map Description
+        </a>
+        <a href="{{ route('admin.cot.team-role-results.index') }}"
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/connecting/team-role-map/results*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Team Role Map Results
+        </a>
     </div>
 </div>
--->
 
-{{-- personality-type --}}
-<!--
-<div x-data="{ open: false }" class="ml-3 space-y-1">
-    <button @click="open = !open"
-        class="flex items-center justify-between w-full p-2.5 rounded-xl hover:bg-gray-100 transition text-gray-700">
+{{-- Personality Type --}}
+<div 
+    x-data="{ 
+        open: {{ request()->is('admin/connecting/personality-type*') ? 'true' : 'false' }} 
+    }" 
+    class="ml-3 space-y-1">
+    <button @click.stop="open = !open"
+        class="flex items-center justify-between w-full p-2.5 rounded-xl transition 
+        {{ request()->is('admin/connecting/personality-type*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
         <div class="flex items-center space-x-3">
             <img src="{{ asset('images/personality-type.svg') }}" class="h-5 w-5" />
             <span class="text-sm">Personality Type</span>
@@ -483,18 +532,38 @@
     </button>
 
     <div x-show="open" x-transition class="ml-4 mt-1 space-y-1 border-l border-gray-200 pl-3">
-        <a href="#" class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Question</a>
-              <a href="#" class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Options</a>
-              <a href="#" class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Value</a>
+        <a href="{{ route('admin.personality-type.questions.index') }}" 
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/connecting/personality-type/questions*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Questions
+        </a>
+        <a href="{{ route('admin.personality-type.options.index') }}" 
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/connecting/personality-type/options*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Options
+        </a>
+        <a href="{{ route('admin.personality-type.values.index') }}" 
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/connecting/personality-type/values*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Values
+        </a>
+        <a href="{{ route('admin.personality-type.results.index') }}" 
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/connecting/personality-type/results*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Results
+        </a>
     </div>
 </div>
- -->
 
-{{-- Supercharging --}}
-<!--
-<div x-data="{ open: false }" class="ml-3 space-y-1">
-    <button @click="open = !open"
-        class="flex items-center justify-between w-full p-2.5 rounded-xl hover:bg-gray-100 transition text-gray-700">
+{{-- Supercharging Module --}}
+<div 
+    x-data="{ 
+        open: {{ request()->is('admin/supercharging*') ? 'true' : 'false' }} 
+    }" 
+    class="ml-3 space-y-1">
+    <button @click.stop="open = !open"
+        class="flex items-center justify-between w-full p-2.5 rounded-xl transition 
+        {{ request()->is('admin/supercharging*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
         <div class="flex items-center space-x-3">
             <img src="{{ asset('images/personality-type.svg') }}" class="h-5 w-5" />
             <span class="text-sm">Supercharging</span>
@@ -507,21 +576,54 @@
     </button>
 
     <div x-show="open" x-transition class="ml-4 mt-1 space-y-1 border-l border-gray-200 pl-3">
-        <a href="#"
-            class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Cultural Structure Questions</a>
-              <a href="#"
-            class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Motivation Questions</a>
-              <a href="#"
-            class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Motivation Value</a>
+        {{-- Culture Structure --}}
+        <div class="ml-2 space-y-1">
+            <a href="{{ route('admin.culture-structure.questions.index') }}" 
+                class="block text-sm p-2 rounded 
+                {{ request()->is('admin/supercharging/culture-structure/questions*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+                Culture Structure Questions
+            </a>
+            <a href="{{ route('admin.culture-structure.types.index') }}" 
+                class="block text-sm p-2 rounded 
+                {{ request()->is('admin/supercharging/culture-structure/types*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+                Culture Structure Types
+            </a>
+            <a href="{{ route('admin.culture-structure.results.index') }}" 
+                class="block text-sm p-2 rounded 
+                {{ request()->is('admin/supercharging/culture-structure/results*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+                Culture Structure Results
+            </a>
+        </div>
+        {{-- Motivation --}}
+        <div class="ml-2 space-y-1">
+            <a href="{{ route('admin.motivation.questions.index') }}" 
+                class="block text-sm p-2 rounded 
+                {{ request()->is('admin/supercharging/motivation/questions*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+                Motivation Questions
+            </a>
+            <a href="{{ route('admin.motivation.values.index') }}" 
+                class="block text-sm p-2 rounded 
+                {{ request()->is('admin/supercharging/motivation/values*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+                Motivation Values
+            </a>
+            <a href="{{ route('admin.motivation.results.index') }}" 
+                class="block text-sm p-2 rounded 
+                {{ request()->is('admin/supercharging/motivation/results*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+                Motivation Results
+            </a>
+        </div>
     </div>
 </div>
--->
 
 {{-- Diagnostics --}}
-<!--
-<div x-data="{ open: false }" class="ml-3 space-y-1">
-    <button @click="open = !open"
-        class="flex items-center justify-between w-full p-2.5 rounded-xl hover:bg-gray-100 transition text-gray-700">
+<div 
+    x-data="{ 
+        open: {{ request()->is('admin/diagnostics*') ? 'true' : 'false' }} 
+    }" 
+    class="ml-3 space-y-1">
+    <button @click.stop="open = !open"
+        class="flex items-center justify-between w-full p-2.5 rounded-xl transition 
+        {{ request()->is('admin/diagnostics*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
         <div class="flex items-center space-x-3">
             <img src="{{ asset('images/diagnostics.svg') }}" class="h-5 w-5" />
             <span class="text-sm">Diagnostics</span>
@@ -534,23 +636,41 @@
     </button>
 
     <div x-show="open" x-transition class="ml-4 mt-1 space-y-1 border-l border-gray-200 pl-3">
-        <a href="#"
-            class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Question</a>
-              <a href="#"
-            class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Options</a>
-              <a href="#"
-            class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Value</a>
+        <a href="{{ route('admin.diagnostic.index') }}"
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/diagnostics') && !request()->is('admin/diagnostics/options*') && !request()->is('admin/diagnostics/categories*') && !request()->is('admin/diagnostics/results*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Questions
+        </a>
+        <a href="{{ route('admin.diagnostic.options.index') }}"
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/diagnostics/options*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Options
+        </a>
+        <a href="{{ route('admin.diagnostic.categories.index') }}"
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/diagnostics/categories*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Categories
+        </a>
+        <a href="{{ route('admin.diagnostic.results.index') }}"
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/diagnostics/results*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Results
+        </a>
     </div>
 </div>
--->
-{{-- Tribometer --}}
-<!--
-<div x-data="{ open: false }" class="ml-3 space-y-1">
-    <button @click="open = !open"
-        class="flex items-center justify-between w-full p-2.5 rounded-xl hover:bg-gray-100 transition text-gray-700">
+
+{{-- Tribeometer --}}
+<div 
+    x-data="{ 
+        open: {{ request()->is('admin/tribeometer*') ? 'true' : 'false' }} 
+    }" 
+    class="ml-3 space-y-1">
+    <button @click.stop="open = !open"
+        class="flex items-center justify-between w-full p-2.5 rounded-xl transition 
+        {{ request()->is('admin/tribeometer*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
         <div class="flex items-center space-x-3">
-            <img src="{{ asset('images/tribometer.svg') }}" class="h-5 w-5" />
-            <span class="text-sm">Tribometer</span>
+            <img src="{{ asset('images/diagnostics.svg') }}" class="h-5 w-5" />
+            <span class="text-sm">Tribeometer</span>
         </div>
         <svg class="w-3 h-3 transition-transform" :class="open ? 'rotate-180' : ''" fill="currentColor"
             viewBox="0 0 448 512">
@@ -560,15 +680,28 @@
     </button>
 
     <div x-show="open" x-transition class="ml-4 mt-1 space-y-1 border-l border-gray-200 pl-3">
-       <a href="#"
-            class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Question</a>
-              <a href="#"
-            class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Options</a>
-              <a href="#"
-            class="block text-sm text-gray-700 p-2 rounded hover:bg-gray-100">Value</a>
+        <a href="{{ route('admin.tribeometer.index') }}"
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/tribeometer') && !request()->is('admin/tribeometer/options') && !request()->is('admin/tribeometer/values') && !request()->is('admin/tribeometer/results*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Questions
+        </a>
+        <a href="{{ route('admin.tribeometer.option.list') }}"
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/tribeometer/options*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Options
+        </a>
+        <a href="{{ route('admin.tribeometer.value.list') }}"
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/tribeometer/values*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Values
+        </a>
+        <a href="{{ route('admin.tribeometer.results.index') }}"
+            class="block text-sm p-2 rounded 
+            {{ request()->is('admin/tribeometer/results*') ? 'bg-red-100 text-red-600 font-semibold' : 'text-gray-700 hover:bg-gray-100' }}">
+            Results
+        </a>
     </div>
 </div>
--->
 
 {{-- HI-PB’S --}}
       
@@ -676,6 +809,116 @@ document.querySelector(".menu-icon").addEventListener("click", function () {
     document.querySelector(".menu-icon").classList.toggle("active");
     document.body.classList.toggle("menu-open");
 });
+</script>
+
+<!-- Offloading Password Modal (Global) -->
+<div id="offloadingPasswordModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Access Offloading Feature</h2>
+        <p class="text-sm text-gray-600 mb-4">Select an organisation and enter your login password to access the Offloading dashboard.</p>
+
+        <form id="offloadingPasswordFormSidebar" onsubmit="event.preventDefault(); verifyOffloadingPasswordFromSidebar();">
+            <div class="mb-4">
+                <label for="offloadingOrgSelect" class="block text-sm font-medium text-gray-700 mb-2">
+                    Organisation <span class="text-red-500">*</span>
+                </label>
+                <select id="offloadingOrgSelect"
+                        required
+                        class="w-full border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#EB1C24]">
+                    <option value="">-- Select Organisation --</option>
+                    @forelse($organisations ?? [] as $org)
+                        <option value="{{ $org->id }}">{{ $org->name }}</option>
+                    @empty
+                        <option value="" disabled>No organisations found</option>
+                    @endforelse
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label for="offloadingPasswordSidebar" class="block text-sm font-medium text-gray-700 mb-2">
+                    Password <span class="text-red-500">*</span>
+                </label>
+                <input type="password"
+                       id="offloadingPasswordSidebar"
+                       name="password"
+                       required
+                       class="w-full border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#EB1C24]"
+                       placeholder="Enter password">
+            </div>
+
+            <div id="passwordErrorSidebar" class="mb-4 text-sm text-red-600 hidden"></div>
+
+            <div class="flex justify-end gap-3">
+                <button type="button"
+                        onclick="closeOffloadingPasswordModalSidebar()"
+                        class="px-4 py-2 bg-gray-300 rounded-md hover:bg-gray-400">
+                    Cancel
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-[#EB1C24] text-white rounded-md hover:bg-[#c71313]">
+                    Access Dashboard
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    window.showOffloadingAccess = function() {
+        const modal = document.getElementById('offloadingPasswordModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            document.getElementById('offloadingPasswordSidebar')?.focus();
+        }
+    };
+
+    function closeOffloadingPasswordModalSidebar() {
+        document.getElementById('offloadingPasswordModal')?.classList.add('hidden');
+        const password = document.getElementById('offloadingPasswordSidebar');
+        const org = document.getElementById('offloadingOrgSelect');
+        const err = document.getElementById('passwordErrorSidebar');
+        if (password) password.value = '';
+        if (org) org.value = '';
+        if (err) err.classList.add('hidden');
+    }
+
+    function verifyOffloadingPasswordFromSidebar() {
+        const password = document.getElementById('offloadingPasswordSidebar')?.value;
+        const orgId = document.getElementById('offloadingOrgSelect')?.value;
+        const errorDiv = document.getElementById('passwordErrorSidebar');
+
+        if (!orgId) {
+            errorDiv.textContent = 'Please select an organisation';
+            errorDiv.classList.remove('hidden');
+            return;
+        }
+
+        fetch('{{ route("admin.improvement.check-pass") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ password: password })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status) {
+                window.location.href = '/admin/iot-dashboard/' + orgId;
+            } else {
+                errorDiv.textContent = data.message || 'Invalid password';
+                errorDiv.classList.remove('hidden');
+            }
+        })
+        .catch(() => {
+            errorDiv.textContent = 'An error occurred. Please try again.';
+            errorDiv.classList.remove('hidden');
+        });
+    }
+
+    document.getElementById('offloadingPasswordModal')?.addEventListener('click', function(e) {
+        if (e.target === this) closeOffloadingPasswordModalSidebar();
+    });
 </script>
 
 
@@ -809,3 +1052,4 @@ document.querySelector(".menu-icon").addEventListener("click", function () {
 }
     }
 </style>
+</div>

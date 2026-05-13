@@ -37,7 +37,7 @@
 
         {{-- Sidebar --}}
           
-         @include('livewire.sidebar-menu')
+         @livewire('sidebar-menu')
             
 
         {{-- Content --}}

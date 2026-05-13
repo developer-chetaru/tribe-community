@@ -15,10 +15,16 @@ class CotRoleMapOption extends Model
         'maper',
         'maper_key',
         'categoryId',
+        'role_description_id',
         'short_description',
         'long_description',
         'status',
     ];
+
+    public function roleDescription()
+    {
+        return $this->belongsTo(CotTeamRoleDescription::class, 'role_description_id', 'id');
+    }
 
     public function cotAnswers()
     {

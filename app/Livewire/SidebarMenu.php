@@ -1,17 +1,23 @@
 <?php
 
-namespace App\Http\Livewire;
+namespace App\Livewire;
 
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Organisation;
 
 class SidebarMenu extends Component
 {
-    // public $role;
+    public $organisations = [];
 
     public function mount()
     {
-        // $this->role = Auth::user()?->getRoleNames()?->first(); // 'super_admin' etc.
+        $user = Auth::user();
+        if ($user && $user->hasRole('super_admin')) {
+            $this->organisations = Organisation::query()
+                ->orderBy('name')
+                ->get(['id', 'name']);
+        }
     }
 
     public function render()

@@ -5,6 +5,13 @@ use App\Http\Controllers\Api\MonthlySummaryController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ReflectionApiController;
+use App\Http\Controllers\Api\ApiIOTController;
+use App\Http\Controllers\Api\ApiCOTController;
+use App\Http\Controllers\Api\ApiPersonalitytypeController;
+use App\Http\Controllers\Api\ApiCultureStructureController;
+use App\Http\Controllers\Api\ApiMotivationController;
+use App\Http\Controllers\Api\ApiDiagnosticController;
+use App\Http\Controllers\Api\ApiTribeometerController;
 use App\Http\Controllers\Api\WeeklySummaryController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ForgotController;
@@ -12,6 +19,7 @@ use App\Http\Controllers\HappyIndexController;
 use App\Http\Controllers\HPTMController;
 use App\Http\Controllers\SummaryController;
 use App\Http\Controllers\UserLeaveController;
+use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/user-set-password', [AuthController::class, 'setPassword']);
@@ -47,6 +55,55 @@ Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     // Payment APIs
     Route::post('/submit-payment', [PaymentController::class, 'submitPayment']);
     Route::get('/payments', [PaymentController::class, 'getPayments']);
+
+    // IOT/Offloading API routes
+    Route::post('/iot-post-feedback', [ApiIOTController::class, 'postFeedback']);
+    Route::post('/iot-get-feedback-detail', [ApiIOTController::class, 'getFeedbackDetail']);
+    Route::post('/iot-send-msg', [ApiIOTController::class, 'iotSendMsg']);
+    Route::post('/iot-inbox-list', [ApiIOTController::class, 'getInboxChatList']);
+    Route::post('/iot-get-msg', [ApiIOTController::class, 'getChatMessages']);
+    Route::post('/iot-get-theme-list', [ApiIOTController::class, 'getThemeList']);
+
+    // Assessments API routes (Connecting / Supercharging / Diagnostics / Tribeometer)
+    Route::get('/cot/questions', [ApiCOTController::class, 'getQuestions']);
+    Route::post('/cot/submit-answers', [ApiCOTController::class, 'submitAnswers']);
+    Route::get('/cot/results', [ApiCOTController::class, 'getResults']);
+    Route::get('/cot/role-descriptions', [ApiCOTController::class, 'getRoleDescriptions']);
+    Route::get('/cot/user-answers', [ApiCOTController::class, 'getUserAnswers']);
+
+    Route::get('/personality-type/questions', [ApiPersonalitytypeController::class, 'getQuestions']);
+    Route::post('/personality-type/submit-answers', [ApiPersonalitytypeController::class, 'submitAnswers']);
+    Route::get('/personality-type/results', [ApiPersonalitytypeController::class, 'getResults']);
+    Route::get('/personality-type/values', [ApiPersonalitytypeController::class, 'getValues']);
+    Route::get('/personality-type/user-answers', [ApiPersonalitytypeController::class, 'getUserAnswers']);
+
+    Route::get('/culture-structure/questions', [ApiCultureStructureController::class, 'getQuestions']);
+    Route::post('/culture-structure/submit-answers', [ApiCultureStructureController::class, 'submitAnswers']);
+    Route::put('/culture-structure/update-answers', [ApiCultureStructureController::class, 'updateAnswers']);
+    Route::get('/culture-structure/user-answers', [ApiCultureStructureController::class, 'getUserAnswers']);
+    Route::get('/culture-structure/results/{userId}', [ApiCultureStructureController::class, 'getResults']);
+    Route::get('/culture-structure/types', [ApiCultureStructureController::class, 'getTypes']);
+
+    Route::get('/motivation/questions', [ApiMotivationController::class, 'getQuestions']);
+    Route::post('/motivation/submit-answers', [ApiMotivationController::class, 'submitAnswers']);
+    Route::put('/motivation/update-answers', [ApiMotivationController::class, 'updateAnswers']);
+    Route::get('/motivation/user-answers', [ApiMotivationController::class, 'getUserAnswers']);
+    Route::get('/motivation/results/{userId}', [ApiMotivationController::class, 'getResults']);
+    Route::get('/motivation/values', [ApiMotivationController::class, 'getValues']);
+
+    Route::get('/getDiagnosticQuestionList', [ApiDiagnosticController::class, 'getDiagnosticQuestionList']);
+    Route::post('/addDiagnosticAnswers', [ApiDiagnosticController::class, 'addDiagnosticAnswers']);
+    Route::get('/getDiagnosticCompletedAnswers', [ApiDiagnosticController::class, 'getDiagnosticCompletedAnswers']);
+    Route::post('/updateDiagnosticAnswers', [ApiDiagnosticController::class, 'updateDiagnosticAnswers']);
+    Route::get('/isDiagnosticTribeometerAnswerDone', [ApiDiagnosticController::class, 'isDiagnosticTribeometerAnswerDone']);
+    Route::post('/getDiagnosticReport', [ApiDiagnosticController::class, 'getDiagnosticReport']);
+
+    Route::get('/tribeometer/questions', [ApiTribeometerController::class, 'getQuestions']);
+    Route::post('/tribeometer/submit-answers', [ApiTribeometerController::class, 'submitAnswers']);
+    Route::get('/tribeometer/results', [ApiTribeometerController::class, 'getResults']);
+    Route::get('/tribeometer/values', [ApiTribeometerController::class, 'getValues']);
+    Route::get('/tribeometer/user-answers', [ApiTribeometerController::class, 'getUserAnswers']);
+    Route::get('/tribeometer/check-completion', [ApiTribeometerController::class, 'checkCompletion']);
 
     // Organisation Subscription APIs (for directors/organisation users)
     Route::post('/billing/subscription/cancel', [\App\Http\Controllers\Billing\StripeSubscriptionController::class, 'cancelSubscription']);

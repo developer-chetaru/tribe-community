@@ -17,4 +17,14 @@ class CotAnswer extends Model
         'created_at',
         'updated_at',
     ];
+
+    public function question()
+    {
+        return $this->belongsTo(CotQuestion::class, 'questionId', 'id');
+    }
+
+    public function roleMapOption()
+    {
+        return $this->belongsTo(CotRoleMapOption::class, 'cot_role_map_option_id', 'id');
+    }
 }
