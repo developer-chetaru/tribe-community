@@ -8,11 +8,11 @@
     <div class="bg-white p-6 rounded shadow">
         <div class="flex justify-between items-center mb-4">
             <div class="flex gap-4 items-center">
-                <a href="{{ route('admin.supercharging.motivation.questions.index') }}" 
+                <a href="{{ route('admin.motivation.questions.index') }}" 
                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2">
                    <i class="fas fa-list"></i> Questions
                 </a>
-                <a href="{{ route('admin.supercharging.motivation.results.index') }}" 
+                <a href="{{ route('admin.motivation.results.index') }}" 
                    class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2">
                    <i class="fas fa-chart-bar"></i> Results
                 </a>
@@ -49,7 +49,7 @@
                             </span>
                         </td>
                         <td class="px-4 py-2 flex gap-2 justify-end">
-                            <a href="{{ route('admin.supercharging.motivation.values.edit', $value->id) }}"
+                            <a href="{{ route('admin.motivation.values.edit', $value->id) }}"
                                class="rounded p-1 flex items-center justify-center hover:bg-red-50"
                                title="Edit">
                                 <img src="{{ asset('images/edit.svg') }}" alt="Edit" class="h-8 w-8">

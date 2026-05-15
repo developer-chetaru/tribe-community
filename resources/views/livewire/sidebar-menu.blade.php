@@ -164,7 +164,7 @@
 @endhasanyrole
 
 <!-- Offloading for regular users -->
-@hasanyrole('organisation_user|basecamp|director')
+@hasanyrole('organisation_user|director')
 @if(!auth()->user()->hasAnyRole(['super_admin', 'organisation_admin']))
 <a href="{{ route('offloading.list') }}"
    class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
@@ -227,7 +227,7 @@
 
 {{-- Offloading (super_admin placeholder - disabled) --}}
 
-@hasanyrole('organisation_user|basecamp|organisation_admin')
+@hasanyrole('organisation_user|organisation_admin')
     <a href="{{ route('connecting.team-role-map.results') }}"
        class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
        :class="[

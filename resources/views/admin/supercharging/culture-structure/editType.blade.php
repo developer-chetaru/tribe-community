@@ -7,7 +7,7 @@
 
     <div class="bg-white p-6 rounded shadow">
         <div class="mb-4">
-            <a href="{{ route('admin.supercharging.culture-structure.types.index') }}" 
+            <a href="{{ route('admin.culture-structure.types.index') }}" 
                class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded flex items-center gap-2 inline-flex">
                <i class="fas fa-arrow-left"></i> Back to Types
             </a>
@@ -23,7 +23,7 @@
             </div>
         @endif
 
-        <form action="{{ route('admin.supercharging.culture-structure.types.update', $type->id) }}" method="POST">
+        <form action="{{ route('admin.culture-structure.types.update', $type->id) }}" method="POST">
             @csrf
             @method('PUT')
             
@@ -79,7 +79,7 @@
                         class="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded flex items-center gap-2">
                     <i class="fas fa-save"></i> Update Type
                 </button>
-                <a href="{{ route('admin.supercharging.culture-structure.types.index') }}" 
+                <a href="{{ route('admin.culture-structure.types.index') }}" 
                    class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded flex items-center gap-2">
                     Cancel
                 </a>

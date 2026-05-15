@@ -8,12 +8,12 @@
     <div class="bg-white p-6 rounded shadow">
         <div class="flex justify-between items-center mb-4">
             <div class="flex gap-4 items-center">
-                <a href="{{ route('admin.supercharging.motivation.values.index') }}" 
+                <a href="{{ route('admin.motivation.values.index') }}" 
                    class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded flex items-center gap-2">
                    <i class="fas fa-arrow-left"></i> Back
                 </a>
             </div>
-            <a href="{{ route('admin.supercharging.motivation.questions.create') }}" 
+            <a href="{{ route('admin.motivation.questions.create') }}" 
                class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded flex items-center gap-2">
                <i class="fas fa-plus"></i> Add Question
             </a>
@@ -32,7 +32,7 @@
         @endif
 
         <!-- Search and Filter -->
-        <form method="GET" action="{{ route('admin.supercharging.motivation.questions.index') }}" class="mb-4">
+        <form method="GET" action="{{ route('admin.motivation.questions.index') }}" class="mb-4">
             <div class="flex gap-4">
                 <input type="text" name="search" value="{{ request('search') }}" 
                        placeholder="Search questions..." 
@@ -45,7 +45,7 @@
                 <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
                     <i class="fas fa-search"></i> Search
                 </button>
-                <a href="{{ route('admin.supercharging.motivation.questions.index') }}" 
+                <a href="{{ route('admin.motivation.questions.index') }}" 
                    class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded flex items-center">
                     <i class="fas fa-times"></i> Clear
                 </a>
@@ -78,12 +78,12 @@
                             </span>
                         </td>
                         <td class="px-4 py-2 flex gap-2 justify-end">
-                            <a href="{{ route('admin.supercharging.motivation.questions.edit', $question->id) }}"
+                            <a href="{{ route('admin.motivation.questions.edit', $question->id) }}"
                                class="rounded p-1 flex items-center justify-center hover:bg-red-50"
                                title="Edit">
                                 <img src="{{ asset('images/edit.svg') }}" alt="Edit" class="h-8 w-8">
                             </a>
-                            <form action="{{ route('admin.supercharging.motivation.questions.destroy', $question->id) }}" 
+                            <form action="{{ route('admin.motivation.questions.destroy', $question->id) }}" 
                                   method="POST" 
                                   onsubmit="return confirm('Are you sure you want to delete this question?');">
                                 @csrf

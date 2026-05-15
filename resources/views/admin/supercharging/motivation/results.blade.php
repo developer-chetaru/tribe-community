@@ -7,18 +7,18 @@
 
     <div class="bg-white p-6 rounded shadow">
         <div class="mb-4 flex gap-4">
-            <a href="{{ route('admin.supercharging.motivation.questions.index') }}" 
+            <a href="{{ route('admin.motivation.questions.index') }}" 
                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2">
                <i class="fas fa-list"></i> Questions
             </a>
-            <a href="{{ route('admin.supercharging.motivation.values.index') }}" 
+            <a href="{{ route('admin.motivation.values.index') }}" 
                class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded flex items-center gap-2">
                <i class="fas fa-book"></i> Values
             </a>
         </div>
 
         <!-- Filters -->
-        <form method="GET" action="{{ route('admin.supercharging.motivation.results.index') }}" class="mb-6 bg-gray-50 p-4 rounded">
+        <form method="GET" action="{{ route('admin.motivation.results.index') }}" class="mb-6 bg-gray-50 p-4 rounded">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Organisation ID</label>
@@ -37,7 +37,7 @@
                 <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
                     <i class="fas fa-search"></i> Filter
                 </button>
-                <a href="{{ route('admin.supercharging.motivation.results.index') }}" 
+                <a href="{{ route('admin.motivation.results.index') }}" 
                    class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
                     Clear
                 </a>

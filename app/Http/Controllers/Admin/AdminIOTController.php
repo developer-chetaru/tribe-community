@@ -37,7 +37,7 @@ class AdminIOTController extends Controller
         $org = Organisation::findOrFail($orgId);
         $offices = Office::where('organisation_id', $orgId)->get();
 
-        $activeUserStatuses = ['active_verified', 'active_unverified', '1'];
+        $activeUserStatuses = ['active_verified', 'active_unverified', 'pending_payment', '1'];
 
         $activeOrgUserIds = DB::table('users')
             ->whereIn('status', $activeUserStatuses)
@@ -92,7 +92,7 @@ class AdminIOTController extends Controller
     {
         $this->checkAccess();
 
-        $activeUserStatuses = ['active_verified', 'active_unverified', '1'];
+        $activeUserStatuses = ['active_verified', 'active_unverified', 'pending_payment', '1'];
         $activeOrgUserIds = DB::table('users')->whereIn('status', $activeUserStatuses)->pluck('id');
         $messagesFeedbackIds = DB::table('iot_messages')->distinct()->pluck('feedbackId');
 
