@@ -96,7 +96,11 @@
 
             <!-- Detailed Descriptions -->
             <div class="mt-8">
-                <h3 class="text-xl font-semibold mb-4">Understanding Your Personality Dimensions</h3>
+                <h3 class="text-xl font-semibold mb-1">Understanding Your Personality Dimensions</h3>
+                <p class="text-sm text-gray-500 mb-4">Percentages show your <strong>relative strength</strong> in each dimension — they sum to 100% across all dimensions. Highlighted cards are your top traits.</p>
+                @php
+                    $topPercentage = $results->max('percentage');
+                @endphp
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     @foreach($dimensions as $dimension)
                         @php
@@ -104,16 +108,20 @@
                                 return $result->dimension_key === $dimension->dimension_key || 
                                        $result->personality_type_value_id === $dimension->id;
                             });
+                            $isTopDimension = $userResult && $userResult->percentage >= ($topPercentage * 0.8);
                         @endphp
-                        <div class="p-4 border border-gray-300 rounded-lg 
-                            {{ $userResult && $userResult->percentage > 50 ? 'bg-blue-50 border-blue-300' : '' }}">
-                            <h4 class="font-semibold text-lg mb-2">{{ $dimension->title }}</h4>
+                        <div class="p-4 border rounded-lg
+                            {{ $isTopDimension ? 'bg-blue-50 border-blue-300' : 'border-gray-300' }}">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 class="font-semibold text-lg">{{ $dimension->title }}</h4>
+                                @if($isTopDimension)
+                                    <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium">Top Trait</span>
+                                @endif
+                            </div>
                             @if($userResult)
                                 <p class="text-sm text-gray-600 mb-2">
-                                    Your Score: <strong>{{ number_format($userResult->percentage ?? 0, 1) }}%</strong>
-                                    @if($userResult->score)
-                                        <span class="text-gray-500">({{ $userResult->score }} points)</span>
-                                    @endif
+                                    Relative weight: <strong>{{ number_format($userResult->percentage ?? 0, 1) }}%</strong>
+                                    <span class="text-gray-400 text-xs">({{ $userResult->score }} raw points)</span>
                                 </p>
                             @else
                                 <p class="text-sm text-gray-500 mb-2">Not assessed yet</p>

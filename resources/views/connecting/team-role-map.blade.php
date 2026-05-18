@@ -85,6 +85,13 @@
                 </div>
             @endforeach
 
+            <div id="formErrorBanner" class="hidden mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg flex items-start gap-3">
+                <svg class="w-5 h-5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span id="formErrorText"></span>
+            </div>
+
             <div class="flex gap-4 mt-6">
                 <button type="submit" 
                         class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-semibold">
@@ -163,14 +170,22 @@
             @endforeach
             
             if (!allValid) {
-                alert('Please ensure all questions total exactly 10 points.\n\nQuestion ' + firstInvalidQuestion + ' and possibly others need adjustment.');
-                // Scroll to first invalid question
+                const banner = document.getElementById('formErrorBanner');
+                const bannerText = document.getElementById('formErrorText');
+                bannerText.textContent = 'Please ensure all questions total exactly 10 points. Question ' + firstInvalidQuestion + ' and possibly others need adjustment.';
+                banner.classList.remove('hidden');
+                banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                // Highlight invalid question
                 const firstInvalidElement = document.querySelector(`input[data-question="${firstInvalidQuestion - 1}"].points-input`);
                 if (firstInvalidElement) {
                     firstInvalidElement.closest('.mb-8').scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
                 return false;
             }
+
+            // Hide error banner on valid submit
+            document.getElementById('formErrorBanner').classList.add('hidden');
             
             // If all valid, submit the form
             this.submit();

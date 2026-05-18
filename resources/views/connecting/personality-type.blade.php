@@ -97,7 +97,7 @@
                                        value="{{ $option->id }}"
                                        required
                                        class="w-5 h-5 text-red-600 focus:ring-red-500"
-                                       onchange="this.closest('label').classList.toggle('border-red-500', this.checked); this.closest('label').classList.toggle('bg-red-50', this.checked);">
+                                       onchange="selectRadioOption(this)">
                                 <div class="ml-4 flex-1">
                                     <div class="flex items-center gap-3">
                                         <span class="font-semibold text-lg 
@@ -129,36 +129,54 @@
                    class="bg-gray-500 hover:bg-gray-600 text-white px-8 py-3 rounded-lg font-semibold text-lg transition-colors">
                     View Results
                 </a>
-                <div class="ml-auto flex items-center text-sm text-gray-600">
-                    <span>Progress: </span>
-                    <span id="answeredCount">0</span> / <span>{{ count($questions) }}</span> questions answered
+                <div class="ml-auto flex items-center gap-3 text-sm text-gray-600">
+                    <div class="flex items-center gap-2">
+                        <span id="answeredCount" class="font-bold text-red-600">0</span>
+                        <span>/ {{ count($questions) }} answered</span>
+                    </div>
+                    <div class="w-32 bg-gray-200 rounded-full h-2.5">
+                        <div id="progressBar" class="bg-red-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
                 </div>
             </div>
         </form>
     </div>
 
     <script>
-        // Track progress
+        const totalQuestions = {{ count($questions) }};
+
+        function selectRadioOption(radio) {
+            const questionName = radio.name;
+            // Clear all sibling labels in this question group
+            document.querySelectorAll(`input[name="${questionName}"]`).forEach(function(sibling) {
+                sibling.closest('label').classList.remove('border-red-500', 'bg-red-50');
+                sibling.closest('label').classList.add('border-gray-200');
+            });
+            // Highlight selected
+            radio.closest('label').classList.add('border-red-500', 'bg-red-50');
+            radio.closest('label').classList.remove('border-gray-200');
+
+            updateProgress();
+        }
+
         function updateProgress() {
-            const totalQuestions = {{ count($questions) }};
-            const answered = document.querySelectorAll('input[type="radio"]:checked').length;
+            // Count unique question names that have a checked radio
+            const checkedNames = new Set();
+            document.querySelectorAll('input[type="radio"]:checked').forEach(function(r) {
+                checkedNames.add(r.name);
+            });
+            const answered = checkedNames.size;
+
             document.getElementById('answeredCount').textContent = answered;
-            
-            const progressBar = document.querySelector('.progress-bar');
+
+            const progressBar = document.getElementById('progressBar');
             if (progressBar) {
                 const percentage = (answered / totalQuestions) * 100;
                 progressBar.style.width = percentage + '%';
             }
         }
 
-        // Update progress on change
-        document.addEventListener('change', function(e) {
-            if (e.target.type === 'radio') {
-                updateProgress();
-            }
-        });
-
-        // Initial progress
+        // Initial progress (for old() repopulated radios)
         updateProgress();
     </script>
 </x-app-layout>

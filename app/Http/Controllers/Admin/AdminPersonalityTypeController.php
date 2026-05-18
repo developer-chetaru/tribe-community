@@ -247,14 +247,17 @@ class AdminPersonalityTypeController extends Controller
             $query->where('orgId', $request->org_id);
         }
 
-        $latestAssessments = DB::table('personality_type_results')
+        // Get latest assessment_date per user correctly using a subquery join
+        $latestSubquery = DB::table('personality_type_results')
             ->select('userId', DB::raw('MAX(assessment_date) as latest_date'))
-            ->groupBy('userId')
-            ->get()
-            ->pluck('latest_date', 'userId');
+            ->groupBy('userId');
 
-        $results = $query->whereIn('assessment_date', $latestAssessments->values())
-            ->orderBy('userId')
+        $results = $query->select('personality_type_results.*')
+            ->joinSub($latestSubquery, 'latest', function ($join) {
+                $join->on('personality_type_results.userId', '=', 'latest.userId')
+                     ->on('personality_type_results.assessment_date', '=', 'latest.latest_date');
+            })
+            ->orderBy('personality_type_results.userId')
             ->get()
             ->groupBy('userId');
 

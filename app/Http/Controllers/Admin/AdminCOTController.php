@@ -76,15 +76,18 @@ class AdminCOTController extends Controller
             });
         }
 
-        $latestAssessments = DB::table('cot_team_role_results')
+        // Get latest assessment_date per user correctly using a subquery join
+        $latestSubquery = DB::table('cot_team_role_results')
             ->select('userId', DB::raw('MAX(assessment_date) as latest_date'))
-            ->groupBy('userId')
-            ->get()
-            ->pluck('latest_date', 'userId');
+            ->groupBy('userId');
 
-        $results = $query->whereIn('assessment_date', $latestAssessments->values())
-            ->orderBy('userId')
-            ->orderBy('preference_rank')
+        $results = $query->select('cot_team_role_results.*')
+            ->joinSub($latestSubquery, 'latest', function ($join) {
+                $join->on('cot_team_role_results.userId', '=', 'latest.userId')
+                     ->on('cot_team_role_results.assessment_date', '=', 'latest.latest_date');
+            })
+            ->orderBy('cot_team_role_results.userId')
+            ->orderBy('cot_team_role_results.preference_rank')
             ->get()
             ->groupBy('userId');
 

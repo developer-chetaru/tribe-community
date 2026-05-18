@@ -37,29 +37,43 @@
             </div>
         @else
             <!-- Top 5 Preferences -->
+            @php
+                $rankStyles = [
+                    1 => ['border' => 'border-yellow-400', 'bg' => 'bg-yellow-50', 'badge' => 'bg-yellow-400 text-white', 'rank_color' => 'text-yellow-600', 'label' => '🥇'],
+                    2 => ['border' => 'border-gray-400',   'bg' => 'bg-gray-50',   'badge' => 'bg-gray-400 text-white',   'rank_color' => 'text-gray-500',  'label' => '🥈'],
+                    3 => ['border' => 'border-orange-400', 'bg' => 'bg-orange-50', 'badge' => 'bg-orange-400 text-white', 'rank_color' => 'text-orange-500','label' => '🥉'],
+                    4 => ['border' => 'border-blue-300',   'bg' => 'bg-blue-50',   'badge' => 'bg-blue-300 text-white',   'rank_color' => 'text-blue-500',  'label' => '#4'],
+                    5 => ['border' => 'border-purple-300', 'bg' => 'bg-purple-50', 'badge' => 'bg-purple-300 text-white', 'rank_color' => 'text-purple-500','label' => '#5'],
+                ];
+            @endphp
             <div class="mb-6">
                 <h3 class="text-xl font-semibold mb-4">Your Top 5 Team Role Preferences</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     @foreach($results->where('preference_rank', '<=', 5) as $result)
-                        <div class="p-4 border-2 rounded-lg 
-                            {{ $result->preference_rank == 1 ? 'border-red-500 bg-red-50' : 
-                               ($result->preference_rank == 2 ? 'border-orange-500 bg-orange-50' : 
-                               ($result->preference_rank == 3 ? 'border-yellow-500 bg-yellow-50' : 'border-gray-300 bg-gray-50')) }}">
+                        @php $style = $rankStyles[$result->preference_rank] ?? ['border' => 'border-gray-300', 'bg' => 'bg-gray-50', 'badge' => 'bg-gray-300 text-white', 'rank_color' => 'text-gray-600', 'label' => '#' . $result->preference_rank]; @endphp
+                        <div class="p-4 border-2 rounded-lg {{ $style['border'] }} {{ $style['bg'] }}">
                             <div class="flex justify-between items-start mb-2">
-                                <div>
-                                    <span class="text-2xl font-bold text-gray-600">#{{ $result->preference_rank }}</span>
-                                    <h4 class="text-lg font-semibold mt-1">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold {{ $style['badge'] }}">
+                                            {{ $result->preference_rank <= 3 ? $result->preference_rank : '#' . $result->preference_rank }}
+                                        </span>
+                                        <span class="text-xs font-semibold {{ $style['rank_color'] }} uppercase tracking-wide">
+                                            Rank {{ $result->preference_rank }}
+                                        </span>
+                                    </div>
+                                    <h4 class="text-lg font-semibold">
                                         {{ $result->roleDescription->title ?? ucfirst(str_replace('_', ' ', $result->role_key ?? 'Unknown')) }}
                                     </h4>
                                     <p class="text-sm text-gray-600">
                                         {{ $result->roleDescription->value_focus ?? '' }}
                                     </p>
                                 </div>
-                                <span class="text-lg font-bold text-gray-700">{{ $result->score }} pts</span>
+                                <span class="text-lg font-bold text-gray-700 ml-2">{{ $result->score }} pts</span>
                             </div>
                             @if($result->roleDescription)
                                 <p class="text-sm text-gray-700 mt-2">
-                                    {{ Str::limit($result->roleDescription->description ?? '', 100) }}
+                                    {{ Str::limit($result->roleDescription->description ?? '', 120) }}
                                 </p>
                             @endif
                         </div>

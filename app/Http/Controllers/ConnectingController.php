@@ -117,6 +117,16 @@ class ConnectingController extends Controller
             'answers.*.options.*.points' => 'required|integer|min:0|max:10',
         ]);
 
+        // Server-side: each question's points must sum to exactly 10
+        foreach ($request->answers as $index => $answer) {
+            $total = collect($answer['options'])->sum(fn($o) => (int)($o['points'] ?? 0));
+            if ($total !== 10) {
+                return redirect()->back()
+                    ->with('error', 'Question ' . ($index + 1) . ' must have exactly 10 points distributed. You entered ' . $total . '.')
+                    ->withInput();
+            }
+        }
+
         $apiController = new \App\Http\Controllers\Api\ApiCOTController();
         $apiRequest = new Request([
             'userId' => $user->id,
