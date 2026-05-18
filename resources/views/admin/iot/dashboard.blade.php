@@ -116,14 +116,22 @@
     <script>
         document.getElementById('officeFilter').addEventListener('change', function() {
             const officeId = this.value;
-            const baseUrl = "{{ route('admin.iot.feedback-list', ['orgId' => $org->id, 'status' => 'new', 'officeId' => '']) }}";
-            if (officeId) {
-                window.location.href = baseUrl.replace('/new/', '/new/' + officeId);
-            } else {
-                window.location.href = baseUrl;
-            }
-        });
+            const orgId = "{{ $org->id }}";
+            const baseUrl = "{{ route('admin.iot.feedback-list', ['orgId' => '__ORG__', 'status' => '__STATUS__', 'officeId' => '__OFFICE__']) }}"
+                .replace('__ORG__', orgId);
 
+            // Update all stat card links to reflect selected office
+            const statuses = ['new', 'on_hold', 'completed', 'awaiting'];
+            statuses.forEach(function(status) {
+                const link = document.querySelector('a[href*="status=' + status + '"]');
+                if (link) {
+                    const url = baseUrl
+                        .replace('__STATUS__', status)
+                        .replace('__OFFICE__', officeId);
+                    link.href = url;
+                }
+            });
+        });
     </script>
     @endpush
 </x-app-layout>

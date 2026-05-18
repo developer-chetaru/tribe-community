@@ -7,7 +7,7 @@
 
     <div class="bg-white p-6 rounded shadow">
         <div class="flex justify-between items-center mb-4">
-            <a href="{{ route('admin.diagnostic.category.list') }}" 
+            <a href="{{ route('admin.diagnostic.categories.index') }}" 
                class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded flex items-center gap-2">
                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />

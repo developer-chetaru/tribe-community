@@ -40,9 +40,9 @@
                             class="w-full border border-gray-300 rounded-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#EB1C24] focus:border-transparent"
                             placeholder="Share your thoughts, concerns, or feedback here..."
                         ></textarea>
-                        @error('message')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
+                        @if($errors->has('message'))
+                            <p class="mt-1 text-sm text-red-600">{{ $errors->first('message') }}</p>
+                        @endif
                         <p class="mt-1 text-xs text-gray-500">Minimum 10 characters, maximum 2000 characters</p>
                     </div>
 
@@ -78,9 +78,9 @@
                                 </div>
                             @endif
                         </div>
-                        @error('image')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
+                        @if($errors->has('image'))
+                            <p class="mt-1 text-sm text-red-600">{{ $errors->first('image') }}</p>
+                        @endif
                         <p class="mt-1 text-xs text-gray-500">Maximum file size: 2MB. Supported formats: JPG, PNG, GIF</p>
                     </div>
 
@@ -100,9 +100,9 @@
                             <option value="Opportunity">Opportunity</option>
                             <option value="Threat">Threat</option>
                         </select>
-                        @error('SWOT')
-                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                        @enderror
+                        @if($errors->has('SWOT'))
+                            <p class="mt-1 text-sm text-red-600">{{ $errors->first('SWOT') }}</p>
+                        @endif
                     </div>
 
                     <!-- Theme Selection -->
@@ -121,9 +121,9 @@
                                     <option value="{{ $theme->id }}">{{ $theme->title }}</option>
                                 @endforeach
                             </select>
-                            @error('themeId')
-                                <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
-                            @enderror
+                            @if($errors->has('themeId'))
+                                <p class="mt-1 text-sm text-red-600">{{ $errors->first('themeId') }}</p>
+                            @endif
                         </div>
                     @endif
 

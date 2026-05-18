@@ -69,6 +69,7 @@ class OffloadingChat extends Component
                     ? asset('storage/' . $sender->profile_photo_path)
                     : null,
                 'isMe' => $msg->sendFrom == Auth::id(),
+                'isAdmin' => $sender ? $sender->hasAnyRole(['super_admin', 'organisation_admin']) : false,
             ];
         })->toArray();
     }

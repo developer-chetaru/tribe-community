@@ -15,7 +15,7 @@
                    </svg>
                    Back to Questions
                 </a>
-                <a href="{{ route('admin.diagnostic.option.list') }}" 
+                <a href="{{ route('admin.diagnostic.options.index') }}" 
                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2">
                    View Options
                 </a>

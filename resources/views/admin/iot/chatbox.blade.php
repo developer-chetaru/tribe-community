@@ -77,7 +77,7 @@
                                         <div class="flex-1">
                                             <p class="text-xs text-gray-500 mb-1">
                                                 {{ $message->sender->name ?? 'Unknown' }}
-                                                <span class="text-gray-400">({{ $message->sender && $message->sender->hasRole('admin') ? 'Admin' : 'User' }})</span>
+                                                <span class="text-gray-400">({{ $message->sender && $message->sender->hasAnyRole(['super_admin', 'organisation_admin']) ? 'Admin' : 'User' }})</span>
                                             </p>
                                             @if($message->message)
                                                 <p class="text-gray-900 text-sm">{{ $message->message }}</p>

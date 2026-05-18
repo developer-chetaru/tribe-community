@@ -79,7 +79,7 @@ class AdminIOTController extends Controller
                             $uq->select('model_id')
                                 ->from('model_has_roles')
                                 ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
-                                ->where('roles.name', 'admin');
+                                ->whereIn('roles.name', ['super_admin', 'organisation_admin']);
                         });
                     });
             })
@@ -133,7 +133,7 @@ class AdminIOTController extends Controller
                                     $uq->select('model_id')
                                         ->from('model_has_roles')
                                         ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
-                                        ->where('roles.name', 'admin');
+                                        ->whereIn('roles.name', ['super_admin', 'organisation_admin']);
                                 });
                             });
                     });

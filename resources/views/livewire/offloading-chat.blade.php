@@ -12,12 +12,12 @@
 
         <!-- Back Button -->
         <div class="mb-4">
-            <a href="{{ route('offloading.create') }}"
+            <a href="{{ route('offloading.list') }}"
                class="bg-white px-4 py-2 rounded-md shadow hover:bg-gray-100 text-sm transition inline-flex items-center">
                 <svg width="7" height="11" viewBox="0 0 7 11" fill="none" xmlns="http://www.w3.org/2000/svg" class="mr-2">
                     <path d="M6 10.5C6 10.5 1 6.81758 1 5.5C1 4.18233 6 0.5 6 0.5" stroke="#808080" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                Back to Offloading
+                Back to My Feedback
             </a>
         </div>
 
@@ -60,48 +60,84 @@
                 </div>
 
                 <!-- Chat Messages -->
-                <div wire:poll.2s="loadMessages" id="chatMessages" class="p-4 space-y-4 max-h-[500px] overflow-y-auto bg-gray-50">
+                <div wire:poll.5s="loadMessages" wire:loading.class.remove="opacity-0" id="chatMessages" class="p-4 space-y-4 max-h-[500px] overflow-y-auto bg-gray-50">
                     @foreach($messages as $msg)
-                        <div class="flex {{ $msg['isMe'] ? 'justify-end' : 'justify-start' }}">
-                            <div class="max-w-md bg-white rounded-lg p-3 shadow-sm {{ $msg['isMe'] ? 'bg-blue-50' : '' }}">
-                                <div class="flex items-start gap-2">
-                                    @if($msg['sender_photo'])
-                                        <img src="{{ $msg['sender_photo'] }}"
-                                             class="w-8 h-8 rounded-full" alt="Avatar">
-                                    @else
-                                        <div class="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center text-xs font-medium">
-                                            {{ strtoupper(substr($msg['sender_name'], 0, 1)) }}
-                                        </div>
-                                    @endif
-                                    <div class="flex-1">
-                                        <p class="text-xs text-gray-500 mb-1">
-                                            {{ $msg['sender_name'] }}
-                                            <span class="text-gray-400">({{ $msg['isMe'] ? 'You' : ($msg['sender_name'] === 'Admin' ? 'Admin' : 'User') }})</span>
-                                        </p>
-                                        @if($msg['message'])
-                                            <p class="text-gray-900 text-sm">{{ $msg['message'] }}</p>
-                                        @endif
-                                        @if($msg['file'])
-                                            <div class="mt-2">
-                                                @if($msg['fileType'] === 'video')
-                                                    <video controls class="max-w-xs rounded-lg border border-gray-300" preload="metadata">
-                                                        <source src="{{ $msg['file'] }}" type="video/mp4">
-                                                        Your browser does not support the video tag.
-                                                    </video>
-                                                @else
-                                                    <img src="{{ $msg['file'] }}"
-                                                         alt="Message Image"
-                                                         class="max-w-xs rounded-lg border border-gray-300 cursor-pointer hover:opacity-90"
-                                                         onclick="window.open('{{ $msg['file'] }}', '_blank')">
-                                                @endif
-                                            </div>
-                                        @endif
-                                        <p class="text-xs text-gray-400 mt-1">
-                                            {{ $msg['created_at'] }}
-                                        </p>
+                        @php
+                            $initial = strtoupper(substr($msg['sender_name'], 0, 1));
+                            $avatarColor = $msg['isAdmin'] ? 'bg-red-500 text-white' : 'bg-gray-300 text-gray-700';
+                        @endphp
+                        <div class="flex {{ $msg['isMe'] ? 'justify-end' : 'justify-start' }} items-end gap-2">
+
+                            {{-- Avatar: left side for others --}}
+                            @if(!$msg['isMe'])
+                                @if($msg['sender_photo'])
+                                    <img src="{{ $msg['sender_photo'] }}"
+                                         class="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                                         alt="{{ $initial }}"
+                                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                    <div class="w-8 h-8 {{ $avatarColor }} rounded-full items-center justify-center text-xs font-bold flex-shrink-0"
+                                         style="display:none;">
+                                        {{ $initial }}
                                     </div>
-                                </div>
+                                @else
+                                    <div class="w-8 h-8 {{ $avatarColor }} rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                                        {{ $initial }}
+                                    </div>
+                                @endif
+                            @endif
+
+                            {{-- Message Bubble --}}
+                            <div class="max-w-md rounded-2xl p-3 shadow-sm
+                                {{ $msg['isMe']
+                                    ? 'bg-[#EB1C24] text-white rounded-br-none'
+                                    : 'bg-white text-gray-900 rounded-bl-none border border-gray-100' }}">
+                                <p class="text-xs mb-1 {{ $msg['isMe'] ? 'text-red-100' : 'text-gray-500' }}">
+                                    {{ $msg['isMe'] ? 'You' : $msg['sender_name'] }}
+                                    <span class="{{ $msg['isMe'] ? 'text-red-200' : 'text-gray-400' }}">
+                                        ({{ $msg['isMe'] ? 'You' : ($msg['isAdmin'] ? 'Admin' : 'User') }})
+                                    </span>
+                                </p>
+                                @if($msg['message'])
+                                    <p class="text-sm">{{ $msg['message'] }}</p>
+                                @endif
+                                @if($msg['file'])
+                                    <div class="mt-2">
+                                        @if($msg['fileType'] === 'video')
+                                            <video controls class="max-w-xs rounded-lg border border-gray-300" preload="metadata">
+                                                <source src="{{ $msg['file'] }}" type="video/mp4">
+                                                Your browser does not support the video tag.
+                                            </video>
+                                        @else
+                                            <img src="{{ $msg['file'] }}"
+                                                 alt="Message Image"
+                                                 class="max-w-xs rounded-lg border border-gray-300 cursor-pointer hover:opacity-90"
+                                                 onclick="window.open('{{ $msg['file'] }}', '_blank')">
+                                        @endif
+                                    </div>
+                                @endif
+                                <p class="text-xs mt-1 {{ $msg['isMe'] ? 'text-red-200 text-right' : 'text-gray-400' }}">
+                                    {{ $msg['created_at'] }}
+                                </p>
                             </div>
+
+                            {{-- Avatar: right side for me --}}
+                            @if($msg['isMe'])
+                                @if($msg['sender_photo'])
+                                    <img src="{{ $msg['sender_photo'] }}"
+                                         class="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                                         alt="{{ $initial }}"
+                                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                    <div class="w-8 h-8 bg-[#EB1C24] text-white rounded-full items-center justify-center text-xs font-bold flex-shrink-0"
+                                         style="display:none;">
+                                        {{ $initial }}
+                                    </div>
+                                @else
+                                    <div class="w-8 h-8 bg-[#EB1C24] text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                                        {{ $initial }}
+                                    </div>
+                                @endif
+                            @endif
+
                         </div>
                     @endforeach
                 </div>
@@ -129,10 +165,11 @@
                         <div class="flex gap-2">
                             <input type="text"
                                    wire:model="newMessage"
+                                   wire:loading.attr="disabled" wire:target="sendMessage"
                                    placeholder="Type your message..."
                                    class="flex-1 border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#EB1C24]">
 
-                            <label for="fileInput" class="cursor-pointer bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-md inline-flex items-center" title="Attach image or video">
+                            <label for="fileInput" class="cursor-pointer bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-md inline-flex items-center" title="Attach image or video" wire:loading.attr="disabled" wire:target="sendMessage">
                                 <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
                                 </svg>
@@ -140,10 +177,10 @@
                             <input type="file" id="fileInput" wire:model="newFile" class="hidden" accept="image/*,video/*">
 
                             <button type="submit"
-                                    wire:loading.attr="disabled"
+                                    wire:loading.attr="disabled" wire:target="sendMessage"
                                     class="bg-[#EB1C24] text-white px-6 py-2 rounded-md hover:bg-[#c71313] transition disabled:opacity-50">
-                                <span wire:loading.remove>Send</span>
-                                <span wire:loading>
+                                <span wire:loading.remove wire:target="sendMessage">Send</span>
+                                <span wire:loading wire:target="sendMessage">
                                     <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>

@@ -167,14 +167,14 @@
 @hasanyrole('organisation_user|director')
 @if(!auth()->user()->hasAnyRole(['super_admin', 'organisation_admin']))
 <a href="{{ route('offloading.list') }}"
-   class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
-   :class="[
-       $store.sidebar.open ? ' justify-start' : 'justify-center',
-       request()->is('offloading*') || request()->routeIs('offloading.*')
+   class="flex items-center p-2.5 rounded-xl transition
+       {{ request()->is('offloading*') || request()->routeIs('offloading.*')
            ? 'bg-red-100 text-red-600 font-semibold'
-           : 'text-gray-700 hover:bg-gray-100'
-   ]">
-    <img src="{{ asset('images/offloading.svg') }}" class="h-5 w-5" />
+           : 'text-gray-700 hover:bg-gray-100' }}"
+   :class="$store.sidebar.open ? 'justify-start' : 'justify-center'">
+    <img src="{{ request()->is('offloading*') || request()->routeIs('offloading.*') ? asset('images/offloading-active.svg') : asset('images/offloading.svg') }}"
+         class="h-5 w-5 flex-shrink-0"
+         onerror="this.src='{{ asset('images/offloading.svg') }}'" />
     <span x-show="$store.sidebar.open" x-transition class="text-sm pl-4">Offloading</span>
 </a>
 @endif
@@ -228,52 +228,59 @@
 {{-- Offloading (super_admin placeholder - disabled) --}}
 
 @hasanyrole('organisation_user|organisation_admin')
+    {{-- Assessments --}}
     <a href="{{ route('connecting.team-role-map.results') }}"
-       class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
-       :class="[
-           $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
-           request()->is('connecting*') 
-               ? 'bg-red-100 text-red-600 font-semibold' 
-               : 'text-gray-700 hover:bg-gray-100'
-       ]"
+       class="flex items-center p-2.5 rounded-xl transition
+           {{ request()->is('connecting*') || request()->is('personality-type*')
+               ? 'bg-red-100 text-red-600 font-semibold'
+               : 'text-gray-700 hover:bg-gray-100' }}"
+       :class="$store.sidebar.open ? 'justify-start' : 'justify-center'"
     >
-        <img src="{{ asset('images/connecting.svg') }}" class="h-5 w-5" />
+        <img src="{{ request()->is('connecting*') || request()->is('personality-type*') ? asset('images/connecting-active.svg') : asset('images/connecting.svg') }}"
+             class="h-5 w-5 flex-shrink-0"
+             onerror="this.src='{{ asset('images/connecting.svg') }}'" />
         <span x-show="$store.sidebar.open" x-transition class="text-sm pl-4">Assessments</span>
     </a>
+
+    {{-- Supercharging --}}
     <a href="{{ route('supercharging.culture-structure.results') }}"
-       class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
-       :class="[
-           $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
-           request()->is('supercharging*') 
-               ? 'bg-red-100 text-red-600 font-semibold' 
-               : 'text-gray-700 hover:bg-gray-100'
-       ]"
+       class="flex items-center p-2.5 rounded-xl transition
+           {{ request()->is('supercharging*')
+               ? 'bg-red-100 text-red-600 font-semibold'
+               : 'text-gray-700 hover:bg-gray-100' }}"
+       :class="$store.sidebar.open ? 'justify-start' : 'justify-center'"
     >
-        <img src="{{ asset('images/connecting.svg') }}" class="h-5 w-5" onerror="this.src='{{ asset('images/connecting.svg') }}'" />
+        <img src="{{ request()->is('supercharging*') ? asset('images/connecting-active.svg') : asset('images/connecting.svg') }}"
+             class="h-5 w-5 flex-shrink-0"
+             onerror="this.src='{{ asset('images/connecting.svg') }}'" />
         <span x-show="$store.sidebar.open" x-transition class="text-sm pl-4">Supercharging</span>
     </a>
+
+    {{-- Diagnostics --}}
     <a href="{{ route('diagnostics.index') }}"
-       class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
-       :class="[
-           $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
-           request()->is('diagnostics*') 
-               ? 'bg-red-100 text-red-600 font-semibold' 
-               : 'text-gray-700 hover:bg-gray-100'
-       ]"
+       class="flex items-center p-2.5 rounded-xl transition
+           {{ request()->is('diagnostics*')
+               ? 'bg-red-100 text-red-600 font-semibold'
+               : 'text-gray-700 hover:bg-gray-100' }}"
+       :class="$store.sidebar.open ? 'justify-start' : 'justify-center'"
     >
-        <img src="{{ asset('images/diagnostics.svg') }}" class="h-5 w-5" onerror="this.src='{{ asset('images/connecting.svg') }}'" />
+        <img src="{{ request()->is('diagnostics*') ? asset('images/diagnostics-active.svg') : asset('images/diagnostics.svg') }}"
+             class="h-5 w-5 flex-shrink-0"
+             onerror="this.src='{{ asset('images/diagnostics.svg') }}'" />
         <span x-show="$store.sidebar.open" x-transition class="text-sm pl-4">Diagnostics</span>
     </a>
+
+    {{-- Tribeometer --}}
     <a href="{{ route('tribeometer.index') }}"
-       class="flex items-center p-2.5 rounded-xl hover:bg-gray-100 transition"
-       :class="[
-           $store.sidebar.open ? 'space-x-3 justify-start' : 'justify-center',
-           request()->is('tribeometer*') 
-               ? 'bg-red-100 text-red-600 font-semibold' 
-               : 'text-gray-700 hover:bg-gray-100'
-       ]"
+       class="flex items-center p-2.5 rounded-xl transition
+           {{ request()->is('tribeometer*')
+               ? 'bg-red-100 text-red-600 font-semibold'
+               : 'text-gray-700 hover:bg-gray-100' }}"
+       :class="$store.sidebar.open ? 'justify-start' : 'justify-center'"
     >
-        <img src="{{ asset('images/diagnostics.svg') }}" class="h-5 w-5" onerror="this.src='{{ asset('images/connecting.svg') }}'" />
+        <img src="{{ request()->is('tribeometer*') ? asset('images/diagnostics-active.svg') : asset('images/diagnostics.svg') }}"
+             class="h-5 w-5 flex-shrink-0"
+             onerror="this.src='{{ asset('images/diagnostics.svg') }}'" />
         <span x-show="$store.sidebar.open" x-transition class="text-sm pl-4">Tribeometer</span>
     </a>
 @endhasanyrole
