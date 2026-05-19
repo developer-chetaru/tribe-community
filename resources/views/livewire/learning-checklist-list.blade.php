@@ -3,7 +3,7 @@
     Learning Checklist
   </h2>
 </x-slot>
-<div class=" w-full" x-data="{ showConfirm: false, deleteId: null }">
+<div class=" w-full">
     {{-- Header --}}
     <div class="flex justify-between items-center mb-6">
         <h2 class="text-xl font-bold text-red-600"></h2>
@@ -211,8 +211,9 @@
 </a>
 
                                 {{-- Delete --}}
-                           <button @click="showConfirm = true; deleteId = {{ $item->primary_id ?? $item->id }}"
-        class=" rounded flex items-center justify-center"
+                           <button type="button"
+        wire:click="openDeleteConfirm({{ $item->primary_id ?? $item->id }})"
+        class="rounded flex items-center justify-center"
         title="Delete">
     <img src="{{ asset('images/delete.svg') }}" alt="Delete" class="h-8 w-24">
 </button>
@@ -230,24 +231,30 @@
     </div>
 </div>
     {{-- Delete Confirmation Modal --}}
-    <div x-show="showConfirm" x-cloak
-         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+    @if($showDeleteModal)
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+         wire:keydown.escape.window="cancelDelete">
+        <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-md" wire:click.stop>
             <h2 class="text-lg font-semibold text-red-600 mb-4">Confirm Deletion</h2>
-            <p class="text-gray-700 mb-6">Are you sure you want to delete this checklist?</p>
+            <p class="text-gray-700 mb-6">Are you sure you want to delete this checklist? All linked principle entries will be removed.</p>
 
             <div class="flex justify-end gap-3">
-                <button @click="showConfirm = false" 
+                <button type="button"
+                        wire:click="cancelDelete"
                         class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
                     Cancel
                 </button>
-                <button type="button" @click="$wire.delete(deleteId); showConfirm = false" 
-                        class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">
-                    Delete
+                <button type="button"
+                        wire:click="confirmDelete"
+                        wire:loading.attr="disabled"
+                        class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50">
+                    <span wire:loading.remove wire:target="confirmDelete">Delete</span>
+                    <span wire:loading wire:target="confirmDelete">Deleting…</span>
                 </button>
             </div>
         </div>
     </div>
+    @endif
 
 	<script>
     // load YouTube IFrame API once
