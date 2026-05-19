@@ -285,6 +285,19 @@
     </a>
 @endhasanyrole
 
+<a href="{{ route('help.support') }}"
+   class="flex items-center p-2.5 rounded-xl transition
+       {{ request()->routeIs('help.support')
+           ? 'bg-red-100 text-red-600 font-semibold'
+           : 'text-gray-700 hover:bg-gray-100' }}"
+   :class="$store.sidebar.open ? 'justify-start' : 'justify-center'">
+    <svg class="h-5 w-5 flex-shrink-0 {{ request()->routeIs('help.support') ? 'text-red-600' : 'text-gray-600' }}"
+         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <span x-show="$store.sidebar.open" x-transition class="text-sm pl-4">Help & Support</span>
+</a>
       @hasanyrole('super_admin')
       <a href="{{ route('basecampuser') }}"
        class="flex items-center p-2.5 rounded-xl transition"
