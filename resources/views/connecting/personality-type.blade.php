@@ -60,6 +60,21 @@
             </div>
         </div>
 
+        @if($questions->isEmpty())
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center">
+                <svg class="w-12 h-12 text-amber-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Assessment questions are not available</h3>
+                <p class="text-sm text-gray-600 max-w-md mx-auto mb-4">
+                    No active questions were found in the database. An administrator must seed personality type data on this server.
+                </p>
+                <div class="text-left max-w-lg mx-auto bg-white rounded-lg border border-amber-100 p-4 text-sm font-mono text-gray-700 space-y-1">
+                    <p>php artisan db:seed --class=PersonalityTypeValueSeeder --force</p>
+                    <p>php artisan db:seed --class=PersonalityTypeQuestionSeeder --force</p>
+                </div>
+            </div>
+        @else
         <form action="{{ route('connecting.personality-type.submit') }}" method="POST" id="personalityForm">
             @csrf
             
@@ -140,9 +155,8 @@
                 </div>
             </div>
         </form>
-    </div>
 
-    <script>
+        <script>
         const totalQuestions = {{ count($questions) }};
 
         function selectRadioOption(radio) {
@@ -178,6 +192,8 @@
 
         // Initial progress (for old() repopulated radios)
         updateProgress();
-    </script>
+        </script>
+        @endif
+    </div>
 </x-app-layout>
 

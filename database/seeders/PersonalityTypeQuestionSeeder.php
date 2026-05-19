@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Models\PersonalityTypeQuestion;
 use App\Models\PersonalityTypeOption;
+use App\Models\PersonalityTypeQuestion;
 use App\Models\PersonalityTypeValue;
+use Illuminate\Database\Seeder;
 
 class PersonalityTypeQuestionSeeder extends Seeder
 {
@@ -14,8 +14,19 @@ class PersonalityTypeQuestionSeeder extends Seeder
      */
     public function run(): void
     {
+        if (PersonalityTypeValue::count() === 0) {
+            $this->command?->warn('No personality dimensions found — running PersonalityTypeValueSeeder first.');
+            $this->call(PersonalityTypeValueSeeder::class);
+        }
+
         // Get all personality dimensions
         $dimensions = PersonalityTypeValue::where('status', 'Active')->get()->keyBy('dimension_key');
+
+        if ($dimensions->isEmpty()) {
+            throw new \RuntimeException(
+                'PersonalityTypeQuestionSeeder requires active rows in personality_type_values. Run: php artisan db:seed --class=PersonalityTypeValueSeeder --force'
+            );
+        }
 
         // Standard 5-point Likert scale options (same for all questions)
         $likertOptions = [
@@ -245,7 +256,7 @@ class PersonalityTypeQuestionSeeder extends Seeder
 
         foreach ($questions as $questionData) {
             $dimension = $dimensions->get($questionData['dimension_key']);
-            
+
             // Create or update question
             $question = PersonalityTypeQuestion::updateOrCreate(
                 ['question' => $questionData['question']],
@@ -272,6 +283,15 @@ class PersonalityTypeQuestionSeeder extends Seeder
                     'status' => 'Active',
                 ]);
             }
+        }
+
+        $questionCount = PersonalityTypeQuestion::where('status', 'Active')->count();
+        $optionCount = PersonalityTypeOption::where('status', 'Active')->count();
+
+        $this->command?->info("Personality Type: {$questionCount} active questions, {$optionCount} active options.");
+
+        if ($questionCount === 0) {
+            throw new \RuntimeException('No personality type questions were seeded. Check database connection and migrations.');
         }
     }
 }

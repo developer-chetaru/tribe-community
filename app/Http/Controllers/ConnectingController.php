@@ -69,7 +69,10 @@ class ConnectingController extends Controller
         $user = Auth::user();
 
         $questions = PersonalityTypeQuestion::where('status', 'Active')
-            ->with(['options', 'personalityTypeValue'])
+            ->with([
+                'options' => fn ($query) => $query->where('status', 'Active')->orderBy('order'),
+                'personalityTypeValue',
+            ])
             ->orderBy('order')
             ->get();
 
@@ -119,15 +122,15 @@ class ConnectingController extends Controller
 
         // Server-side: each question's points must sum to exactly 10
         foreach ($request->answers as $index => $answer) {
-            $total = collect($answer['options'])->sum(fn($o) => (int)($o['points'] ?? 0));
+            $total = collect($answer['options'])->sum(fn ($o) => (int) ($o['points'] ?? 0));
             if ($total !== 10) {
                 return redirect()->back()
-                    ->with('error', 'Question ' . ($index + 1) . ' must have exactly 10 points distributed. You entered ' . $total . '.')
+                    ->with('error', 'Question '.($index + 1).' must have exactly 10 points distributed. You entered '.$total.'.')
                     ->withInput();
             }
         }
 
-        $apiController = new \App\Http\Controllers\Api\ApiCOTController();
+        $apiController = new \App\Http\Controllers\Api\ApiCOTController;
         $apiRequest = new Request([
             'userId' => $user->id,
             'orgId' => $user->orgId ?? null,
@@ -138,7 +141,7 @@ class ConnectingController extends Controller
             $response = $apiController->submitAnswers($apiRequest);
             $responseData = json_decode($response->getContent(), true);
 
-            if (!empty($responseData['status'])) {
+            if (! empty($responseData['status'])) {
                 return redirect()->route('connecting.team-role-map.results')
                     ->with('success', 'Assessment submitted successfully!');
             }
@@ -148,7 +151,7 @@ class ConnectingController extends Controller
                 ->withInput();
         } catch (\Exception $e) {
             return redirect()->back()
-                ->with('error', 'An error occurred: ' . $e->getMessage())
+                ->with('error', 'An error occurred: '.$e->getMessage())
                 ->withInput();
         }
     }
@@ -163,7 +166,7 @@ class ConnectingController extends Controller
             'answers.*.optionId' => 'required|exists:personality_type_options,id',
         ]);
 
-        $apiController = new \App\Http\Controllers\Api\ApiPersonalitytypeController();
+        $apiController = new \App\Http\Controllers\Api\ApiPersonalitytypeController;
         $apiRequest = new Request([
             'userId' => $user->id,
             'orgId' => $user->orgId ?? null,
@@ -174,7 +177,7 @@ class ConnectingController extends Controller
             $response = $apiController->submitAnswers($apiRequest);
             $responseData = json_decode($response->getContent(), true);
 
-            if (!empty($responseData['status'])) {
+            if (! empty($responseData['status'])) {
                 return redirect()->route('connecting.personality-type.results')
                     ->with('success', 'Assessment submitted successfully!');
             }
@@ -184,9 +187,8 @@ class ConnectingController extends Controller
                 ->withInput();
         } catch (\Exception $e) {
             return redirect()->back()
-                ->with('error', 'An error occurred: ' . $e->getMessage())
+                ->with('error', 'An error occurred: '.$e->getMessage())
                 ->withInput();
         }
     }
 }
-
