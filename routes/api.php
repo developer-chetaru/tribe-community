@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\ApiHelpSupportController;
 use App\Http\Controllers\Api\BasecampBillingController;
 use App\Http\Controllers\Api\MonthlySummaryController;
 use App\Http\Controllers\Api\NotificationController;
@@ -124,6 +125,15 @@ Route::middleware(['auth:api', 'validate.jwt'])->group(function () {
     Route::get('/basecamp/invoices/{id}/download', [BasecampBillingController::class, 'downloadInvoice']); // Alias for mobile app compatibility
 
     Route::post('/add-happy-index', [HappyIndexController::class, 'addHappyIndex']);
+
+    // Help & Support Chat API
+    Route::prefix('help-support')->group(function () {
+        Route::get('/history', [ApiHelpSupportController::class, 'history']);
+        Route::post('/send', [ApiHelpSupportController::class, 'send']);
+        Route::get('/quick-actions', [ApiHelpSupportController::class, 'quickActions']);
+        Route::post('/run-action', [ApiHelpSupportController::class, 'runAction']);
+        Route::delete('/clear', [ApiHelpSupportController::class, 'clear']);
+    });
 
 });
 
